@@ -89,15 +89,6 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
 </head>
 <body>
 
-<!-- 密钥激活遮罩 (默认隐藏，靠JS控制显示) -->
-<div id="activation-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#111; z-index:9999; color:#fff; text-align:center; padding-top:20vh;">
-    <h2>《星路制作人》游玩权限验证</h2>
-    <p style="margin-top:10px; font-size:14px; color:#aaa;">请输入您的购买编号/密钥（本设备仅需验证一次）：</p>
-    <input type="text" id="activation-key-input" style="padding:10px; width:300px; font-size:16px; margin:20px 0; color:#000;" placeholder="输入密钥...">
-    <br>
-    <button onclick="verifyKey()" style="padding:10px 20px; font-size:16px; cursor:pointer; max-width:300px;">验证并进入游戏</button>
-</div>
-
 <!-- 顶部状态栏 -->
 <div class="top-bar" id="topBar" style="display:none;">
   <div class="top-time">
@@ -109,24 +100,36 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
   </div>
 </div>
 
-<!-- === 创建页 === -->
+<!-- === 创建页 (包含密码验证逻辑) === -->
 <div id="createPage" class="page active">
   <div class="card" style="margin-top:20px;text-align:center;">
     <h2 class="tg" style="font-size:24px;margin-bottom:20px;">星路制作人</h2>
+    
     <input id="inRealName" placeholder="真实姓名 (必填)" style="text-align:center;">
     <input id="inStageName" placeholder="艺名" style="text-align:center;">
     <input id="inFanName" placeholder="粉丝群体名称" style="text-align:center;">
     <input id="inGender" placeholder="性别 (自定义，如：女/男/外星人)" style="text-align:center;">
-    <p style="font-size:12px;color:#888;margin:10px 0;">算法已全面升级：真实单曲/专辑档位、四大奖项结算、粉丝互动回复系统已就绪。</p>
-    <button id="btnCreate" onclick="startGame()" style="margin-top:20px;padding:16px;">✓ 创建并进入演艺圈</button>
     
-    <div style="margin-top:20px;border-top:1px solid #eee;padding-top:15px;">
-      <p style="font-size:12px;color:#555;margin-bottom:10px;">读取本地存档：</p>
-      <div style="display:flex;gap:5px;">
-        <button class="sec" onclick="loadGame(1)">档1</button>
-        <button class="sec" onclick="loadGame(2)">档2</button>
-        <button class="sec" onclick="loadGame(3)">档3</button>
-      </div>
+    <!-- 密钥验证区域 -->
+    <div id="keyAuthBox" style="margin-top:15px; padding:15px; border:1px dashed #c8a440; border-radius:8px; background:#fefcf5;">
+        <p style="font-size:13px; font-weight:bold; margin-bottom:10px; color:#c8a440;">🔒 请输入游戏购买密钥以解锁游玩权限</p>
+        <input type="text" id="inGameKey" style="text-align:center; margin-bottom:10px; border-color:#c8a440;" placeholder="输入密钥/购买编号...">
+        <button onclick="verifyGameKey()" style="background:#111; color:#c8a440;">验证密钥</button>
+    </div>
+
+    <!-- 游戏进入区域（默认隐藏，验证通过后显示） -->
+    <div id="gameStartBox" style="display:none;">
+        <p style="font-size:12px;color:#888;margin:10px 0;">算法已全面升级：真实单曲/专辑档位、四大奖项结算、粉丝互动回复系统已就绪。</p>
+        <button id="btnCreate" onclick="startGame()" style="margin-top:10px;padding:16px;">✓ 创建并进入演艺圈</button>
+        
+        <div style="margin-top:20px;border-top:1px solid #eee;padding-top:15px;">
+          <p style="font-size:12px;color:#555;margin-bottom:10px;">读取本地存档：</p>
+          <div style="display:flex;gap:5px;">
+            <button class="sec" onclick="loadGame(1)">档1</button>
+            <button class="sec" onclick="loadGame(2)">档2</button>
+            <button class="sec" onclick="loadGame(3)">档3</button>
+          </div>
+        </div>
     </div>
   </div>
 </div>
@@ -502,24 +505,40 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
 const VALID_KEYS = [
     "BUYER-001-A1B2C",
     "BUYER-002-D3E4F",
-    "TEST-KEY-123" // 测试用密钥
+    "TEST-KEY-123", // 测试用密钥
+    "dhtjuffuyjg",   // 新增定制密码
+    "VIP-MEMBER-888",
+    "PRO-GAMER-2026"
 ];
 
+// 检查设备是否已经激活
 function checkDeviceActivation() {
-    if (localStorage.getItem('isDeviceActivated') === 'true') return true;
-    document.getElementById('activation-modal').style.display = 'block';
+    if (localStorage.getItem('isDeviceActivated') === 'true') {
+        // 已激活，直接隐藏密码框，显示游戏入口
+        if($('keyAuthBox')) $('keyAuthBox').style.display = 'none';
+        if($('gameStartBox')) $('gameStartBox').style.display = 'block';
+        return true;
+    }
+    // 未激活，显示密码框，隐藏游戏入口
+    if($('keyAuthBox')) $('keyAuthBox').style.display = 'block';
+    if($('gameStartBox')) $('gameStartBox').style.display = 'none';
     return false;
 }
 
-function verifyKey() {
-    const inputKey = document.getElementById('activation-key-input').value.trim();
+// 验证输入的密钥
+window.verifyGameKey = function() {
+    const inputKey = document.getElementById('inGameKey').value.trim();
     if (VALID_KEYS.includes(inputKey)) {
-        alert("验证成功！欢迎来到星路制作人！");
+        alert("✅ 验证成功！游玩权限已解锁。");
         localStorage.setItem('isDeviceActivated', 'true');
-        document.getElementById('activation-modal').style.display = 'none';
+        
+        // 验证成功后，切换UI显示
+        document.getElementById('keyAuthBox').style.display = 'none';
+        document.getElementById('gameStartBox').style.display = 'block';
+        
         initAfterActivation();
     } else {
-        alert("密钥无效或已被使用，请检查您的购买编号！");
+        alert("❌ 密钥无效或已被使用，请检查您的购买编号！");
     }
 }
 
@@ -584,6 +603,7 @@ window.loadGame = function(slotOverride){
   let s = localStorage.getItem(k); if(!s) return alert("未找到存档！");
   let data = migrateSave(JSON.parse(s));
   ad=data.ad; lib=data.lib||[]; std=data.std||[]; albs=data.albs||[]; trackPool=data.trackPool||[]; marketSongs=data.marketSongs||[]; time=data.time; Mt=data.Mt; posts=data.posts||{wb:[],x:[],ins:[],tiktok:[],mom:[]}; curPj=data.curPj; prog=data.prog; curAlbPj=data.curAlbPj; historyAwards=data.historyAwards||[]; conts=data.conts||[]; worldArtists=data.worldArtists||[]; writers=data.writers||[]; myWorks=data.myWorks||[];
+  
   // 数据兼容修复
   if(!posts.tiktok) posts.tiktok = [];
   conts.forEach(c => { if(c.affinity === undefined) c.affinity = 0; if(c.isCohabiting === undefined) c.isCohabiting = false; });
@@ -594,7 +614,7 @@ window.loadGame = function(slotOverride){
 }
 window.clearSave = function(){ if(confirm("⚠️ 确定清空当前槽位吗？")){ localStorage.removeItem(getSaveKey()); location.reload(); } }
 
-function saveApiConfig() {
+window.saveApiConfig = function() {
     localStorage.setItem('savedApiEndpoint', document.getElementById('apiHost').value);
     localStorage.setItem('savedApiPath', document.getElementById('apiPath').value);
     localStorage.setItem('savedApiKey', document.getElementById('apiToken').value);
@@ -608,7 +628,7 @@ function loadApiConfig() {
     if (savedPath) document.getElementById('apiPath').value = savedPath;
     if (savedKey) document.getElementById('apiToken').value = savedKey;
 }
-function exitToMainMenu() {
+window.exitToMainMenu = function() {
     saveGame(); // 退出前自动存档
     location.reload(); // 刷新回到初始页面
 }
@@ -669,7 +689,7 @@ function costEnergy(amt){
 
 /* ================= 开局设定 ================= */
 function startGame(){
-  if(!$("inRealName").value) return alert("填姓名");
+  if(!$("inRealName").value) return alert("填真实姓名");
   ad={
     r:$("inRealName").value, s:$("inStageName").value, g:$("inGender").value||"保密",
     co:"独立", cot:"indie", m:50000, H:1.0, D:1.0, Elead:1.0, Kalbum:1.0, Geffect: 0.55,
@@ -774,12 +794,12 @@ function renderNpcList(){
     <span style="font-size:12px;color:#c8a440;">粉丝: ${x.fans.toLocaleString()}</span>
     <button class="sec inline" onclick="editNpc('${x.id}')">✏️ 编辑</button></div>`).join('');
 }
-function editNpc(id){
+window.editNpc = function(id){
   let x = worldArtists.find(a=>a.id===id); if(!x)return;
   $("eNpcOldName").value = x.n; $("eNpcName").value = x.n; $("eNpcAge").value = x.age; $("eNpcGender").value = x.gender; $("eNpcFans").value = x.fans;
   switchSubTab($('npcBoxTabs').parentElement.querySelectorAll('.sub-tab')[0], 'npcEditSec', 'npcBoxTabs'); 
 }
-function saveNpcEdit(){
+window.saveNpcEdit = function(){
   let oldN = $("eNpcOldName").value; let newN = $("eNpcName").value;
   let x = worldArtists.find(a=>a.n===oldN); if(!x)return;
   x.n = newN; x.age = parseInt($("eNpcAge").value)||20; x.gender = $("eNpcGender").value; x.fans = parseInt($("eNpcFans").value)||1000;
@@ -796,31 +816,31 @@ function updAttr(){
   $("tabWorks").innerHTML=myWorks.length?myWorks.map(x=>`<div style="font-size:12px;margin-bottom:5px;"><b>${x.n}</b> - 总销:${x.slTotal.toLocaleString()} | 收入:$${x.revenue.toLocaleString()}</div>`).join(''):"无";
   $("tabAwards").innerHTML=ad.awd.length?ad.awd.join('<br><br>'):"无获奖记录";
 }
-function saveAttr(){ aKs.forEach(x=>{ let v=parseInt($(`ie_${x.k}`).value)||1; ad.sk[x.k]=Math.min(100,Math.max(1,v)); }); $("boxEditAttr").style.display="none"; $("boxBars").style.display="block"; updAttr(); saveGame(); }
+window.saveAttr = function(){ aKs.forEach(x=>{ let v=parseInt($(`ie_${x.k}`).value)||1; ad.sk[x.k]=Math.min(100,Math.max(1,v)); }); $("boxEditAttr").style.display="none"; $("boxBars").style.display="block"; updAttr(); saveGame(); }
 
 /* ================= 地图操作 ================= */
-function showMap(id){ ["mapStudio","mapLabel","mapHome","mapShows","mapAwards","mapMV","mapFashion","mapTV","mapTour"].forEach(x=>{if($(x)) $(x).style.display="none";}); $(id).style.display="block"; if(id=='mapStudio') renderStdMap(); if(id=='mapLabel') renderLbl(); if(id=='mapShows') renderShows(); if(id=='mapAwards') renderAwardsMap(); if(id=='mapMV') renderMVMap(); }
+window.showMap = function(id){ ["mapStudio","mapLabel","mapHome","mapShows","mapAwards","mapMV","mapFashion","mapTV","mapTour"].forEach(x=>{if($(x)) $(x).style.display="none";}); $(id).style.display="block"; if(id=='mapStudio') renderStdMap(); if(id=='mapLabel') renderLbl(); if(id=='mapShows') renderShows(); if(id=='mapAwards') renderAwardsMap(); if(id=='mapMV') renderMVMap(); }
 
 function renderMapCompany(){
   if(ad.co === "独立"){ $("boxSignCompany").style.display = "block"; $("boxMyCompany").style.display = "none"; renderLbl(); } 
   else { $("boxSignCompany").style.display = "none"; $("boxMyCompany").style.display = "block"; $("btnMapCompany").innerText = "🏢 我的公司"; }
 }
 
-function meetPeople(){
+window.meetPeople = function(){
   if(!costEnergy(10)) return; advHour(24);
   let n = npcNames[Math.floor(Math.random()*npcNames.length)]+"(同行)"; conts.push({id:Date.now(), n:n, t:"圈内人脉", h:[], affinity:0, isCohabiting:false});
   $("logCompany").style.display="block"; $("logCompany").innerText = `🤝 结识了 ${n}，耗10精力，耗时1天，已加通讯录。`; saveGame();
 }
 
-function relaxHome(){ 
+window.relaxHome = function(){ 
   $("logHome").style.display="block"; advHour(1); 
   ad.energy = Math.min(ad.maxEnergy, ad.energy + 20); updTimeUI();
   if(Math.random()<0.35){ let gn=gs[Math.floor(Math.random()*gs.length)]; let nm=ts[Math.floor(Math.random()*ts.length)]+" Dream"; lib.push({id:"lb_"+Date.now(), n:nm, g:[gn], c:"放空所得"}); $("logHome").innerText=`🛁 灵光一闪！获得【${gn}】Demo《${nm}》。恢复20精力。`; renderLib(); } else { $("logHome").innerText=`🛋️ 休息了1小时，恢复20精力。`; } 
   saveGame();
 }
 
-/* ================= 好友与互动系统改造 ================= */
-function openInviteList() {
+/* ================= 好友与互动系统 ================= */
+window.openInviteList = function() {
     let listHTML = '<ul style="list-style:none; padding:0;">';
     conts.forEach((friend, idx) => {
         let aff = friend.affinity || 0;
@@ -850,7 +870,7 @@ function renderRomanceButtons(friend, idx) {
     return btns;
 }
 
-function interactWithFriend(idx, action) {
+window.interactWithFriend = function(idx, action) {
     let friend = conts[idx];
     if (friend.affinity === undefined) friend.affinity = 0;
     
@@ -873,7 +893,7 @@ function interactWithFriend(idx, action) {
     saveGame(); 
 }
 
-function romanceAction(idx, type) {
+window.romanceAction = function(idx, type) {
     let friend = conts[idx];
     if (type === 'confess') {
         alert(`你向${friend.n}表白了！对方红着脸答应了你！(好感度+10)`);
@@ -886,7 +906,7 @@ function romanceAction(idx, type) {
     saveGame();
 }
 
-function joinFashion(){
+window.joinFashion = function(){
   if(ad.st.f > 5000000 && ad.sk.fa >= 70){ ad.st.f += 50000; ad.sk.fa = Math.min(100, ad.sk.fa+5); alert("✨ 受邀免票出席大秀！粉丝+5万 | 时尚+5"); } 
   else { if(ad.m < 200000) return alert("不够红，买门票要20万，钱不够！"); ad.m -= 200000; ad.st.f += 10000; ad.sk.fa = Math.min(100, ad.sk.fa+2); alert("✨ 花20万出席秀场镀金！粉丝+1万 | 时尚+2"); }
   advTime(1, false); updAttr(); saveGame();
@@ -900,8 +920,8 @@ function renderLbl(){
     <span style="font-size:12px">签金+$${c.m} (需粉${(c.f/10000).toFixed(0)}万 或 核心属性≥${c.attr})</span> ${can?`<br><button onclick="openSign(${i})">签约</button>`:''}</div>`;
   }).join('');
 }
-function openSign(i){ tempIdx = i; $("signTitle").innerText = `签约 ${coList[i].n}`; $("mSign").classList.add("open"); }
-function confirmSign(){
+window.openSign = function(i){ tempIdx = i; $("signTitle").innerText = `签约 ${coList[i].n}`; $("mSign").classList.add("open"); }
+window.confirmSign = function(){
   let c = coList[tempIdx]; let deal = $("selDealType").value; let years = parseInt($("signYears").value) || 3;
   ad.co = c.n; ad.cot = c.t; ad.m += c.m; ad.contractEnd = time.y + years; ad.dealType = deal=="1" ? "7/3" : "2/8";
   ad.Geffect = c.grade * (deal=="1" ? 1.0 : 0.6);
@@ -915,7 +935,7 @@ function renderShows(){
     <div class="card" style="${s2?'':'opacity:0.5'}"><b>⚽ 世界杯开幕式</b><br><span style="font-size:12px">要求: 3000万粉</span><br>${s2&&!ad.shows.includes('c2')?`<button onclick="doShow('c2','世界杯')">接受邀约</button>`: (ad.shows.includes('c2')?`<span style="color:#25d366;font-size:12px">已演出</span>`:'')}</div>
     <div class="card" style="${s3?'':'opacity:0.5'}"><b>🏈 超级碗中场秀</b><br><span style="font-size:12px">要求: 5000万粉</span><br>${s3&&!ad.shows.includes('c3')?`<button onclick="doShow('c3','超级碗')">接受邀约</button>`: (ad.shows.includes('c3')?`<span style="color:#25d366;font-size:12px">已演出</span>`:'')}</div>`;
 }
-function doShow(id, name){
+window.doShow = function(id, name){
   ad.shows.push(id); advTime(7, false); let gain = id=='c1'?2000000 : (id=='c2'?5000000:10000000);
   ad.st.f += gain; ad.st.h += 50; ad.awd.unshift(`${time.y}年 - 登顶【${name}】舞台！`);
   updAttr(); renderShows(); alert(`🎉 震撼全球的表演！狂揽 ${gain.toLocaleString()} 粉丝！`); saveGame();
@@ -952,7 +972,7 @@ function checkAutoAward(){
   $("txtAwardBannerMsg").innerText = msg;
   $("mAwardBanner").classList.add("open");
 }
-function joinAward(awdName){ checkAutoAward(); renderAwardsMap(); saveGame(); }
+window.joinAward = function(awdName){ checkAutoAward(); renderAwardsMap(); saveGame(); }
 
 /* ================= MV 与 打单 ================= */
 function renderMVMap(){
@@ -961,7 +981,7 @@ function renderMVMap(){
     <b>${t.n}</b><br><span style="font-size:11px;color:#888;">流媒: ${t.stm.toLocaleString()} | 历史MV次数: ${t.mvN||0}</span>
     <div style="margin-top:6px;"><button class="sec inline" onclick="shootMV('${t.id}', 0)">纸片MV($2K, 耗10精)</button><button class="inline" onclick="shootMV('${t.id}', 1)">真人MV($1W, 耗10精, 1天)</button></div></div>`).join('') : "<p style='font-size:12px;color:#888;'>没有已发行的单曲可拍MV</p>";
 }
-function shootMV(tid, type){
+window.shootMV = function(tid, type){
   if(!costEnergy(10)) return;
   let t = trackPool.find(x=>x.id===tid); if(!t) return; let cost = type==1 ? 10000 : 2000;
   if(ad.m < cost) return alert("资金不足！"); ad.m -= cost; if(type==1) advHour(24);
@@ -973,7 +993,7 @@ function shootMV(tid, type){
   alert(`🎬 MV拍摄完成！\n类型: ${type==1?'真人出镜':'简单纸片'}\n大众观感分: ${Smv}\n💡 边际系数: x${decay.toFixed(2)}\n最终带来 ${finalAdd.toLocaleString()} 流媒爆发脉冲！`);
 }
 
-function doTVPromo(){
+window.doTVPromo = function(){
   if(!costEnergy(10)) return; advHour(24);
   let myTrks = trackPool.filter(x=>x.isMe && x.type==="track" && x.weeks<=4); 
   if(!myTrks.length) { alert("你参加了《周六夜现场》，刷了刷脸，但因为没有处于打歌期的新歌，效果平平。"); return; }
@@ -985,7 +1005,7 @@ function doTVPromo(){
   updatePeakRanks(); saveGame();
 }
 
-function doTour(){
+window.doTour = function(){
   if(!costEnergy(30)) return; advTime(7, false);
   let ctry = $("selTourCountry").value; if(ctry==="custom") ctry = $("inTourCustom").value || "未知国家";
   
@@ -1007,15 +1027,15 @@ function doTour(){
 }
 
 /* ================= 企划制作 ================= */
-function showProj(id){ ["pjSingle","pjLib","pjAlbum"].forEach(x=>$(x).style.display="none"); $(id).style.display="block"; renderLib(); renderAlb(); }
+window.showProj = function(id){ ["pjSingle","pjLib","pjAlbum"].forEach(x=>$(x).style.display="none"); $(id).style.display="block"; renderLib(); renderAlb(); }
 
-async function aiGenName(type, targetId){
+window.aiGenName = async function(type, targetId){
   let btn = event.target; btn.innerText="...";
   let r = await api(`随机生成一个带有欧美流行/摇滚质感的${type=="song"?"英文单曲名":"英文专辑名"}，只要名字，不要引号和多余解释。`);
   btn.innerText="AI 取名"; if(r) $(targetId).value = r.trim().replace(/["']/g,"");
 }
 
-function startWrite(){
+window.startWrite = function(){
   if(curPj) return alert("有正在进行的企划！");
   if(!costEnergy(10)) return;
   let n=$("inSName").value||"Demo"; let ff = parseInt($("inFeat")?$("inFeat").value:0) || 0; if(ff>0) n += " (Feat.)";
@@ -1024,7 +1044,7 @@ function startWrite(){
   $("boxWriteProgress").style.display="block"; $("btnStartWriteProj").style.display="none";
   alert(`企划立项：${n}。已扣除10精力。点击【投入创作】涨进度！`); saveGame();
 }
-function writeSongStep(){
+window.writeSongStep = function(){
   if(!curPj) return; if(!costEnergy(10)) return;
   advHour(1);
   prog += Math.floor(Math.random()*11)+20; 
@@ -1042,18 +1062,18 @@ function renderStdMap(){
   `<hr style="margin:10px 0;border:#eee 1px solid;"><b>录音成品库(可发单曲)：</b><br>`+
   std.map((x,i)=>`<div class="row"><span>${x.n}</span><button class="sec inline" onclick="openRelSingle('${x.id}')">发单曲</button></div>`).join('');
 }
-function startRecord(i){
+window.startRecord = function(i){
   if(curPj && curPj.type==="write") return alert("正在写歌，请先完成！");
   if(!costEnergy(10)) return;
   let s=lib.splice(i,1)[0]; s.released=false; s.id="st_"+Date.now()+"_"+Math.floor(Math.random()*1000); std.push(s);
   alert(`🎙️ 录制成功：${s.n} (耗10精)`); renderStdMap(); renderLib(); saveGame();
 }
 
-function openRelSingle(sid){
+window.openRelSingle = function(sid){
   tempIdx = sid; pickAction = "relSingleDirect"; $("mPickExt").style.display="block";
   $("mPickTitle").innerText = "发行单曲定价"; $("mPickList").innerHTML=""; $("mPick").classList.add("open");
 }
-async function confirmPick(){
+window.confirmPick = async function(){
   let price = parseInt($("sgPrice").value) || 1;
   if(pickAction === "relSingleDirect"){
     let i = std.findIndex(x=>x.id===tempIdx); if(i===-1)return; let s = std[i]; s.released = true;
@@ -1110,18 +1130,18 @@ function updateAlbProjUI(){
     $("boxWipSongs").innerHTML = "<b>已选曲目:</b><br>" + curAlbPj.s.map(x=>x.n + (x.released?" <span style='color:#c8a440'>(已发)</span>":"")).join('<br>');
   } else { $("boxNewAlb").style.display="block"; $("boxWipAlb").style.display="none"; }
 }
-function startAlbum(){
+window.startAlbum = function(){
   if(curAlbPj) return alert("已有筹备中专辑！");
   curAlbPj = { n:$("inAName").value||"Album", g:[...selAG], core:$("inACore").value||"无", s:[], hype: 1.0, preCount: 0 };
   alert("新专立项成功！"); updateAlbProjUI(); saveGame();
 }
-function addWipSong(){
+window.addWipSong = function(){
   let avail=std.filter(x=>!x.released); if(!avail.length) return alert("录音室没新歌！");
   pickAction = "addWip"; $("mPickTitle").innerText = "选入专辑"; $("mPickExt").style.display="none";
   $("mPickList").innerHTML = avail.map(x=>`<div><input type="checkbox" id="pk_m_${x.id}" value="${x.id}"> ${x.n}</div>`).join('');
   $("mPick").classList.add("open");
 }
-function relPreSingle(){
+window.relPreSingle = function(){
   if(!curAlbPj || curAlbPj.s.length==0) return alert("专辑没加歌！");
   let avail = curAlbPj.s.filter(x=>!x.released); if(!avail.length) return alert("都发过了！");
   pickAction = "relPre"; $("mPickTitle").innerText = "发行先行曲"; $("mPickExt").style.display="block";
@@ -1129,7 +1149,7 @@ function relPreSingle(){
   $("mPick").classList.add("open");
 }
 
-async function relWipAlb(){
+window.relWipAlb = async function(){
   if(!curAlbPj || !curAlbPj.s.length) return alert("全专没歌！");
   let price = parseInt($("albPrice")?$("albPrice").value:10) || 10;
   let a = {n:curAlbPj.n, g:curAlbPj.g, core:curAlbPj.core, s:curAlbPj.s, st:"已发", deluxeLevel:0};
@@ -1167,7 +1187,7 @@ async function relWipAlb(){
   alert(`🚀 全专上线！定价: $${price}\n预热(x${(a.preCount>0?curAlbPj.hype:1).toFixed(2)}) 泄曲惩罚(x${Dleak.toFixed(2)})\n感知分: ${tAlb.Spub.toFixed(1)} ${aiCmt?'\nAI评价: '+aiCmt:''}\n首周销量: ${tAlb.slTotal.toLocaleString()}`);
 }
 
-function scrapAlb(){
+window.scrapAlb = function(){
   let cost = Math.floor(ad.m * 0.2); ad.m -= cost;
   alert(`🗑️ 已推翻专辑！损失 $${cost.toLocaleString()}。\n及时止损，避免了粪曲污染大盘。`); curAlbPj = null; updateAlbProjUI(); updAttr(); saveGame();
 }
@@ -1181,13 +1201,13 @@ function renderAlb(){
   }).join('');
 }
 
-function openDeluxe(idx){
+window.openDeluxe = function(idx){
   tempIdx = idx; let avail = std.filter(x=>!x.released);
   if(!avail.length) return alert("录音室没新歌！");
   $("boxDeluxePick").innerHTML = avail.map(x=>`<div><input type="checkbox" id="dx_${x.id}"> ${x.n}</div>`).join('');
   $("mDeluxe").classList.add("open");
 }
-function confirmDeluxe(){
+window.confirmDeluxe = function(){
   let a = albs[tempIdx]; let tAlb = a.trackRef;
   let avail = std.filter(x=>!x.released), added=[];
   avail.forEach(x=>{if($(`dx_${x.id}`).checked)added.push(x);});
@@ -1219,9 +1239,9 @@ function updTimeUI(){
   $("sysTimeTxt") && ($("sysTimeTxt").innerText = s);
   if($("uiEnergy")) $("uiEnergy").innerText = ad.energy;
 }
-function setSysTime(){ let y=parseInt($("sysInY").value), m=parseInt($("sysInM").value), w=parseInt($("sysInW").value); if(y) time.y=y; if(m) time.m=m; if(w) time.w=w; updTimeUI(); alert("时间已修改！"); saveGame(); }
-function advHour(h){ for(let i=0; i<h; i++){ time.h++; if(time.h >= 24) { time.h = 0; advTime(1, false); ad.energy=ad.maxEnergy; } } updTimeUI(); saveGame(); }
-function advTimeByFlow(){ let v = parseInt($("selTimeFlow").value) || 7; advTime(Math.floor(v/7)||1, true); }
+window.setSysTime = function(){ let y=parseInt($("sysInY").value), m=parseInt($("sysInM").value), w=parseInt($("sysInW").value); if(y) time.y=y; if(m) time.m=m; if(w) time.w=w; updTimeUI(); alert("时间已修改！"); saveGame(); }
+window.advHour = function(h){ for(let i=0; i<h; i++){ time.h++; if(time.h >= 24) { time.h = 0; advTime(1, false); ad.energy=ad.maxEnergy; } } updTimeUI(); saveGame(); }
+window.advTimeByFlow = function(){ let v = parseInt($("selTimeFlow").value) || 7; advTime(Math.floor(v/7)||1, true); }
 
 function updatePeakRanks(){
   let trks = trackPool.filter(x=>x.type==="track");
@@ -1321,7 +1341,7 @@ function renderRankRow(x,i,durKey,peakKey,valKey,isAlb){
     <b class="tg" style="font-size:12px;display:block;text-align:right;">${x[valKey].toLocaleString()} ${valKey.includes('stm')?'播放':(isAlb?'张':'Pts')}</b></div>`;
 }
 
-function openApp(id){
+window.openApp = function(id){
   if(['Wb','Ins','X','TikTok'].includes(id)){
     curApp = id; $("mTextTitle").innerText=id; $("mText").classList.add("open"); drawP(id);
   } else if(id=='NPC'){ $("mCustomNPC").classList.add("open"); renderNpcList();
@@ -1359,7 +1379,7 @@ function openApp(id){
   }
 }
 
-function buySong(i){ let s=marketSongs[i]; if(ad.m<s.price)return alert("钱不够！"); ad.m-=s.price; lib.push({n:s.n,g:[...s.g],c:""}); marketSongs.splice(i,1); updAttr();renderLib();openApp('Market');alert("买入Demo成功！"); saveGame(); }
+window.buySong = function(i){ let s=marketSongs[i]; if(ad.m<s.price)return alert("钱不够！"); ad.m-=s.price; lib.push({n:s.n,g:[...s.g],c:""}); marketSongs.splice(i,1); updAttr();renderLib();openApp('Market');alert("买入Demo成功！"); saveGame(); }
 
 function getCert(sl){
   if(sl>=10000000) return `<span class="cert-badge" style="background:#b9f2ff;border-color:#00bfff;">💎 钻石(x${Math.floor(sl/10000000)})</span>`;
@@ -1369,7 +1389,7 @@ function getCert(sl){
 }
 
 // 填充宣传歌曲下拉框
-function populatePromoSongs() {
+window.populatePromoSongs = function() {
     const select = document.getElementById('promo-song-select');
     select.innerHTML = '';
     myWorks.forEach(song => {
@@ -1382,7 +1402,7 @@ function populatePromoSongs() {
 
 let curImgBase64=""; $("mTextImg").onchange=function(e){ let f=e.target.files[0];if(!f)return;let r=new FileReader(); r.onload=function(evt){curImgBase64=evt.target.result;} r.readAsDataURL(f); }
 
-function postSocial(){ 
+window.postSocial = function(){ 
     let t=$("mTextInput").value;
     
     // 如果是宣发打单
@@ -1415,8 +1435,8 @@ function postSocial(){
 function drawP(id){ $("mTextList").innerHTML=posts[id.toLowerCase()].map(x=>`<div class="card" style="padding:10px;margin:5px 0;">${x}</div>`).join(''); }
 
 // API 动态交互
-function refreshFeed(){ api(`请模拟3条关于欧美娱乐圈的${curApp}简短网友动态。`).then(r=>{if(r)$("feedList").innerHTML=r.split('\n').map(x=>`<div class="card" style="padding:10px;margin:5px 0;font-size:12px;">${x}</div>`).join('');}); }
-function refreshTrend(){ api(`请模拟5条当前欧美娱乐圈的${curApp}实时热搜词条。`).then(r=>{if(r)$("trendList").innerHTML=r.split('\n').map(x=>`<div class="row" style="color:#c8a440;font-weight:bold;">${x}</div>`).join('');}); }
+window.refreshFeed = function(){ api(`请模拟3条关于欧美娱乐圈的${curApp}简短网友动态。`).then(r=>{if(r)$("feedList").innerHTML=r.split('\n').map(x=>`<div class="card" style="padding:10px;margin:5px 0;font-size:12px;">${x}</div>`).join('');}); }
+window.refreshTrend = function(){ api(`请模拟5条当前欧美娱乐圈的${curApp}实时热搜词条。`).then(r=>{if(r)$("trendList").innerHTML=r.split('\n').map(x=>`<div class="row" style="color:#c8a440;font-weight:bold;">${x}</div>`).join('');}); }
 
 window.getFanCmts = function(n,g,btn){
   btn.innerText="加载中..."; btn.disabled=true;
@@ -1439,11 +1459,11 @@ window.replyComment = function(btn, cmt){
 }
 
 let curC;
-function oChat(i){ curC=conts[i]; $("vList").style.display="none"; $("vChat").style.display="block"; $("vName").innerText=curC.n; dChat(); }
-function vBack(){ $("vChat").style.display="none"; $("vList").style.display="block"; }
+window.oChat = function(i){ curC=conts[i]; $("vList").style.display="none"; $("vChat").style.display="block"; $("vName").innerText=curC.n; dChat(); }
+window.vBack = function(){ $("vChat").style.display="none"; $("vList").style.display="block"; }
 function dChat(){ $("vHistory").innerHTML=curC.h.map(x=>`<div class="${x.m?'bubble-me':'bubble-other'}"><span>${x.t}</span></div>`).join(''); $("vHistory").scrollTop=9999; }
-function vSendMsg(){ let v=$("vIn").value; if(!v)return; curC.h.push({m:1,t:v}); $("vIn").value=""; dChat(); api(`用自然、简短的话语回复这条消息：${v}`).then(r=>{ if(r){ curC.h.push({m:0,t:r}); dChat(); saveGame(); } }); }
-function vSendMom(){ let v=$("vMomIn").value; if(!v)return; posts.mom.unshift(v); $("vMomIn").value=""; $("vMomList").innerHTML = posts.mom.map(x=>`<div class="card" style="padding:10px;margin:5px 0;">${x}</div>`).join(''); saveGame(); }
+window.vSendMsg = function(){ let v=$("vIn").value; if(!v)return; curC.h.push({m:1,t:v}); $("vIn").value=""; dChat(); api(`用自然、简短的话语回复这条消息：${v}`).then(r=>{ if(r){ curC.h.push({m:0,t:r}); dChat(); saveGame(); } }); }
+window.vSendMom = function(){ let v=$("vMomIn").value; if(!v)return; posts.mom.unshift(v); $("vMomIn").value=""; $("vMomList").innerHTML = posts.mom.map(x=>`<div class="card" style="padding:10px;margin:5px 0;">${x}</div>`).join(''); saveGame(); }
 </script>
 </body>
 </html>

@@ -501,68 +501,73 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
   </div>
 </div>
 <script>
-/* ================= 修复后密码验证解锁函数 无BUG版 ================= */
+/* ========== 修复版密码验证 + 全局页面加载统一处理（无冲突） ========== */
+// 统一小写密码库，彻底规避大小写匹配bug
+const VALID_PASS = [
+    "dhtjuffuyjg",
+    "123456",
+    "buyer-001",
+    "vip888",
+    "pro-gamer-2026"
+];
+
 window.verifyGameKey = function() {
-    var inputEl = document.getElementById('inGameKey');
-    if (!inputEl) {
-        alert("错误：密码输入框元素丢失！请刷新页面重试");
-        return;
-    }
-    
-    // 去除首尾所有空格、转小写统一匹配
-    var val = inputEl.value.trim().toLowerCase();
-    const PASSWORDS = [
-        "dhtjuffuyjg",
-        "123456",
-        "buyer-001",
-        "vip888",
-        "pro-gamer-2026"
-    ];
+    // 等待DOM完全渲染兜底
+    setTimeout(()=>{
+        const inputDom = document.getElementById("inGameKey");
+        const authBox = document.getElementById("keyAuthBox");
+        const startBox = document.getElementById("gameStartBox");
+        if(!inputDom || !authBox || !startBox){
+            alert("DOM未加载完成，请等待页面加载完毕再点解锁");
+            return;
+        }
 
-    if (val === "") {
-        alert("请输入密钥密码，不能为空！");
-        return;
-    }
+        let inputText = inputDom.value.trim().toLowerCase();
+        if(inputText === ""){
+            alert("密钥不能为空！");
+            return;
+        }
 
-    let isValid = PASSWORDS.includes(val);
+        // 精确匹配
+        const passOk = VALID_PASS.includes(inputText);
+        if(passOk){
+            // 写入激活标记
+            localStorage.setItem("isDeviceActivated","true");
+            alert("✅ 解锁成功！跳转角色创建页面");
+            // 切换界面
+            authBox.style.display = "none";
+            startBox.style.display = "block";
+            // 清空输入框防止缓存
+            inputDom.value = "";
 
-    if (isValid) {
-        alert("✅ 密钥验证成功，游戏权限已解锁！");
-        // 永久标记设备激活
-        localStorage.setItem('isDeviceActivated', 'true');
-        // 切换界面
-        document.getElementById('keyAuthBox').style.display = 'none';
-        document.getElementById('gameStartBox').style.display = 'block';
-        
-        // 检测存档弹窗
-        if (localStorage.getItem("starProSave_1")) {
-            setTimeout(() => {
-                if (confirm("检测到本地存档1，是否直接读取存档进入游戏？")) {
-                    if (typeof loadGame === 'function') loadGame(1);
+            // 存档检测延迟执行，避免DOM冲突
+            setTimeout(()=>{
+                if(localStorage.getItem("starProSave_1")){
+                    if(confirm("检测到存档1，是否直接读取存档进入游戏？")){
+                        if(typeof loadGame === "function") loadGame(1);
+                    }
                 }
-            }, 300);
+            },400);
+        }else{
+            alert("❌ 密码错误！可用密码：PRO-GAMER-2026 / VIP888 / 123456");
+            inputDom.value = "";
+            inputDom.focus();
         }
-    } else {
-        alert("❌ 密钥错误！复制下方任意密码重试：\nPRO-GAMER-2026\nVIP888\n123456");
-        inputEl.value = ""; // 清空输入框方便重输
-        inputEl.focus();
-    }
-};
+    },150);
+}
 
-// 页面加载激活检测修复（解决刷新自动失效问题）
-window.addEventListener('DOMContentLoaded', function(){
-    setTimeout(function() {
-        const activated = localStorage.getItem('isDeviceActivated');
-        const authBox = document.getElementById('keyAuthBox');
-        const startBox = document.getElementById('gameStartBox');
-        if(activated === 'true'){
-            authBox.style.display = 'none';
-            startBox.style.display = 'block';
-        }
-    }, 200);
-})
-window.onload = function() {
-    // 监听社交媒体发帖类型切换 (TikTok 宣发等)
+// 唯一全局加载事件（整合原onload功能，不再冲突）
+document.addEventListener("DOMContentLoaded",function(){
+    // 1. 启动自动激活检测
+    const isAct = localStorage.getItem("isDeviceActivated");
+    const authBox = document.getElementById("keyAuthBox");
+    const startBox = document.getElementById("gameStartBox");
+    if(isAct === "true" && authBox && startBox){
+        authBox.style.display = "none";
+        startBox.style.display = "block";
+    }
+
+    // 2. 还原原来window.onload里的社交媒体切换逻辑
     let radios = document.querySelectorAll('input[name="post-type"]');
     if(radios) {
         radios.forEach(radio => {
@@ -575,7 +580,7 @@ window.onload = function() {
             });
         });
     }
-};
+});
 
 /* ================= 全局核心变量 ================= */
 const GAME_VERSION = "1.8.1";
@@ -1471,4 +1476,3 @@ function dChat(){ $("vHistory").innerHTML=curC.h.map(x=>`<div class="${x.m?'bubb
 window.vSendMsg = function(){ let v=$("vIn").value; if(!v)return; curC.h.push({m:1,t:v}); $("vIn").value=""; dChat(); api(`用自然、简短的话语回复这条消息：${v}`).then(r=>{ if(r){ curC.h.push({m:0,t:r}); dChat(); saveGame(); } }); }
 window.vSendMom = function(){ let v=$("vMomIn").value; if(!v)return; posts.mom.unshift(v); $("vMomIn").value=""; $("vMomList").innerHTML = posts.mom.map(x=>`<div class="card" style="padding:10px;margin:5px 0;">${x}</div>`).join(''); saveGame(); }
 </script>
-不走

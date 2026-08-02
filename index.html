@@ -501,69 +501,66 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
   </div>
 </div>
 <script>
-/* ================= 极简暴力密码锁 ================= */
-const PASSWORDS = [
-    "dhtjuffuyjg",   // 定制密码
-    "123456",        // 备用简易测试密码
-    "BUYER-001",
-    "VIP888",
-    "PRO-GAMER-2026"
-];
-
-// 核心解锁函数（直接挂载到 window，防止任何作用域丢失）
+/* ================= 修复后密码验证解锁函数 无BUG版 ================= */
 window.verifyGameKey = function() {
     var inputEl = document.getElementById('inGameKey');
     if (!inputEl) {
-        alert("严重错误：找不到输入框元素，请重新复制完整代码！");
+        alert("错误：密码输入框元素丢失！请刷新页面重试");
         return;
     }
     
-    // 获取输入的密码并转为小写，去掉前后空格防手滑
+    // 去除首尾所有空格、转小写统一匹配
     var val = inputEl.value.trim().toLowerCase();
+    const PASSWORDS = [
+        "dhtjuffuyjg",
+        "123456",
+        "buyer-001",
+        "vip888",
+        "pro-gamer-2026"
+    ];
+
     if (val === "") {
-        alert("请输入购买密码！");
+        alert("请输入密钥密码，不能为空！");
         return;
     }
 
-    // 遍历检查密码是否匹配
-    var isValid = false;
-    for (var i = 0; i < PASSWORDS.length; i++) {
-        if (PASSWORDS[i].toLowerCase() === val) {
-            isValid = true;
-            break;
-        }
-    }
+    let isValid = PASSWORDS.includes(val);
 
     if (isValid) {
-        alert("✅ 密码验证通过！权限已解锁。");
+        alert("✅ 密钥验证成功，游戏权限已解锁！");
+        // 永久标记设备激活
         localStorage.setItem('isDeviceActivated', 'true');
-        
-        // 瞬间隐藏密码框，显示游戏资料填写界面
+        // 切换界面
         document.getElementById('keyAuthBox').style.display = 'none';
         document.getElementById('gameStartBox').style.display = 'block';
         
-        // 如果本地有存档，顺便问一句要不要读档
+        // 检测存档弹窗
         if (localStorage.getItem("starProSave_1")) {
-            if (confirm("检测到本地有存档记录，是否直接读取存档 1 恢复进度？")) {
-                if (typeof loadGame === 'function') loadGame(1);
-            }
+            setTimeout(() => {
+                if (confirm("检测到本地存档1，是否直接读取存档进入游戏？")) {
+                    if (typeof loadGame === 'function') loadGame(1);
+                }
+            }, 300);
         }
     } else {
-        alert("❌ 密码错误！请输入正确的密码或购买编号。");
+        alert("❌ 密钥错误！复制下方任意密码重试：\nPRO-GAMER-2026\nVIP888\n123456");
+        inputEl.value = ""; // 清空输入框方便重输
+        inputEl.focus();
     }
 };
 
-// 每次打开网页时，自动检查是否已经输过密码
-setTimeout(function() {
-    if (localStorage.getItem('isDeviceActivated') === 'true') {
-        var authBox = document.getElementById('keyAuthBox');
-        var startBox = document.getElementById('gameStartBox');
-        if(authBox) authBox.style.display = 'none';
-        if(startBox) startBox.style.display = 'block';
-    }
-}, 100);
-/* ================================================== */
-
+// 页面加载激活检测修复（解决刷新自动失效问题）
+window.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function() {
+        const activated = localStorage.getItem('isDeviceActivated');
+        const authBox = document.getElementById('keyAuthBox');
+        const startBox = document.getElementById('gameStartBox');
+        if(activated === 'true'){
+            authBox.style.display = 'none';
+            startBox.style.display = 'block';
+        }
+    }, 200);
+})
 window.onload = function() {
     // 监听社交媒体发帖类型切换 (TikTok 宣发等)
     let radios = document.querySelectorAll('input[name="post-type"]');
@@ -1474,3 +1471,4 @@ function dChat(){ $("vHistory").innerHTML=curC.h.map(x=>`<div class="${x.m?'bubb
 window.vSendMsg = function(){ let v=$("vIn").value; if(!v)return; curC.h.push({m:1,t:v}); $("vIn").value=""; dChat(); api(`用自然、简短的话语回复这条消息：${v}`).then(r=>{ if(r){ curC.h.push({m:0,t:r}); dChat(); saveGame(); } }); }
 window.vSendMom = function(){ let v=$("vMomIn").value; if(!v)return; posts.mom.unshift(v); $("vMomIn").value=""; $("vMomList").innerHTML = posts.mom.map(x=>`<div class="card" style="padding:10px;margin:5px 0;">${x}</div>`).join(''); saveGame(); }
 </script>
+不走

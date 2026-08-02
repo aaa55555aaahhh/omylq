@@ -109,8 +109,8 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
     <div id="keyAuthBox" style="padding:20px 10px; border-radius:12px; background:#fff8e8; border:1px solid #f0e9d0;">
         <p style="font-size:14px; font-weight:bold; margin-bottom:15px; color:#a67c00;">✨ 游玩权限验证 ✨</p>
         <input type="text" id="inGameKey" style="text-align:center; margin-bottom:15px; border:1px solid #d1c290; border-radius:8px; padding:12px; font-size:14px; background:#fff;" placeholder="请输入购买密钥...">
-        <!-- 给按钮增加了 ID，用于双重事件绑定防失效 -->
-        <button id="btnVerifyKey" onclick="window.verifyGameKey()" style="background:#c8a440; color:#000; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; font-size:14px; width:100%; box-shadow:0 2px 5px rgba(200,164,64,0.3);">确认解锁游戏</button>
+        <!-- 修改点：去掉多余的 window. 前缀，直接绑定最基础的点击事件 -->
+        <button id="btnVerifyKey" onclick="verifyGameKey()" style="background:#c8a440; color:#000; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; font-size:14px; width:100%; box-shadow:0 2px 5px rgba(200,164,64,0.3);">确认解锁游戏</button>
     </div>
 
     <!-- 游戏资料填写与读档区（验证成功后直接显示此区域） -->
@@ -501,111 +501,87 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
   </div>
 </div>
 <script>
-/* ================= 密钥整理区与防御性验证系统 ================= */
-const VALID_KEYS = [
-    "BUYER-001-A1B2C",
-    "BUYER-002-D3E4F",
-    "TEST-KEY-123", // 测试用密钥
-    "dhtjuffuyjg",   // 新增定制密码
-    "VIP-MEMBER-888",
+/* ================= 极简暴力密码锁 ================= */
+const PASSWORDS = [
+    "dhtjuffuyjg",   // 定制密码
+    "123456",        // 备用简易测试密码
+    "BUYER-001",
+    "VIP888",
     "PRO-GAMER-2026"
 ];
 
-// 检查设备是否已经激活
-window.checkDeviceActivation = function() {
-    try {
-        let authBox = document.getElementById('keyAuthBox');
-        let startBox = document.getElementById('gameStartBox');
-        if (!authBox || !startBox) return false;
-
-        if (localStorage.getItem('isDeviceActivated') === 'true') {
-            authBox.style.display = 'none';
-            startBox.style.display = 'block';
-            return true;
-        }
-        authBox.style.display = 'block';
-        startBox.style.display = 'none';
-        return false;
-    } catch(err) {
-        console.error("检查激活状态报错:", err);
-        return false;
-    }
-}
-
-// 核心验证函数（加入防呆与容错机制）
+// 核心解锁函数（直接挂载到 window，防止任何作用域丢失）
 window.verifyGameKey = function() {
-    try {
-        let inputEl = document.getElementById('inGameKey');
-        if (!inputEl) {
-            alert("⚠️ 严重系统错误：未找到输入框节点，请刷新页面重试！");
-            return;
+    var inputEl = document.getElementById('inGameKey');
+    if (!inputEl) {
+        alert("严重错误：找不到输入框元素，请重新复制完整代码！");
+        return;
+    }
+    
+    // 获取输入的密码并转为小写，去掉前后空格防手滑
+    var val = inputEl.value.trim().toLowerCase();
+    if (val === "") {
+        alert("请输入购买密码！");
+        return;
+    }
+
+    // 遍历检查密码是否匹配
+    var isValid = false;
+    for (var i = 0; i < PASSWORDS.length; i++) {
+        if (PASSWORDS[i].toLowerCase() === val) {
+            isValid = true;
+            break;
         }
+    }
+
+    if (isValid) {
+        alert("✅ 密码验证通过！权限已解锁。");
+        localStorage.setItem('isDeviceActivated', 'true');
         
-        // 自动去除前后空格并统一转为小写，防止玩家手滑打错大小写
-        const inputKey = inputEl.value.trim().toLowerCase(); 
-        if (!inputKey) {
-            alert("请输入有效密钥！");
-            return;
+        // 瞬间隐藏密码框，显示游戏资料填写界面
+        document.getElementById('keyAuthBox').style.display = 'none';
+        document.getElementById('gameStartBox').style.display = 'block';
+        
+        // 如果本地有存档，顺便问一句要不要读档
+        if (localStorage.getItem("starProSave_1")) {
+            if (confirm("检测到本地有存档记录，是否直接读取存档 1 恢复进度？")) {
+                if (typeof loadGame === 'function') loadGame(1);
+            }
         }
-
-        // 将系统密钥库也全部转为小写进行无感对比
-        const validKeysLower = VALID_KEYS.map(k => k.toLowerCase());
-
-        if (validKeysLower.includes(inputKey)) {
-            alert("✅ 验证成功！游玩权限已彻底解锁。");
-            localStorage.setItem('isDeviceActivated', 'true');
-            
-            // 强制刷新UI图层
-            document.getElementById('keyAuthBox').style.display = 'none';
-            document.getElementById('gameStartBox').style.display = 'block';
-            
-            initAfterActivation();
-        } else {
-            alert("❌ 密钥无效或已被使用，请检查您的输入是否有误！");
-        }
-    } catch (err) {
-        alert("⚠️ 验证系统发生底层报错，请截图反馈开发者：\n" + err.message);
+    } else {
+        alert("❌ 密码错误！请输入正确的密码或购买编号。");
     }
-}
+};
 
-window.initAfterActivation = function() {
-    loadApiConfig();
-    if(localStorage.getItem("starProSave_1")) {
-        if(confirm("检测到本地存档(槽位1)，是否自动读取恢复进度？")) {
-            loadGame(1);
-        }
+// 每次打开网页时，自动检查是否已经输过密码
+setTimeout(function() {
+    if (localStorage.getItem('isDeviceActivated') === 'true') {
+        var authBox = document.getElementById('keyAuthBox');
+        var startBox = document.getElementById('gameStartBox');
+        if(authBox) authBox.style.display = 'none';
+        if(startBox) startBox.style.display = 'block';
     }
-}
+}, 100);
+/* ================================================== */
 
 window.onload = function() {
-    try {
-        // 双重事件绑定兜底，防止 html 里的 onclick 失效
-        let verifyBtn = document.getElementById('btnVerifyKey');
-        if(verifyBtn) {
-            verifyBtn.addEventListener('click', window.verifyGameKey);
-        }
-
-        if (checkDeviceActivation()) {
-            initAfterActivation();
-        }
-        
-        // 监听社交媒体发帖类型切换 (TikTok 宣发等)
-        document.querySelectorAll('input[name="post-type"]').forEach(radio => {
+    // 监听社交媒体发帖类型切换 (TikTok 宣发等)
+    let radios = document.querySelectorAll('input[name="post-type"]');
+    if(radios) {
+        radios.forEach(radio => {
             radio.addEventListener('change', function() {
                 let sel = document.getElementById('promo-song-select');
                 if(sel) {
                     sel.style.display = (this.value === 'promo') ? 'inline-block' : 'none';
-                    if(this.value === 'promo') populatePromoSongs();
+                    if(this.value === 'promo' && typeof populatePromoSongs === 'function') populatePromoSongs();
                 }
             });
         });
-    } catch (e) {
-        console.error("页面加载初始化发生错误", e);
     }
 };
 
 /* ================= 全局核心变量 ================= */
-const GAME_VERSION = "1.8.0";
+const GAME_VERSION = "1.8.1";
 const $ = id => document.getElementById(id);
 let ad={}; let lib=[]; let std=[]; let albs=[]; let trackPool=[]; let marketSongs=[]; let worldArtists=[]; let writers=[]; let myWorks=[];
 let selG=[]; let selAG=[]; let posts={wb:[],x:[],ins:[],tiktok:[],mom:[]}; let curApp="";
@@ -940,7 +916,7 @@ window.doShow = function(id, name){
   updAttr(); renderShows(); alert(`🎉 震撼全球的表演！狂揽 ${gain.toLocaleString()} 粉丝！`); saveGame();
 }
 
-/* ================= 【深度细化】奖项与四大系统 ================= */
+/* ================= 深度细化奖项与四大系统 ================= */
 function renderAwardsMap(){
   let isAwardMonth = [2,5,8,11].includes(time.m);
   let awdName = time.m==2?"星耀留声机大奖 (模拟格莱美)":time.m==5?"BB榜音乐盛典":time.m==8?"V-视听大奖 (模拟VMA)":time.m==11?"全星音乐盛典 (模拟AMA)":"";
@@ -980,7 +956,7 @@ window.checkAutoAward = function(){
   let resultMsg = "";
 
   if(time.m==2) {
-      awdName = "星耀留声机大奖 (留声机四大通类)";
+      awdName = "星耀留声机大奖 (四大通类)";
       aoty = pickMeOrNpc(albsOnly, 'Spub', 0.2);
       soty = pickMeOrNpc(trks, 'Spub', 0.2);
       roty = pickMeOrNpc(trks, 'ptsY', 0.2);
@@ -988,41 +964,36 @@ window.checkAutoAward = function(){
       if(Math.random()<0.15) bna = ad.s; 
       sub1 = pickMeOrNpc(popTrks, 'Spub', 0.25);
       sub2 = pickMeOrNpc(rckTrks, 'Spub', 0.25);
-      
       resultMsg = `【年度专辑 AOTY】：${aoty}\n【年度歌曲 SOTY】：${soty}\n【年度制作 ROTY】：${roty}\n【最佳新人】：${bna}\n【最佳流行歌手】：${sub1}\n【最佳摇滚/另类】：${sub2}`;
   } 
   else if(time.m==5) {
-      awdName = "BB榜音乐盛典 (销量与数据为王)";
+      awdName = "BB榜音乐盛典 (销量与数据)";
       aoty = pickMeOrNpc(albsOnly, 'slTotal', 0.3); 
       soty = pickMeOrNpc(trks, 'pts', 0.3);        
       sub1 = pickMeOrNpc(trks, 'stm', 0.3);        
       resultMsg = `【顶级公告牌专辑】：${aoty}\n【顶级Hot100单曲】：${soty}\n【顶级流媒体歌曲】：${sub1}`;
   }
   else if(time.m==8) {
-      awdName = "V-视听大奖 (年度MV与视觉)";
+      awdName = "V-视听大奖 (年度MV)";
       aoty = pickMeOrNpc(trks, 'mvN', 0.4); 
       sub1 = pickMeOrNpc(popTrks, 'stmDly', 0.3);
       sub2 = pickMeOrNpc(hipTrks, 'stmDly', 0.3);
-      resultMsg = `【年度最佳MV】：${aoty}\n【最佳流行MV】：${sub1}\n【最佳HipHop/R&B MV】：${sub2}`;
+      resultMsg = `【年度最佳MV】：${aoty}\n【最佳流行MV】：${sub1}\n【最佳HipHop MV】：${sub2}`;
   }
   else if(time.m==11) {
-      awdName = "全星音乐盛典 (粉丝票选与人气)";
+      awdName = "全星音乐盛典 (粉丝票选)";
       aoty = worldArtists.sort((a,b)=>b.fans-a.fans)[0]?.n || ad.s; 
       if(ad.st.f > 20000000 && Math.random()<0.4) aoty = ad.s;
       soty = pickMeOrNpc(albsOnly, 'stmDlyAlb', 0.4); 
-      resultMsg = `【年度最佳艺人】：${aoty}\n【最受欢迎流行/摇滚专辑】：${soty}`;
+      resultMsg = `【年度最佳艺人】：${aoty}\n【最受欢迎专辑】：${soty}`;
   }
 
   let rec = `<b>${time.y}年${time.m}月 - ${awdName}</b><br><span style="font-size:11px;color:#555;">${resultMsg.replace(/\n/g,'<br>')}</span>`;
   historyAwards.unshift(rec);
-  
   let isMeWin = resultMsg.includes(ad.s);
-  if(isMeWin) {
-      ad.awd.unshift(`${time.y}年${time.m}月 - 在【${awdName}】中斩获大奖！`);
-      updAttr();
-  }
+  if(isMeWin) { ad.awd.unshift(`${time.y}年${time.m}月 - 在【${awdName}】中斩获大奖！`); updAttr(); }
 
-  $("txtAwardBannerMsg").innerHTML = `🏆 本月举办了【${awdName}】！<br><br><div style="text-align:left;font-size:13px;line-height:1.6;background:#222;padding:10px;border-radius:8px;">${resultMsg.replace(/\n/g,'<br>')}</div><br>${isMeWin ? "<b style='color:#25d366;'>🎉 恭喜！你在这场盛典中成功斩获了奖项！荣誉已载入史册。</b>" : "<span style='color:#888;'>遗憾的是，你本次陪跑了，继续努力吧！</span>"}`;
+  $("txtAwardBannerMsg").innerHTML = `🏆 本月举办了【${awdName}】！<br><br><div style="text-align:left;font-size:13px;line-height:1.6;background:#222;padding:10px;border-radius:8px;">${resultMsg.replace(/\n/g,'<br>')}</div><br>${isMeWin ? "<b style='color:#25d366;'>🎉 恭喜！成功斩获了奖项！荣誉已载入史册。</b>" : "<span style='color:#888;'>遗憾的是，你本次陪跑了，继续努力吧！</span>"}`;
   $("mAwardBanner").classList.add("open");
 }
 window.joinAward = function(awdName){ window.checkAutoAward(); renderAwardsMap(); saveGame(); }
@@ -1503,5 +1474,3 @@ function dChat(){ $("vHistory").innerHTML=curC.h.map(x=>`<div class="${x.m?'bubb
 window.vSendMsg = function(){ let v=$("vIn").value; if(!v)return; curC.h.push({m:1,t:v}); $("vIn").value=""; dChat(); api(`用自然、简短的话语回复这条消息：${v}`).then(r=>{ if(r){ curC.h.push({m:0,t:r}); dChat(); saveGame(); } }); }
 window.vSendMom = function(){ let v=$("vMomIn").value; if(!v)return; posts.mom.unshift(v); $("vMomIn").value=""; $("vMomList").innerHTML = posts.mom.map(x=>`<div class="card" style="padding:10px;margin:5px 0;">${x}</div>`).join(''); saveGame(); }
 </script>
-</body>
-</html>

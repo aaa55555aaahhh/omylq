@@ -105,29 +105,29 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
   <div class="card" style="margin-top:20px;text-align:center;">
     <h2 class="tg" style="font-size:24px;margin-bottom:20px;">星路制作人</h2>
     
-    <input id="inRealName" placeholder="真实姓名 (必填)" style="text-align:center;">
-    <input id="inStageName" placeholder="艺名" style="text-align:center;">
-    <input id="inFanName" placeholder="粉丝群体名称" style="text-align:center;">
-    <input id="inGender" placeholder="性别 (自定义，如：女/男/外星人)" style="text-align:center;">
-    
-    <!-- 密钥验证区域 -->
-    <div id="keyAuthBox" style="margin-top:15px; padding:15px; border:1px dashed #c8a440; border-radius:8px; background:#fefcf5;">
-        <p style="font-size:13px; font-weight:bold; margin-bottom:10px; color:#c8a440;">🔒 请输入游戏购买密钥以解锁游玩权限</p>
-        <input type="text" id="inGameKey" style="text-align:center; margin-bottom:10px; border-color:#c8a440;" placeholder="输入密钥/购买编号...">
-        <button onclick="verifyGameKey()" style="background:#111; color:#c8a440;">验证密钥</button>
+    <!-- 密钥验证区域 (优化UI美观度，默认显示) -->
+    <div id="keyAuthBox" style="padding:20px 10px; border-radius:12px; background:#fff8e8; border:1px solid #f0e9d0;">
+        <p style="font-size:14px; font-weight:bold; margin-bottom:15px; color:#a67c00;">✨ 游玩权限验证 ✨</p>
+        <input type="text" id="inGameKey" style="text-align:center; margin-bottom:15px; border:1px solid #d1c290; border-radius:8px; padding:12px; font-size:14px; background:#fff;" placeholder="请输入购买密钥或编号...">
+        <button onclick="verifyGameKey()" style="background:#c8a440; color:#000; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; font-size:14px; width:100%; box-shadow:0 2px 5px rgba(200,164,64,0.3);">确认解锁游戏</button>
     </div>
 
-    <!-- 游戏进入区域（默认隐藏，验证通过后显示） -->
+    <!-- 游戏资料填写与读档区（验证成功后直接显示此区域） -->
     <div id="gameStartBox" style="display:none;">
-        <p style="font-size:12px;color:#888;margin:10px 0;">算法已全面升级：真实单曲/专辑档位、四大奖项结算、粉丝互动回复系统已就绪。</p>
-        <button id="btnCreate" onclick="startGame()" style="margin-top:10px;padding:16px;">✓ 创建并进入演艺圈</button>
+        <input id="inRealName" placeholder="真实姓名 (必填)" style="text-align:center; font-size:14px;">
+        <input id="inStageName" placeholder="艺名" style="text-align:center; font-size:14px;">
+        <input id="inFanName" placeholder="粉丝群体名称" style="text-align:center; font-size:14px;">
+        <input id="inGender" placeholder="性别 (自定义，如：女/男/外星人)" style="text-align:center; font-size:14px;">
+        
+        <p style="font-size:12px;color:#888;margin:10px 0;">算法已全面升级：四大通类奖项细分、粉丝动态交互系统已就绪。</p>
+        <button id="btnCreate" onclick="startGame()" style="margin-top:10px;padding:16px;font-size:15px;">✓ 创建并进入演艺圈</button>
         
         <div style="margin-top:20px;border-top:1px solid #eee;padding-top:15px;">
-          <p style="font-size:12px;color:#555;margin-bottom:10px;">读取本地存档：</p>
+          <p style="font-size:12px;color:#555;margin-bottom:10px;font-weight:bold;">读取本地存档：</p>
           <div style="display:flex;gap:5px;">
-            <button class="sec" onclick="loadGame(1)">档1</button>
-            <button class="sec" onclick="loadGame(2)">档2</button>
-            <button class="sec" onclick="loadGame(3)">档3</button>
+            <button class="sec" onclick="loadGame(1)">存档 1</button>
+            <button class="sec" onclick="loadGame(2)">存档 2</button>
+            <button class="sec" onclick="loadGame(3)">存档 3</button>
           </div>
         </div>
     </div>
@@ -925,7 +925,6 @@ window.checkAutoAward = function(){
   let rckTrks = trks.filter(x=>x.gnr.includes("摇滚")||x.gnr.includes("另类")||x.gnr.includes("乡村"));
   let hipTrks = trks.filter(x=>x.gnr.includes("HipHop")||x.gnr.includes("R&B")||x.gnr.includes("灵魂乐"));
 
-  // 辅助挑选函数
   const pickBest = (arr, sortKey) => { arr.sort((a,b)=>b[sortKey]-a[sortKey]); return arr[0] ? arr[0].artist + `《${arr[0].n}》` : "空缺"; };
   const pickMeOrNpc = (arr, sortKey, myProb) => { 
       arr.sort((a,b)=>b[sortKey]-a[sortKey]); 
@@ -949,7 +948,7 @@ window.checkAutoAward = function(){
       soty = pickMeOrNpc(trks, 'Spub', 0.2);
       roty = pickMeOrNpc(trks, 'ptsY', 0.2);
       bna  = worldArtists.sort((a,b)=>b.fans-a.fans)[Math.floor(Math.random()*3)]?.n || "黑马新人";
-      if(Math.random()<0.15) bna = ad.s; // 玩家拿新人奖概率
+      if(Math.random()<0.15) bna = ad.s; 
       sub1 = pickMeOrNpc(popTrks, 'Spub', 0.25);
       sub2 = pickMeOrNpc(rckTrks, 'Spub', 0.25);
       
@@ -957,21 +956,21 @@ window.checkAutoAward = function(){
   } 
   else if(time.m==5) {
       awdName = "BB榜音乐盛典 (销量与数据为王)";
-      aoty = pickMeOrNpc(albsOnly, 'slTotal', 0.3); // Top Album
-      soty = pickMeOrNpc(trks, 'pts', 0.3);        // Top Hot 100 Song
-      sub1 = pickMeOrNpc(trks, 'stm', 0.3);        // Top Streaming Song
+      aoty = pickMeOrNpc(albsOnly, 'slTotal', 0.3); 
+      soty = pickMeOrNpc(trks, 'pts', 0.3);        
+      sub1 = pickMeOrNpc(trks, 'stm', 0.3);        
       resultMsg = `【顶级公告牌专辑】：${aoty}\n【顶级Hot100单曲】：${soty}\n【顶级流媒体歌曲】：${sub1}`;
   }
   else if(time.m==8) {
       awdName = "V-视听大奖 (年度MV与视觉)";
-      aoty = pickMeOrNpc(trks, 'mvN', 0.4); // Video of the year (按拍MV次数/热度算)
+      aoty = pickMeOrNpc(trks, 'mvN', 0.4); 
       sub1 = pickMeOrNpc(popTrks, 'stmDly', 0.3);
       sub2 = pickMeOrNpc(hipTrks, 'stmDly', 0.3);
       resultMsg = `【年度最佳MV】：${aoty}\n【最佳流行MV】：${sub1}\n【最佳HipHop/R&B MV】：${sub2}`;
   }
   else if(time.m==11) {
       awdName = "全星音乐盛典 (粉丝票选与人气)";
-      aoty = worldArtists.sort((a,b)=>b.fans-a.fans)[0]?.n || ad.s; // Artist of the Year
+      aoty = worldArtists.sort((a,b)=>b.fans-a.fans)[0]?.n || ad.s; 
       if(ad.st.f > 20000000 && Math.random()<0.4) aoty = ad.s;
       soty = pickMeOrNpc(albsOnly, 'stmDlyAlb', 0.4); 
       resultMsg = `【年度最佳艺人】：${aoty}\n【最受欢迎流行/摇滚专辑】：${soty}`;

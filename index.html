@@ -108,8 +108,9 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
     <!-- 密钥验证区域 (优化UI美观度，默认显示) -->
     <div id="keyAuthBox" style="padding:20px 10px; border-radius:12px; background:#fff8e8; border:1px solid #f0e9d0;">
         <p style="font-size:14px; font-weight:bold; margin-bottom:15px; color:#a67c00;">✨ 游玩权限验证 ✨</p>
-        <input type="text" id="inGameKey" style="text-align:center; margin-bottom:15px; border:1px solid #d1c290; border-radius:8px; padding:12px; font-size:14px; background:#fff;" placeholder="请输入购买密钥或编号...">
-        <button onclick="verifyGameKey()" style="background:#c8a440; color:#000; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; font-size:14px; width:100%; box-shadow:0 2px 5px rgba(200,164,64,0.3);">确认解锁游戏</button>
+        <input type="text" id="inGameKey" style="text-align:center; margin-bottom:15px; border:1px solid #d1c290; border-radius:8px; padding:12px; font-size:14px; background:#fff;" placeholder="请输入购买密钥...">
+        <!-- 给按钮增加了 ID，用于双重事件绑定防失效 -->
+        <button id="btnVerifyKey" onclick="window.verifyGameKey()" style="background:#c8a440; color:#000; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; font-size:14px; width:100%; box-shadow:0 2px 5px rgba(200,164,64,0.3);">确认解锁游戏</button>
     </div>
 
     <!-- 游戏资料填写与读档区（验证成功后直接显示此区域） -->
@@ -500,7 +501,7 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
   </div>
 </div>
 <script>
-/* ================= 密钥整理区 ================= */
+/* ================= 密钥整理区与防御性验证系统 ================= */
 const VALID_KEYS = [
     "BUYER-001-A1B2C",
     "BUYER-002-D3E4F",
@@ -512,33 +513,58 @@ const VALID_KEYS = [
 
 // 检查设备是否已经激活
 window.checkDeviceActivation = function() {
-    let authBox = document.getElementById('keyAuthBox');
-    let startBox = document.getElementById('gameStartBox');
-    if (!authBox || !startBox) return false;
+    try {
+        let authBox = document.getElementById('keyAuthBox');
+        let startBox = document.getElementById('gameStartBox');
+        if (!authBox || !startBox) return false;
 
-    if (localStorage.getItem('isDeviceActivated') === 'true') {
-        authBox.style.display = 'none';
-        startBox.style.display = 'block';
-        return true;
+        if (localStorage.getItem('isDeviceActivated') === 'true') {
+            authBox.style.display = 'none';
+            startBox.style.display = 'block';
+            return true;
+        }
+        authBox.style.display = 'block';
+        startBox.style.display = 'none';
+        return false;
+    } catch(err) {
+        console.error("检查激活状态报错:", err);
+        return false;
     }
-    authBox.style.display = 'block';
-    startBox.style.display = 'none';
-    return false;
 }
 
-// 验证输入的密钥
+// 核心验证函数（加入防呆与容错机制）
 window.verifyGameKey = function() {
-    const inputKey = document.getElementById('inGameKey').value.trim();
-    if (VALID_KEYS.includes(inputKey)) {
-        alert("✅ 验证成功！游玩权限已解锁。");
-        localStorage.setItem('isDeviceActivated', 'true');
+    try {
+        let inputEl = document.getElementById('inGameKey');
+        if (!inputEl) {
+            alert("⚠️ 严重系统错误：未找到输入框节点，请刷新页面重试！");
+            return;
+        }
         
-        document.getElementById('keyAuthBox').style.display = 'none';
-        document.getElementById('gameStartBox').style.display = 'block';
-        
-        initAfterActivation();
-    } else {
-        alert("❌ 密钥无效或已被使用，请检查您的购买编号！");
+        // 自动去除前后空格并统一转为小写，防止玩家手滑打错大小写
+        const inputKey = inputEl.value.trim().toLowerCase(); 
+        if (!inputKey) {
+            alert("请输入有效密钥！");
+            return;
+        }
+
+        // 将系统密钥库也全部转为小写进行无感对比
+        const validKeysLower = VALID_KEYS.map(k => k.toLowerCase());
+
+        if (validKeysLower.includes(inputKey)) {
+            alert("✅ 验证成功！游玩权限已彻底解锁。");
+            localStorage.setItem('isDeviceActivated', 'true');
+            
+            // 强制刷新UI图层
+            document.getElementById('keyAuthBox').style.display = 'none';
+            document.getElementById('gameStartBox').style.display = 'block';
+            
+            initAfterActivation();
+        } else {
+            alert("❌ 密钥无效或已被使用，请检查您的输入是否有误！");
+        }
+    } catch (err) {
+        alert("⚠️ 验证系统发生底层报错，请截图反馈开发者：\n" + err.message);
     }
 }
 
@@ -552,23 +578,34 @@ window.initAfterActivation = function() {
 }
 
 window.onload = function() {
-    if (checkDeviceActivation()) {
-        initAfterActivation();
-    }
-    document.querySelectorAll('input[name="post-type"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            if(this.value === 'promo') {
-                document.getElementById('promo-song-select').style.display = 'inline-block';
-                populatePromoSongs();
-            } else {
-                document.getElementById('promo-song-select').style.display = 'none';
-            }
+    try {
+        // 双重事件绑定兜底，防止 html 里的 onclick 失效
+        let verifyBtn = document.getElementById('btnVerifyKey');
+        if(verifyBtn) {
+            verifyBtn.addEventListener('click', window.verifyGameKey);
+        }
+
+        if (checkDeviceActivation()) {
+            initAfterActivation();
+        }
+        
+        // 监听社交媒体发帖类型切换 (TikTok 宣发等)
+        document.querySelectorAll('input[name="post-type"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                let sel = document.getElementById('promo-song-select');
+                if(sel) {
+                    sel.style.display = (this.value === 'promo') ? 'inline-block' : 'none';
+                    if(this.value === 'promo') populatePromoSongs();
+                }
+            });
         });
-    });
+    } catch (e) {
+        console.error("页面加载初始化发生错误", e);
+    }
 };
 
 /* ================= 全局核心变量 ================= */
-const GAME_VERSION = "1.7.0";
+const GAME_VERSION = "1.8.0";
 const $ = id => document.getElementById(id);
 let ad={}; let lib=[]; let std=[]; let albs=[]; let trackPool=[]; let marketSongs=[]; let worldArtists=[]; let writers=[]; let myWorks=[];
 let selG=[]; let selAG=[]; let posts={wb:[],x:[],ins:[],tiktok:[],mom:[]}; let curApp="";

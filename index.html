@@ -5,59 +5,84 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>星路制作人 - 真实乐坛重制版</title>
 <style>
+/* 基础与排版 */
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
 body{background:#f5f5f7;color:#111;max-width:480px;margin:0 auto;padding:15px;padding-top:60px;padding-bottom:100px;box-shadow:0 0 15px rgba(0,0,0,0.1);min-height:100vh;}
 .card{background:#fff;border-radius:12px;padding:15px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,0.05);}
 .tg{color:#c8a440;font-weight:bold;}
+
+/* 顶部时间与精力栏 (白色风格) */
 .top-bar{position:fixed;top:0;left:0;right:0;height:50px;background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border-bottom:1px solid #eaeaea;display:flex;justify-content:space-between;align-items:center;padding:0 15px;z-index:100;max-width:480px;margin:0 auto;}
 .top-time{font-size:13px;font-weight:bold;color:#333;}
 .top-energy{font-size:12px;font-weight:bold;color:#c8a440;}
 .top-btn{background:#c8a440;color:#000;border:none;padding:5px 10px;border-radius:6px;font-weight:bold;font-size:12px;cursor:pointer;}
 .top-btn:active{background:#fadb6b;}
+
+/* 按钮与输入框 */
 button{background:#c8a440;color:#000;padding:12px 15px;border:none;border-radius:8px;cursor:pointer;font-weight:bold;font-size:14px;width:100%;margin-bottom:8px;transition:background 0.1s;}
 button:active{background:#fadb6b !important;} 
 button.sec{background:#f0e9d0;color:#333;} 
 button.red{background:#fee2e2;color:#991b1b;}
 button.inline{width:auto;padding:6px 12px;font-size:12px;margin:0 0 0 5px;}
 input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px solid #d1c290;border-radius:8px;font-size:13px;outline:none;background:#fafafa;}
+
+/* AI 生成器组合框 */
 .ai-input-group {display:flex;gap:5px;margin-bottom:10px;}
 .ai-input-group input {margin-bottom:0;flex:1;}
 .ai-input-group button {width:auto;margin-bottom:0;padding:0 15px;font-size:12px;}
+
+/* 文本展示 */
 .log{min-height:40px;white-space:pre-wrap;padding:10px;border:1px solid #d1c290;background:#fefcf5;font-size:12px;border-radius:8px;line-height:1.5;}
 .page,.tab-page,.sub-page{display:none;} .active{display:block;}
+
+/* 导航系统 */
 .bottom-nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#fff;border-top:1px solid #ddd;padding:10px 5px;z-index:99;max-width:480px;margin:0 auto;}
 .nav-btn{flex:1;padding:12px 2px;border-radius:8px;background:#fff;font-size:12px;font-weight:bold;cursor:pointer;text-align:center;color:#666;}
 .nav-btn.active{background:#c8a440;color:#000;}
 .sub-tab-bar{display:flex;gap:5px;margin-bottom:15px;overflow-x:auto;}
 .sub-tab{padding:8px 12px;border:1px solid #d1c290;border-radius:20px;cursor:pointer;font-size:12px;background:#fff;white-space:nowrap;}
 .sub-tab.active{background:#c8a440;color:#000;}
+
+/* 属性面板 */
 .attr-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f0e0;font-size:13px;}
 .attr-bar-wrap{flex:1;margin:0 10px;height:8px;background:#f0e9d0;border-radius:4px;}
 .attr-bar-fill{height:100%;background:#c8a440;border-radius:4px;}
 .attr-edit-row{display:flex;align-items:center;gap:10px;padding:5px 0;}
 .attr-edit-row label{width:60px;font-size:13px;}
 .attr-edit-row input{width:80px;text-align:center;margin:0;}
+
+/* 杂项 */
 .g-tag{display:inline-block;padding:4px 10px;border:1px solid #d1c290;border-radius:20px;margin:3px;cursor:pointer;font-size:11px;background:#fff8e8;}
 .g-tag.selected{background:#c8a440;color:#000;}
 .phone-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:5px;}
 .app-icon{height:65px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:bold;cursor:pointer;box-shadow:0 2px 5px rgba(0,0,0,.15);}
 .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #eee;font-size:13px;}
+
+/* 聊天框 */
 .bubble-me{text-align:right;margin:6px 0;}
 .bubble-me span{display:inline-block;background:#c8e6c9;padding:8px 12px;border-radius:12px 12px 2px 12px;max-width:85%;text-align:left;font-size:13px;}
 .bubble-other{text-align:left;margin:6px 0;}
 .bubble-other span{display:inline-block;background:#f1f1f1;padding:8px 12px;border-radius:12px 12px 12px 2px;max-width:85%;font-size:13px;}
+
+/* 模态弹窗 */
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;justify-content:center;align-items:center;padding:15px;}
 .modal.open{display:flex;}
 .modal-box{background:#fff;width:100%;max-width:420px;border-radius:16px;padding:20px;position:relative;max-height:85vh;overflow-y:auto;}
 .modal-x{position:absolute;top:10px;right:10px;background:#fee2e2;color:#991b1b;padding:6px 12px;border-radius:6px;font-size:12px;width:auto;margin:0;z-index:10;}
+
+/* 徽章与标签 */
 .tier-badge{padding:2px 6px;border-radius:8px;font-size:11px;color:#fff;font-weight:bold;margin-left:4px;display:inline-block;}
 .cert-badge{padding:2px 6px;border-radius:8px;font-size:11px;background:#e2e8f0;color:#0f172a;font-weight:bold;margin-left:4px;display:inline-block;border:1px solid #cbd5e1;}
 .cmt-box{font-size:12px;color:#333;background:#f9f9f9;padding:10px;border-radius:8px;margin:8px 0;border-left:3px solid #c8a440;line-height:1.5;}
+
 .prog-wrap{width:100%;height:14px;border:1px solid #d1c290;border-radius:8px;background:#fefcf5;margin-bottom:10px;overflow:hidden;}
 .prog-fill{height:100%;background:#c8a440;transition:width 0.3s;}
+
+/* 排行榜升降 */
 .rank-up{color:#008000;font-weight:bold;font-size:11px;} 
 .rank-down{color:#ff0000;font-weight:bold;font-size:11px;} 
 .rank-new{color:#0055ff;font-weight:bold;font-size:11px;}
+
 .romance-btns {display:flex; flex-direction:column; gap:5px; margin-left:10px;}
 </style>
 </head>
@@ -102,13 +127,33 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
   </div>
 </div>
 
-<!-- 【核心修复】将验证逻辑直接放在元素下方同步执行，保证页面一打开瞬间生效，不需要重新输入密码 -->
+<!-- ！！【关键修复】安全与验证逻辑完全独立！！ -->
 <script>
+const VALID_PASS = ["123456", "vip888", "pro-gamer-2026", "dhtjuffuyjg"];
+
+function verifyGameKey() {
+    let inputDom = document.getElementById("inGameKey");
+    if(!inputDom) return;
+    let inputText = inputDom.value.trim().toLowerCase();
+    
+    if(VALID_PASS.includes(inputText)){
+        localStorage.setItem("isDeviceActivated", "true");
+        alert("✅ 解锁成功！设备权限已永久记录。");
+        document.getElementById("keyAuthBox").style.display = "none";
+        document.getElementById("gameStartBox").style.display = "block";
+        inputDom.value = "";
+    } else {
+        alert("❌ 密码错误！请输入有效编码。");
+        inputDom.value = "";
+    }
+}
+
 if(localStorage.getItem("isDeviceActivated") === "true"){
     document.getElementById("keyAuthBox").style.display = "none";
     document.getElementById("gameStartBox").style.display = "block";
 }
 </script>
+<!-- 密码验证区域彻底结束，绝对不受下方大模块代码影响 -->
 
 <div id="gameMain" class="page">
   <div id="pAttr" class="tab-page active">
@@ -262,36 +307,85 @@ if(localStorage.getItem("isDeviceActivated") === "true"){
 <div class="modal" id="mFriendList"><div class="modal-box"><button class="modal-x" onclick="closeM('mFriendList')">X</button><h3 class="tg" style="text-align:center;">好友互动列表</h3><div id="friend-list-container" style="max-height:60vh; overflow-y:auto; margin-top:15px; font-size:13px;"></div></div></div>
 <div class="modal" id="mAwardBanner"><div class="modal-box" style="text-align:center;background:linear-gradient(135deg, #111, #333);color:#fff;border:2px solid #c8a440;"><h2 style="color:#c8a440;font-size:24px;margin-bottom:15px;">🏆 颁奖盛典 🏆</h2><p id="txtAwardBannerMsg" style="font-size:15px;line-height:1.8;"></p><button onclick="closeM('mAwardBanner')" style="margin-top:20px;background:#c8a440;color:#000;">确认</button></div></div>
 <div class="modal" id="mWeeklyReport"><div class="modal-box"><button class="modal-x" onclick="closeM('mWeeklyReport')">关闭</button><h3 class="tg" style="text-align:center;font-size:20px;margin-bottom:15px;">📊 周期结算简报</h3><div id="weeklyReportContent" style="font-size:14px;line-height:1.8;"></div><button onclick="closeM('mWeeklyReport')" style="margin-top:20px;">确认</button></div></div>
-<div class="modal" id="mCustomNPC"><div class="modal-box"><button class="modal-x" onclick="closeM('mCustomNPC')">X</button><h3 class="tg" style="margin-bottom:10px;">🌟 艺人榜管理</h3><div class="sub-tab-bar" style="margin-bottom:10px;justify-content:center;"><div class="sub-tab active" onclick="switchSubTab(this, 'npcListSec', 'npcBoxTabs')">现存艺人</div><div class="sub-tab" onclick="switchSubTab(this, 'npcAddSec', 'npcBoxTabs')">+ 生成</div></div><div id="npcBoxTabs"><div id="npcListSec" class="sub-page active"><div id="uiNpcList" style="max-height:300px;overflow-y:auto;"></div></div><div id="npcEditSec" class="sub-page"><h4 class="tg" style="margin-bottom:10px;">编辑艺人</h4><input id="eNpcOldName" type="hidden"><input id="eNpcName" placeholder="姓名"><input id="eNpcAge" type="number" placeholder="年龄"><input id="eNpcGender" placeholder="性别"><input id="eNpcFans" type="number" placeholder="粉丝数"><button onclick="saveNpcEdit()">保存修改</button><button class="sec" onclick="switchSubTab($('npcBoxTabs').parentElement.querySelector('.sub-tab'), 'npcListSec', 'npcBoxTabs')">取消返回</button></div><div id="npcAddSec" class="sub-page"><div class="card" style="padding:10px;background:#fefcf5;margin-bottom:10px;"><b style="font-size:14px;">手动注入艺人</b><input id="aNpcName" placeholder="姓名" style="margin-top:8px;"><input id="aNpcGender" placeholder="性别"><input id="aNpcFans" type="number" placeholder="初始粉丝数"><button onclick="submitCustomNPC()" id="btnCustomNPC">单体注入大盘</button></div><div class="card" style="padding:10px;background:#fefcf5;"><b style="font-size:14px;">批量生成对手</b><input id="aNpcCount" type="number" value="5" placeholder="生成数量" style="margin-top:8px;"><button class="sec" onclick="batchGenNpc()">一键随机生成</button></div></div></div></div></div>
+
+<div class="modal" id="mCustomNPC">
+    <div class="modal-box">
+        <button class="modal-x" onclick="closeM('mCustomNPC')">X</button>
+        <h3 class="tg" style="margin-bottom:10px;">🌟 艺人榜管理</h3>
+        <div class="sub-tab-bar" style="margin-bottom:10px;justify-content:center;">
+            <div class="sub-tab active" onclick="switchSubTab(this, 'npcListSec', 'npcBoxTabs')">现存艺人</div>
+            <div class="sub-tab" onclick="switchSubTab(this, 'npcAddSec', 'npcBoxTabs')">+ 生成</div>
+        </div>
+        <div id="npcBoxTabs">
+            <div id="npcListSec" class="sub-page active"><div id="uiNpcList" style="max-height:300px;overflow-y:auto;"></div></div>
+            <div id="npcEditSec" class="sub-page">
+                <h4 class="tg" style="margin-bottom:10px;">编辑艺人</h4>
+                <input id="eNpcOldName" type="hidden"><input id="eNpcName" placeholder="姓名"><input id="eNpcAge" type="number" placeholder="年龄"><input id="eNpcGender" placeholder="性别"><input id="eNpcFans" type="number" placeholder="粉丝数">
+                <button onclick="saveNpcEdit()">保存修改</button><button class="sec" onclick="switchSubTab($('npcBoxTabs').parentElement.querySelector('.sub-tab'), 'npcListSec', 'npcBoxTabs')">取消返回</button>
+            </div>
+            <div id="npcAddSec" class="sub-page">
+                <div class="card" style="padding:10px;background:#fefcf5;margin-bottom:10px;"><b style="font-size:14px;">手动注入艺人</b><input id="aNpcName" placeholder="姓名" style="margin-top:8px;"><input id="aNpcGender" placeholder="性别"><input id="aNpcFans" type="number" placeholder="初始粉丝数"><button onclick="submitCustomNPC()" id="btnCustomNPC">单体注入大盘</button></div>
+                <div class="card" style="padding:10px;background:#fefcf5;"><b style="font-size:14px;">批量生成对手</b><input id="aNpcCount" type="number" value="5" placeholder="生成数量" style="margin-top:8px;"><button class="sec" onclick="batchGenNpc()">一键随机生成</button></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal" id="mPick"><div class="modal-box"><button class="modal-x" onclick="closeM('mPick')">X</button><h3 class="tg" id="mPickTitle">选择</h3><div id="mPickExt" style="display:none;margin-top:10px;"><label style="font-size:12px;">单曲定价($):</label><input type="number" id="sgPrice" value="1" style="width:60px;margin-left:5px;"></div><div id="mPickList" style="max-height:250px;overflow-y:auto;border:1px solid #eee;padding:10px;margin:10px 0;border-radius:8px;font-size:14px;"></div><button onclick="confirmPick()">确认选择</button></div></div>
 <div class="modal" id="mDeluxe"><div class="modal-box"><button class="modal-x" onclick="closeM('mDeluxe')">X</button><h3 class="tg">📂 发行豪华版</h3><p style="font-size:12px;color:#888;margin-bottom:10px;">选择未发行新歌作为加曲：</p><div id="boxDeluxePick" style="max-height:200px;overflow-y:auto;border:1px solid #eee;padding:10px;margin-bottom:10px;"></div><button onclick="confirmDeluxe()">打包发行豪华版</button></div></div>
 <div class="modal" id="mSign"><div class="modal-box"><button class="modal-x" onclick="closeM('mSign')">X</button><h3 class="tg" id="signTitle"></h3><p style="font-size:13px;margin:8px 0;">分成方案 (公司/艺人)：</p><select id="selDealType" style="margin-bottom:10px;"><option value="1">7/3分成 - 全额宣发</option><option value="2">2/8分成 - 资源打折</option></select><p style="font-size:13px;margin:8px 0;">年限 (年)：</p><input type="number" id="signYears" value="3"><button onclick="confirmSign()">落笔签约</button></div></div>
-<div class="modal" id="mText"><div class="modal-box" style="padding:15px;max-height:95vh;"><button class="modal-x" onclick="closeM('mText')">X</button><h3 class="tg" id="mTextTitle" style="text-align:center;"></h3><div class="sub-tab-bar" style="justify-content:center;"><div class="sub-tab active" onclick="switchSubTab(this, 'mTextFeed', 'socialTabs')">首页</div><div class="sub-tab" onclick="switchSubTab(this, 'mTextTrend', 'socialTabs')">热搜</div><div class="sub-tab" onclick="switchSubTab(this, 'mTextPost', 'socialTabs')">发布</div></div><div id="socialTabs"><div id="mTextFeed" class="sub-page active"><div class="ai-input-group"><input id="inFeedTopic" placeholder="自定义话题(如: 黑粉大战 / 新歌拉踩)"><button class="sec" onclick="refreshFeed()">刷新</button></div><div id="feedList" style="font-size:13px;max-height:250px;overflow-y:auto;margin-top:10px;"></div></div><div id="mTextTrend" class="sub-page"><div class="ai-input-group"><input id="inTrendTopic" placeholder="想看哪方面的热搜？(默认全网实时)"><button class="sec" onclick="refreshTrend()">获取</button></div><div id="trendList" style="font-size:13px;max-height:250px;overflow-y:auto;margin-top:10px;"></div></div><div id="mTextPost" class="sub-page"><div id="social-post-type" style="margin-bottom:10px; font-size:12px; background:#fefcf5; padding:8px; border-radius:6px;"><label><input type="radio" name="post-type" value="text" checked> 纯文案</label><label><input type="radio" name="post-type" value="promo"> 短视频打单/宣发歌曲</label><select id="promo-song-select" style="display:none; margin-top:5px; margin-bottom:0;"></select></div><textarea id="mTextInput" style="height:70px;" placeholder="写点什么..."></textarea><div style="margin:5px 0;"><label style="font-size:12px;color:#888;">配图(本地)：</label><input type="file" id="mTextImg" accept="image/*" style="font-size:12px;padding:5px;"></div><button onclick="postSocial()">发布</button><div id="mTextList" style="margin-top:10px;font-size:13px;max-height:150px;overflow-y:auto;"></div></div></div></div></div>
+
+<div class="modal" id="mText">
+    <div class="modal-box" style="padding:15px;max-height:95vh;">
+        <button class="modal-x" onclick="closeM('mText')">X</button>
+        <h3 class="tg" id="mTextTitle" style="text-align:center;"></h3>
+        <div class="sub-tab-bar" style="justify-content:center;">
+            <div class="sub-tab active" onclick="switchSubTab(this, 'mTextFeed', 'socialTabs')">首页</div>
+            <div class="sub-tab" onclick="switchSubTab(this, 'mTextTrend', 'socialTabs')">热搜</div>
+            <div class="sub-tab" onclick="switchSubTab(this, 'mTextPost', 'socialTabs')">发布</div>
+        </div>
+        <div id="socialTabs">
+            <div id="mTextFeed" class="sub-page active"><div class="ai-input-group"><input id="inFeedTopic" placeholder="自定义话题(如: 黑粉大战 / 新歌拉踩)"><button class="sec" onclick="refreshFeed()">刷新</button></div><div id="feedList" style="font-size:13px;max-height:250px;overflow-y:auto;margin-top:10px;"></div></div>
+            <div id="mTextTrend" class="sub-page"><div class="ai-input-group"><input id="inTrendTopic" placeholder="想看哪方面的热搜？(默认全网实时)"><button class="sec" onclick="refreshTrend()">获取</button></div><div id="trendList" style="font-size:13px;max-height:250px;overflow-y:auto;margin-top:10px;"></div></div>
+            <div id="mTextPost" class="sub-page">
+                <div id="social-post-type" style="margin-bottom:10px; font-size:12px; background:#fefcf5; padding:8px; border-radius:6px;">
+                    <label><input type="radio" name="post-type" value="text" checked> 纯文案</label>
+                    <label><input type="radio" name="post-type" value="promo"> 短视频打单/宣发歌曲</label>
+                    <select id="promo-song-select" style="display:none; margin-top:5px; margin-bottom:0;"></select>
+                </div>
+                <textarea id="mTextInput" style="height:70px;" placeholder="写点什么..."></textarea>
+                <div style="margin:5px 0;"><label style="font-size:12px;color:#888;">配图(本地)：</label><input type="file" id="mTextImg" accept="image/*" style="font-size:12px;padding:5px;"></div>
+                <button onclick="postSocial()">发布</button>
+                <div id="mTextList" style="margin-top:10px;font-size:13px;max-height:150px;overflow-y:auto;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal" id="mV"><div class="modal-box"><button class="modal-x" onclick="closeM('mV')">X</button><h3 class="tg" style="text-align:center;">💬 V</h3><div class="sub-tab-bar" style="justify-content:center;"><div class="sub-tab active" onclick="switchSubTab(this,'vCont','vTabs')">通讯录</div><div class="sub-tab" onclick="switchSubTab(this,'vMom','vTabs')">朋友圈</div></div><div id="vTabs"><div id="vCont" class="sub-page active"><div id="vList"></div><div id="vChat" style="display:none;"><button class="sec inline" onclick="vBack()">←</button> <b class="tg" id="vName"></b><div id="vHistory" style="height:150px;overflow-y:auto;background:#fafafa;padding:5px;margin:5px 0;border-radius:8px;"></div><input id="vIn" placeholder="聊天..."><button onclick="vSendMsg()">发送(需API)</button></div></div><div id="vMom" class="sub-page"><textarea id="vMomIn" placeholder="分享动态..."></textarea><button onclick="vSendMom()">发朋友圈</button><div id="vMomList" style="margin-top:10px;"></div></div></div></div></div>
 <div class="modal" id="mInfo"><div class="modal-box" style="padding-top:40px;"><button class="modal-x" onclick="closeM('mInfo')" style="top:10px;">X 关闭</button><h3 class="tg" id="mInfoTitle" style="text-align:center;margin-bottom:15px;"></h3><div id="mInfoContent" style="max-height:60vh;overflow-y:auto;"></div></div></div>
-
 <script>
-// ==================== 安全与验证逻辑 ====================
+// ==================== 安全与验证逻辑 (绝对防弹版) ====================
 function escapeHTML(str) { 
     if(str === null || str === undefined) return '';
     return String(str).replace(/[&<>'"]/g, tag => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'}[tag] || tag)); 
 }
 
-const VALID_PASS = ["123456", "vip888", "pro-gamer-2026"];
+const VALID_PASS = ["123456", "vip888", "pro-gamer-2026", "dhtjuffuyjg"];
 
 window.verifyGameKey = function() {
     let inputDom = document.getElementById("inGameKey");
     if(!inputDom) return;
     let inputText = inputDom.value.trim().toLowerCase();
     
-    if(VALID_PASS.includes(inputText)){
+    if(VALID_PASS.indexOf(inputText) !== -1){
         localStorage.setItem("isDeviceActivated", "true");
         alert("✅ 解锁成功！设备权限已永久记录。");
         document.getElementById("keyAuthBox").style.display = "none";
         document.getElementById("gameStartBox").style.display = "block";
         inputDom.value = "";
     } else {
-        alert("❌ 密码错误！体验密码：123456");
+        alert("❌ 密码错误！请输入正确的编码。");
         inputDom.value = "";
     }
 }
@@ -312,7 +406,7 @@ document.addEventListener("DOMContentLoaded", function(){
 });
 
 // ==================== 全局变量 ====================
-const GAME_VERSION = "1.8.2";
+const GAME_VERSION = "1.8.3";
 const $ = id => document.getElementById(id);
 let ad={}; let lib=[]; let std=[]; let albs=[]; let trackPool=[]; let marketSongs=[]; let worldArtists=[]; let writers=[]; let myWorks=[];
 let selG=[]; let selAG=[]; let posts={wb:[],x:[],ins:[],tiktok:[],mom:[]}; let curApp="";
@@ -402,10 +496,25 @@ window.showProj = function(id){ ["pjSingle","pjLib","pjAlbum"].forEach(x=>$(x).s
 
 function costEnergy(amt){ if(ad.energy < amt){ alert(`⚠️ 精力不足！`); return false; } ad.energy -= amt; updTimeUI(); return true; }
 
+// ==================== 核心逻辑修复区 ====================
 window.startGame = function(){
-  let rName = escapeHTML($("inRealName").value); if(!rName) return alert("填真实姓名");
+  let inNameDom = document.getElementById("inRealName");
+  let inStageDom = document.getElementById("inStageName");
+  let inGenderDom = document.getElementById("inGender");
+  
+  if(!inNameDom) {
+      alert("错误：未能获取到输入框元素！请刷新页面重试。");
+      return;
+  }
+  
+  let rName = escapeHTML(inNameDom.value.trim()); 
+  if(!rName) {
+      alert("⚠️ 必须填写真实姓名才能踏入星途！");
+      return; 
+  }
+  
   ad={
-    r: rName, s: escapeHTML($("inStageName").value) || rName, g: escapeHTML($("inGender").value) || "保密",
+    r: rName, s: escapeHTML(inStageDom.value.trim()) || rName, g: escapeHTML(inGenderDom.value.trim()) || "保密",
     co:"独立", cot:"indie", m:50000, H:1.0, D:1.0, Elead:1.0, Kalbum:1.0, Geffect: 0.55,
     st:{f:5000,h:10}, sk:{v:50,d:50,r:50,w:50,f:50,s:50,fa:50,va:50}, ws:[], awd:[], shows:[], contractEnd:0, energy: 100, maxEnergy: 100
   };
@@ -479,15 +588,51 @@ function renderAwardsMap(){ let isAwardMonth = [2,5,8,11].includes(time.m); let 
 window.checkAutoAward = function(){
   let isAwardMonth = [2,5,8,11].includes(time.m); if(!isAwardMonth || (historyAwards.length>0 && historyAwards[0].includes(`${time.y}年${time.m}月`))) return;
   let awdName = ""; let aoty="", soty="", roty="", bna="", sub1="", sub2="";
-  let trks = [...trackPool.filter(x=>x.type==="track")]; let albsOnly = [...trackPool.filter(x=>x.type==="album")];
-  let popTrks = trks.filter(x=>x.gnr.includes("流行")||x.gnr.includes("舞曲")||x.gnr.includes("电子")); let rckTrks = trks.filter(x=>x.gnr.includes("摇滚")||x.gnr.includes("另类")||x.gnr.includes("乡村")); let hipTrks = trks.filter(x=>x.gnr.includes("HipHop")||x.gnr.includes("R&B")||x.gnr.includes("灵魂乐"));
-  const pickMeOrNpc = (arr, sortKey, myProb) => { arr.sort((a,b)=>b[sortKey]-a[sortKey]); if(!arr.length) return "空缺"; let topItem = arr[0]; if(topItem.isMe || Math.random() < myProb) { let myBest = arr.find(x=>x.isMe); if(myBest && myBest[sortKey] > arr[0][sortKey]*0.3) { if(myBest.isMe) { ad.awd.unshift(`${time.y}年${time.m}月 获奖！`); updAttr(); } return escapeHTML(myBest.artist) + `《${escapeHTML(myBest.n)}》`; } } return escapeHTML(topItem.artist) + `《${escapeHTML(topItem.n)}》`; };
+  let trks = trackPool.filter(function(x){ return x.type==="track"; });
+  let albsOnly = trackPool.filter(function(x){ return x.type==="album"; });
+  let popTrks = trks.filter(function(x){ return x.gnr.includes("流行")||x.gnr.includes("舞曲")||x.gnr.includes("电子"); }); 
+  let rckTrks = trks.filter(function(x){ return x.gnr.includes("摇滚")||x.gnr.includes("另类")||x.gnr.includes("乡村"); }); 
+  let hipTrks = trks.filter(function(x){ return x.gnr.includes("HipHop")||x.gnr.includes("R&B")||x.gnr.includes("灵魂乐"); });
+  
+  const pickMeOrNpc = function(arr, sortKey, myProb){ 
+      arr.sort(function(a,b){ return b[sortKey]-a[sortKey]; }); 
+      if(!arr.length) return "空缺"; 
+      let topItem = arr[0]; 
+      if(topItem.isMe || Math.random() < myProb) { 
+          let myBest = arr.find(function(x){ return x.isMe; }); 
+          if(myBest && myBest[sortKey] > arr[0][sortKey]*0.3) { 
+              if(myBest.isMe) { ad.awd.unshift(`${time.y}年${time.m}月 获奖！`); updAttr(); } 
+              return escapeHTML(myBest.artist) + `《${escapeHTML(myBest.n)}》`; 
+          } 
+      } 
+      return escapeHTML(topItem.artist) + `《${escapeHTML(topItem.n)}》`; 
+  };
+  
   let resultMsg = "";
-  if(time.m==2) { awdName = "星耀留声机大奖"; aoty = pickMeOrNpc(albsOnly, 'Spub', 0.2); soty = pickMeOrNpc(trks, 'Spub', 0.2); roty = pickMeOrNpc(trks, 'ptsY', 0.2); bna = escapeHTML(worldArtists.sort((a,b)=>b.fans-a.fans)[Math.floor(Math.random()*3)]?.n || "黑马新人"); if(Math.random()<0.15) bna = escapeHTML(ad.s); sub1 = pickMeOrNpc(popTrks, 'Spub', 0.25); sub2 = pickMeOrNpc(rckTrks, 'Spub', 0.25); resultMsg = `【年度专辑 AOTY】：${aoty}\n【年度歌曲 SOTY】：${soty}\n【年度制作 ROTY】：${roty}\n【最佳新人】：${bna}\n【最佳流行歌手】：${sub1}\n【最佳摇滚歌手】：${sub2}`; } 
+  if(time.m==2) { 
+      awdName = "星耀留声机大奖"; aoty = pickMeOrNpc(albsOnly, 'Spub', 0.2); soty = pickMeOrNpc(trks, 'Spub', 0.2); roty = pickMeOrNpc(trks, 'ptsY', 0.2); 
+      let sortedNpc = worldArtists.sort(function(a,b){ return b.fans-a.fans; });
+      bna = "黑马新人";
+      if(sortedNpc.length > 0) {
+          let rIndex = Math.floor(Math.random() * Math.min(3, sortedNpc.length));
+          bna = escapeHTML(sortedNpc[rIndex].n);
+      }
+      if(Math.random()<0.15) bna = escapeHTML(ad.s); 
+      sub1 = pickMeOrNpc(popTrks, 'Spub', 0.25); sub2 = pickMeOrNpc(rckTrks, 'Spub', 0.25); 
+      resultMsg = `【年度专辑 AOTY】：${aoty}\n【年度歌曲 SOTY】：${soty}\n【年度制作 ROTY】：${roty}\n【最佳新人】：${bna}\n【最佳流行歌手】：${sub1}\n【最佳摇滚歌手】：${sub2}`; 
+  } 
   else if(time.m==5) { awdName = "BB榜音乐盛典"; aoty = pickMeOrNpc(albsOnly, 'slTotal', 0.3); soty = pickMeOrNpc(trks, 'pts', 0.3); sub1 = pickMeOrNpc(trks, 'stm', 0.3); resultMsg = `【顶级公告牌专辑】：${aoty}\n【顶级Hot100单曲】：${soty}\n【顶级流媒体歌曲】：${sub1}`; }
   else if(time.m==8) { awdName = "V-视听大奖"; aoty = pickMeOrNpc(trks, 'mvN', 0.4); sub1 = pickMeOrNpc(popTrks, 'stmDly', 0.3); sub2 = pickMeOrNpc(hipTrks, 'stmDly', 0.3); resultMsg = `【年度最佳MV】：${aoty}\n【最佳流行MV】：${sub1}\n【最佳HipHop MV】：${sub2}`; }
-  else if(time.m==11) { awdName = "全星音乐盛典"; aoty = escapeHTML(worldArtists.sort((a,b)=>b.fans-a.fans)[0]?.n || ad.s); if(ad.st.f > 20000000 && Math.random()<0.4) aoty = escapeHTML(ad.s); soty = pickMeOrNpc(albsOnly, 'stmDlyAlb', 0.4); resultMsg = `【年度最佳艺人】：${aoty}\n【最受欢迎专辑】：${soty}`; }
-  let rec = `<b>${time.y}年${time.m}月 - ${awdName}</b><br><span style="font-size:11px;color:#555;">${resultMsg.replace(/\n/g,'<br>')}</span>`; historyAwards.unshift(rec); let isMeWin = resultMsg.includes(ad.s); if(isMeWin) { ad.awd.unshift(`${time.y}年${time.m}月 - 斩获【${awdName}】大奖！`); updAttr(); }
+  else if(time.m==11) { 
+      awdName = "全星音乐盛典"; 
+      aoty = escapeHTML(ad.s);
+      let sortedNpc = worldArtists.sort(function(a,b){ return b.fans-a.fans; });
+      if(sortedNpc.length > 0) aoty = escapeHTML(sortedNpc[0].n);
+      if(ad.st.f > 20000000 && Math.random()<0.4) aoty = escapeHTML(ad.s); 
+      soty = pickMeOrNpc(albsOnly, 'stmDlyAlb', 0.4); 
+      resultMsg = `【年度最佳艺人】：${aoty}\n【最受欢迎专辑】：${soty}`; 
+  }
+  let rec = `<b>${time.y}年${time.m}月 - ${awdName}</b><br><span style="font-size:11px;color:#555;">${resultMsg.replace(/\n/g,'<br>')}</span>`; historyAwards.unshift(rec); let isMeWin = resultMsg.indexOf(ad.s) !== -1; if(isMeWin) { ad.awd.unshift(`${time.y}年${time.m}月 - 斩获【${awdName}】大奖！`); updAttr(); }
   $("txtAwardBannerMsg").innerHTML = `🏆 本月举办了【${awdName}】！<br><br><div style="text-align:left;font-size:13px;line-height:1.6;background:#222;padding:10px;border-radius:8px;">${resultMsg.replace(/\n/g,'<br>')}</div><br>${isMeWin ? "<b style='color:#25d366;'>🎉 恭喜！成功斩获了奖项！荣誉已载入史册。</b>" : "<span style='color:#888;'>遗憾的是，你本次陪跑了，继续努力吧！</span>"}`; $("mAwardBanner").classList.add("open");
 }
 window.joinAward = function(awdName){ window.checkAutoAward(); renderAwardsMap(); saveGame(); }
@@ -615,7 +760,7 @@ window.openApp = function(id){
   } else if(id=='Sale' || id=='Daily'){ $("mInfoTitle").innerText = id=='Sale' ? "📈 专辑总销量榜" : "📉 专辑日增榜"; let albsOnly = trackPool.filter(x=>x.type==="album").sort((a,b)=> (id=='Sale'?b.slTotal-a.slTotal : b.stmDlyAlb-a.stmDlyAlb)); $("mInfoContent").innerHTML = albsOnly.map((x,i)=>`<div class="row" style="${x.isMe?'background:#fff8e0;font-weight:bold;':''}"><span>#${i+1} ${escapeHTML(x.n)} - ${escapeHTML(x.artist)} <br>${getCert(x.slTotal)}</span><b class="tg">${id=='Sale'?x.slTotal.toLocaleString()+' 张':'+'+x.stmDlyAlb.toLocaleString()+'/日'}</b></div>`).join(''); $("mInfo").classList.add("open");
   } else {
     $("mInfoTitle").innerText=id; $("mInfo").classList.add("open"); let h="暂无数据"; 
-    if(id=='Bitch'||id=='RS'){ h = trackPool.map((x,i)=>`<div class="card" style="padding:10px;margin-bottom:8px;"><b>${escapeHTML(x.n)} - ${escapeHTML(x.artist)}</b><br><span style="color:#cc0000;font-size:12px;">${id=='Bitch'?x.bx:x.rs}</span><br><span style="font-size:11px;color:#666;">${x.pub}</span><br><button class="sec" onclick="getFanCmts('${escapeHTML(x.n)}','${x.gnr}',this)" style="font-size:11px;margin-top:4px;">看粉丝留言(需API)</button><div style="margin-top:4px;"></div></div>`).join('');
+    if(id=='Bitch'||id=='RS'){ h = trackPool.map((x,i)=>`<div class="card" style="padding:10px;margin:5px 0;"><b>${escapeHTML(x.n)} - ${escapeHTML(x.artist)}</b><br><span style="color:#cc0000;font-size:12px;">${id=='Bitch'?x.bx:x.rs}</span><br><span style="font-size:11px;color:#666;">${x.pub}</span><br><button class="sec" onclick="getFanCmts('${escapeHTML(x.n)}','${x.gnr}',this)" style="font-size:11px;margin-top:4px;">看粉丝留言(需API)</button><div style="margin-top:4px;"></div></div>`).join('');
     } else if(id=='Market'){ $("mInfoContent").innerHTML = `<div class="sub-tab-bar"><div class="sub-tab active" onclick="switchSubTab(this,'mkDemo','mktT')">Demo 市场</div><div class="sub-tab" onclick="switchSubTab(this,'mkWriter','mktT')">写手排行榜</div></div><div id="mktT"><div id="mkDemo" class="sub-page active">${marketSongs.map((x,i)=>`<div class="row"><span><b>${escapeHTML(x.n)}</b><br><i style="font-size:11px;color:#888;">${x.g.join()} | by ${escapeHTML(x.author)}</i></span><button onclick="buySong(${i})">$${x.price.toLocaleString()}</button></div>`).join('')}</div><div id="mkWriter" class="sub-page">${[...writers].sort((a,b)=>b.hot-a.hot).map((w,i)=>`<div class="row"><span>#${i+1} <b>${escapeHTML(w.n)}</b></span><span style="font-size:12px;color:#888;">热度: ${w.hot} | 功底: ${w.sk}</span></div>`).join('')}</div></div>`; return; }
     $("mInfoContent").innerHTML=h;
   }

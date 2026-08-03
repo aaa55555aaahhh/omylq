@@ -629,8 +629,8 @@ window.openApp = function(id){
 }
 
 // 补全：社交网络相关
-window.refreshFeed = function(){ $("feedList").innerHTML = "<div class="card">加载出几条网友的热门讨论...</div><div class="card">某明星被拍到出街！</div>"; }
-window.refreshTrend = function(){ $("trendList").innerHTML = "<div class="card"># 热搜第一：音乐节盛况</div><div class="card"># 热搜第二：新歌发布热潮</div>"; }
+window.refreshFeed = function(){ $("feedList").innerHTML = "<div class='card'>加载出几条网友的热门讨论...</div><div class='card'>某明星被拍到出街！</div>"; }
+window.refreshTrend = function(){ $("trendList").innerHTML = "<div class='card'># 热搜第一：音乐节盛况</div><div class='card'># 热搜第二：新歌发布热潮</div>"; }
 window.postSocial = function(){ 
     let txt = $("mTextInput").value; if(!txt) return alert("写点内容吧！");
     posts[curApp].unshift(`<p>${escapeHTML(txt)}</p>`); 

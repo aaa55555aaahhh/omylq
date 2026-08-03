@@ -130,22 +130,82 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
   </div>
 </div>
 
+<!-- ================= 终极防掉签密码机制 ================= -->
+<script>
+var PASS_DB = ["dhtjuffuyjg", "123456", "vip888", "pro-gamer-2026"];
+
+// 核心机制：检查是否已经激活，或者【手机里是否已经有任何存档】！
+// 只要你存过档，不管你怎么更新网页，直接判定为老玩家，免密码进入！
+var hasAnySave = localStorage.getItem("starProSave_1") || localStorage.getItem("starProSave_2") || localStorage.getItem("starProSave_3");
+
+if (localStorage.getItem("isDeviceActivated") === "true" || hasAnySave) {
+    // 自动补全激活标记，防止后续出bug
+    localStorage.setItem("isDeviceActivated", "true");
+    document.getElementById("keyAuthBox").style.display = "none";
+    document.getElementById("gameStartBox").style.display = "block";
+    
+    // 自动提醒读档
+    setTimeout(function(){
+        if(localStorage.getItem("starProSave_1")) {
+            if(confirm("检测到本地有存档记录，是否直接读取【存档 1】恢复进度？")) {
+                if(typeof window.loadGame === 'function') window.loadGame(1);
+            }
+        }
+    }, 500);
+}
+
+function forceVerifyKey() {
+    var inputEl = document.getElementById("inGameKey");
+    if(!inputEl) return alert("错误：输入框丢失！");
+    var inputVal = inputEl.value.trim().toLowerCase();
+    
+    if(inputVal === "") return alert("请输入密码！");
+    
+    var passMatch = false;
+    for(var i=0; i<PASS_DB.length; i++) {
+        if(PASS_DB[i].toLowerCase() === inputVal) {
+            passMatch = true; break;
+        }
+    }
+    
+    if(passMatch) {
+        // 瞬间原地解锁，绝对不刷新页面（避免缓存丢失）
+        localStorage.setItem("isDeviceActivated", "true");
+        alert("✅ 密码正确！游玩权限已永久解锁。");
+        document.getElementById("keyAuthBox").style.display = "none";
+        document.getElementById("gameStartBox").style.display = "block";
+        
+        if(localStorage.getItem("starProSave_1")) {
+            if(confirm("检测到本地有存档记录，是否直接读取【存档 1】恢复进度？")) {
+                if(typeof window.loadGame === 'function') window.loadGame(1);
+            }
+        }
+    } else {
+        alert("❌ 密码错误或无效，请重新输入！");
+        inputEl.value = "";
+    }
+}
+</script>
+<!-- ============================================================= -->
 <!-- === 主游戏界面 === -->
 <div id="gameMain" class="page">
   <!-- 档案与属性 -->
   <div id="pAttr" class="tab-page active">
     <div class="card">
       <div id="boxBasic" style="font-size:13px;line-height:2;margin-bottom:10px;"></div>
+      
       <div style="display:flex;justify-content:space-between;margin:10px 0;">
           <b class="tg">⬡ 八维能力</b>
           <button class="sec inline" onclick="document.getElementById('boxBars').style.display='none';document.getElementById('boxEditAttr').style.display='block';">✏️ 编辑</button>
       </div>
+      
       <div id="boxBars"></div>
       <div id="boxEditAttr" style="display:none;">
           <div id="boxInputs"></div>
           <button onclick="saveAttr()">保存</button> 
           <button class="sec" onclick="document.getElementById('boxEditAttr').style.display='none';document.getElementById('boxBars').style.display='block';">取消</button>
       </div>
+      
       <div class="sub-tab-bar" style="margin-top:15px;">
           <div class="sub-tab active" onclick="switchSubTab(this, 'tabWorks', 'attrTabs')">发行作品</div>
           <div class="sub-tab" onclick="switchSubTab(this, 'tabAwards', 'attrTabs')">奖项履历</div>
@@ -200,6 +260,7 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
       <button class="sec" onclick="showMap('mapAwards')">🏆 历届奖项</button>
       <button class="sec" onclick="showMap('mapHome')">🏠 我的家</button>
       
+      <!-- 各个地图场景内容区 -->
       <div id="mapStudio" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
         <h3 class="tg">🎙 录音室</h3><p style="font-size:12px;color:#888;">耗时10精力录制成品。</p>
         <div id="listStudio" style="margin-top:10px;"></div>
@@ -249,13 +310,13 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
         <div id="listAwardsLog" style="font-size:12px;margin-top:10px;max-height:250px;overflow-y:auto;"></div>
       </div>
       
-      <!-- 这里彻底修复了标签错乱，家面板内部结构清晰 -->
       <div id="mapHome" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
         <h3 class="tg">🏠 我的家</h3>
         <p style="font-size:12px;color:#888;">休息回血，必定恢复20精力并流逝1小时。</p>
         <button onclick="relaxHome()">🧘 放空灵魂 (有概率写出Demo)</button>
         <button onclick="openInviteList()">☕ 邀请好友来聚会/互动</button>
         
+        <!-- 【同居恋人专属面板：直接显示在这里】 -->
         <div id="cohabitBox" style="display:none; margin-top:15px; padding:12px; background:#fff0f5; border:1px solid #ffb6c1; border-radius:8px;">
             <h4 style="color:#e91e63; margin-bottom:8px;">💕 同居生活</h4>
             <p id="cohabitName" style="font-size:13px; font-weight:bold; margin-bottom:10px;"></p>
@@ -276,6 +337,7 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
       <button class="sec" onclick="showProj('pjAlbum')">💿 专辑企划室</button>
       <button class="sec" onclick="showProj('pjLib')">📂 个人曲库</button>
 
+      <!-- 创作单曲 -->
       <div id="pjSingle" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
         <h3 class="tg" style="margin-bottom:10px;">创作单曲</h3>
         <div class="ai-input-group"><input id="inSName" placeholder="歌名"><button class="sec inline" onclick="aiGenName('song', 'inSName')">AI 取名</button></div>
@@ -289,10 +351,12 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
         <button id="btnStartWriteProj" onclick="startWrite()">立项创作企划</button>
       </div>
 
+      <!-- 词曲库 -->
       <div id="pjLib" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
         <h3 class="tg">词曲库</h3><div id="listLib" style="margin-top:10px;"></div>
       </div>
 
+      <!-- 专辑企划 -->
       <div id="pjAlbum" style="display:none;margin-top:15px;">
         <div id="boxWipAlb" style="display:none;background:#fefcf5;border:1px solid #d1c290;padding:15px;border-radius:8px;">
           <h3 class="tg" id="txtWipName">筹备中专辑</h3><p style="font-size:12px;color:#666;margin:5px 0;" id="txtWipCore"></p>
@@ -317,7 +381,6 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
     </div>
   </div>
 
-  <!-- 手机应用存放区 -->
   <div id="pPhone" class="tab-page"><div class="card"><h2 class="tg">📱 手机桌面</h2><div class="phone-grid" id="phoneGrid"></div></div></div>
 
   <!-- 底部导航栏 -->
@@ -336,6 +399,7 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
   <div class="modal-box">
     <button class="modal-x" onclick="closeM('mFriendList')">X</button>
     <h3 class="tg" style="text-align:center;">好友互动列表</h3>
+    <!-- 修复：原代码里因为这里的 div 导致了各种结构错位，现已调整 -->
     <div id="friend-list-container" style="max-height:60vh; overflow-y:auto; margin-top:15px; font-size:13px;"></div>
   </div>
 </div>
@@ -413,6 +477,7 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
 
 <div class="modal" id="mV"><div class="modal-box"><button class="modal-x" onclick="closeM('mV')">X</button><h3 class="tg" style="text-align:center;">💬 V</h3><div class="sub-tab-bar" style="justify-content:center;"><div class="sub-tab active" onclick="switchSubTab(this,'vCont','vTabs')">通讯录</div><div class="sub-tab" onclick="switchSubTab(this,'vMom','vTabs')">朋友圈</div></div><div id="vTabs"><div id="vCont" class="sub-page active"><div id="vList"></div><div id="vChat" style="display:none;"><button class="sec inline" onclick="vBack()">←</button> <b class="tg" id="vName"></b><div id="vHistory" style="height:150px;overflow-y:auto;background:#fafafa;padding:5px;margin:5px 0;border-radius:8px;"></div><input id="vIn" placeholder="聊天..."><button onclick="vSendMsg()">发送(需API)</button></div></div><div id="vMom" class="sub-page"><textarea id="vMomIn" placeholder="分享动态..."></textarea><button onclick="vSendMom()">发朋友圈</button><div id="vMomList" style="margin-top:10px;"></div></div></div></div></div>
 <div class="modal" id="mInfo"><div class="modal-box" style="padding-top:40px;"><button class="modal-x" onclick="closeM('mInfo')" style="top:10px;">X 关闭</button><h3 class="tg" id="mInfoTitle" style="text-align:center;margin-bottom:15px;"></h3><div id="mInfoContent" style="max-height:60vh;overflow-y:auto;"></div></div></div>
+
 <script>
 // ==================== 兼容与安全验证工具 ====================
 function escapeHTML(str) { 
@@ -463,10 +528,9 @@ let conts=[
 ];
 const aKs=[{k:"v",n:"唱功"},{k:"d",n:"舞蹈"},{k:"r",n:"Rap"},{k:"w",n:"创作"},{k:"f",n:"颜值"},{k:"s",n:"台风"},{k:"fa",n:"时尚"},{k:"va",n:"综艺"}];
 
-// ==================== 存档与防爆档保护 (防抖优化版) ====================
+// ==================== 存档与防爆档保护 ====================
 function getSaveKey(){ return "starProSave_" + ($("selSaveSlot")?$("selSaveSlot").value:"1"); }
 
-// 立即保存（用于退出、关键节点）
 window.saveGameImmediate = function(){
   try {
       let s = { version: GAME_VERSION, ad:ad, lib:lib, std:std, albs:albs, trackPool:trackPool, marketSongs:marketSongs, time:time, Mt:Mt, posts:posts, curPj:curPj, prog:prog, curAlbPj:curAlbPj, historyAwards:historyAwards, conts:conts, worldArtists:worldArtists, writers:writers, myWorks:myWorks };
@@ -478,7 +542,6 @@ window.saveGameImmediate = function(){
   }
 }
 
-// 延迟保存（防抖），防止循环和频繁点击时卡死主线程
 let saveTimer = null;
 window.saveGame = function(){
     if(saveTimer) clearTimeout(saveTimer);
@@ -572,7 +635,7 @@ window.addEventListener("load", function() {
     loadApiConfig();
 });
 
-// ==== 【关键修复】地图与同居恋人互动 ====
+// ==== 地图与同居交互 ====
 window.showMap = function(id){ 
     let maps = ["mapStudio","mapLabel","mapHome","mapShows","mapAwards","mapMV","mapFashion","mapTV","mapTour"];
     for(var i=0; i<maps.length; i++){ if($(maps[i])) $(maps[i]).style.display="none"; }
@@ -697,7 +760,6 @@ window.saveAttr = function(){ aKs.forEach(function(x){ let v=parseInt($(`ie_${x.
 function renderMapCompany(){ if(ad.co === "独立"){ $("boxSignCompany").style.display = "block"; $("boxMyCompany").style.display = "none"; renderLbl(); } else { $("boxSignCompany").style.display = "none"; $("boxMyCompany").style.display = "block"; $("btnMapCompany").innerText = "🏢 我的公司"; } }
 window.meetPeople = function(){ if(!costEnergy(10)) return; advHour(24); let n = npcNames[Math.floor(Math.random()*npcNames.length)]+"(同行)"; conts.push({id:Date.now(), n:n, t:"圈内人脉", h:[], affinity:0, isCohabiting:false}); $("logCompany").style.display="block"; $("logCompany").innerText = `🤝 结识了 ${n}，耗10精力，耗时1天。`; saveGame(); }
 
-// 同居恋人互动
 window.loverChat = function() {
     let lover = conts.find(function(c){ return c.isCohabiting === true; });
     if(!lover) return;
@@ -705,7 +767,7 @@ window.loverChat = function() {
     advHour(1);
     lover.affinity += 5;
     alert(`你和恋人 ${escapeHTML(lover.n)} 窝在沙发上聊了1小时天，感到十分幸福。好感度+5！`);
-    showMap('mapHome'); 
+    window.showMap('mapHome'); 
     saveGame();
 }
 window.loverSleep = function() {
@@ -716,7 +778,7 @@ window.loverSleep = function() {
     lover.affinity += 10;
     updTimeUI();
     alert(`你和恋人 ${escapeHTML(lover.n)} 相拥入眠，睡了一个好觉。精力完全恢复，好感度+10！`);
-    showMap('mapHome'); 
+    window.showMap('mapHome'); 
     saveGame();
 }
 window.relaxHome = function(){ 
@@ -856,6 +918,7 @@ window.confirmDeluxe = function(){
 function updTimeUI(){ let s = `${time.y}年 ${time.m}月 第${time.w}周 星期${time.d}`; let els=document.querySelectorAll(".uiDateMap"); for(var i=0;i<els.length;i++) els[i].innerText = s; if($("sysTimeTxt")) $("sysTimeTxt").innerText = s; if($("uiEnergy")) $("uiEnergy").innerText = ad.energy; }
 window.setSysTime = function(){ let y=parseInt($("sysInY").value), m=parseInt($("sysInM").value), w=parseInt($("sysInW").value); if(y) time.y=y; if(m) time.m=m; if(w) time.w=w; updTimeUI(); alert("时间已修改！"); saveGame(); }
 
+// 解决时间推进卡死，保证异步存储执行完成
 window.advHour = function(h){ 
     for(let i=0; i<h; i++){ 
         time.h++; 
@@ -866,7 +929,7 @@ window.advHour = function(h){
         } 
     } 
     updTimeUI(); 
-    saveGame(); 
+    saveGameImmediate(); 
 }
 window.advTimeByFlow = function(){ let v = parseInt($("selTimeFlow").value) || 7; advTime(Math.floor(v/7)||1, true); }
 

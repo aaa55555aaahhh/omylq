@@ -298,12 +298,22 @@ function forceVerifyKey() {
         <div id="listAwardsLog" style="font-size:12px;margin-top:10px;max-height:250px;overflow-y:auto;"></div>
       </div>
       
-      <div id="mapHome" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
+           <div id="mapHome" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
         <h3 class="tg">🏠 我的家</h3>
         <p style="font-size:12px;color:#888;">休息回血，必定恢复20精力并流逝1小时。</p>
         <button onclick="relaxHome()">🧘 放空灵魂 (有概率写出Demo)</button>
         <button onclick="openInviteList()">☕ 邀请好友来聚会/互动</button>
+        
+        <!-- 同居恋人专属区域 -->
+        <div id="cohabitBox" style="display:none; margin-top:15px; padding:12px; background:#fff0f5; border:1px solid #ffb6c1; border-radius:8px;">
+            <h4 style="color:#e91e63; margin-bottom:8px;">💕 同居生活</h4>
+            <p id="cohabitName" style="font-size:13px; font-weight:bold; margin-bottom:10px;"></p>
+            <button onclick="loverChat()" style="background:#ffb6c1; color:#000;">💬 和恋人聊天</button>
+            <button onclick="loverSleep()" style="background:#ff69b4; color:#fff;">🛏️ 同眠 (回满精力)</button>
+        </div>
+
         <div id="logHome" class="log" style="display:none;margin-top:10px;"></div>
+      </div>
       </div>
     </div>
   </div>
@@ -525,18 +535,29 @@ window.saveGame = function(){
   }
 }
 window.loadGame = function(slotOverride){
-  let k = slotOverride ? "starProSave_"+slotOverride : getSaveKey();
-  let s = localStorage.getItem(k); if(!s) return alert("未找到存档！");
   try {
+      let k = slotOverride ? "starProSave_"+slotOverride : getSaveKey();
+      let s = localStorage.getItem(k); 
+      if(!s) return alert("未找到存档！");
       let data = JSON.parse(s);
       ad=data.ad; lib=data.lib||[]; std=data.std||[]; albs=data.albs||[]; trackPool=data.trackPool||[]; marketSongs=data.marketSongs||[]; time=data.time; Mt=data.Mt; posts=data.posts||{wb:[],x:[],ins:[],tiktok:[],mom:[]}; curPj=data.curPj; prog=data.prog; curAlbPj=data.curAlbPj; historyAwards=data.historyAwards||[]; conts=data.conts||[]; worldArtists=data.worldArtists||[]; writers=data.writers||[]; myWorks=data.myWorks||[];
       if(!posts.tiktok) posts.tiktok = [];
-      for(var i=0; i<conts.length; i++) { if(conts[i].affinity === undefined) conts[i].affinity = 0; if(conts[i].isCohabiting === undefined) conts[i].isCohabiting = false; }
+      conts.forEach(function(c){ if(c.affinity === undefined) c.affinity = 0; if(c.isCohabiting === undefined) c.isCohabiting = false; });
       initCos(); updTimeUI(); updAttr(); updateAlbProjUI(); updateFeatList(); renderMapCompany();
-      if(curPj){ $("boxWriteProgress").style.display="block"; $("btnStartWriteProj").style.display="none"; $("txtProg").innerText=prog+"%"; $("barProg").style.width=prog+"%"; }
-      $("createPage").classList.remove("active"); $("gameMain").classList.add("active"); $("topBar").style.display="flex"; alert("🎉 读取成功！");
+      if(curPj){ 
+          let wp = document.getElementById("boxWriteProgress");
+          if(wp) { wp.style.display="block"; document.getElementById("btnStartWriteProj").style.display="none"; document.getElementById("txtProg").innerText=prog+"%"; document.getElementById("barProg").style.width=prog+"%"; }
+      }
+      alert("🎉 读取成功！");
   } catch(e) {
-      alert("存档解析失败，可能已损坏！");
+      alert("存档存在异常，已尝试强行读取修复！");
+  } finally {
+      // 绝对强制跳转，无视任何报错
+      document.getElementById("createPage").classList.remove("active"); 
+      document.getElementById("createPage").style.display = "none";
+      document.getElementById("gameMain").classList.add("active"); 
+      document.getElementById("gameMain").style.display = "block";
+      document.getElementById("topBar").style.display="flex"; 
   }
 }
 window.clearSave = function(){ if(confirm("⚠️ 确定清空当前槽位吗？此操作不可逆！")){ localStorage.removeItem(getSaveKey()); location.reload(); } }
@@ -618,20 +639,34 @@ window.showProj = function(id){
 function costEnergy(amt){ if(ad.energy < amt){ alert(`⚠️ 精力不足！`); return false; } ad.energy -= amt; updTimeUI(); return true; }
 
 window.startGame = function(){
-  let inNameDom = document.getElementById("inRealName");
-  let inStageDom = document.getElementById("inStageName");
-  let inGenderDom = document.getElementById("inGender");
-  if(!inNameDom) { alert("错误：未能获取到输入框元素！请刷新页面重试。"); return; }
-  let rName = escapeHTML(inNameDom.value.trim()); 
-  if(!rName) { alert("⚠️ 必须填写真实姓名才能踏入星途！"); return; }
-  ad={
-    r: rName, s: escapeHTML(inStageDom.value.trim()) || rName, g: escapeHTML(inGenderDom.value.trim()) || "保密",
-    co:"独立", cot:"indie", m:50000, H:1.0, D:1.0, Elead:1.0, Kalbum:1.0, Geffect: 0.55,
-    st:{f:5000,h:10}, sk:{v:50,d:50,r:50,w:50,f:50,s:50,fa:50,va:50}, ws:[], awd:[], shows:[], contractEnd:0, energy: 100, maxEnergy: 100
-  };
-  trackPool=[]; myWorks=[]; curPj=null; prog=0; curAlbPj=null; historyAwards=[]; lib=[]; std=[]; worldArtists=[]; writers=[]; conts=[{id:1,n:"妈妈",t:"家人",h:[],affinity:50,isCohabiting:false},{id:2,n:"爸爸",t:"家人",h:[],affinity:50,isCohabiting:false},{id:3,n:"经纪人",t:"工作伙伴",h:[],affinity:30,isCohabiting:false}];
-  initCos(); initNPCs(); genMarket(); updAttr(); updTimeUI(); updateAlbProjUI(); renderMapCompany();
-  $("createPage").classList.remove("active"); $("gameMain").classList.add("active"); $("topBar").style.display="flex"; saveGame();
+  try {
+      let inNameDom = document.getElementById("inRealName");
+      let inStageDom = document.getElementById("inStageName");
+      let inGenderDom = document.getElementById("inGender");
+      if(!inNameDom) { alert("错误：未能获取到输入框元素！请刷新页面重试。"); return; }
+      let rName = escapeHTML(inNameDom.value.trim()); 
+      if(!rName) { alert("⚠️ 必须填写真实姓名才能踏入星途！"); return; }
+      ad={
+        r: rName, s: escapeHTML(inStageDom.value.trim()) || rName, g: escapeHTML(inGenderDom.value.trim()) || "保密",
+        co:"独立", cot:"indie", m:50000, H:1.0, D:1.0, Elead:1.0, Kalbum:1.0, Geffect: 0.55,
+        st:{f:5000,h:10}, sk:{v:50,d:50,r:50,w:50,f:50,s:50,fa:50,va:50}, ws:[], awd:[], shows:[], contractEnd:0, energy: 100, maxEnergy: 100
+      };
+      trackPool=[]; myWorks=[]; curPj=null; prog=0; curAlbPj=null; historyAwards=[]; lib=[]; std=[]; worldArtists=[]; writers=[]; 
+      conts=[{id:1,n:"妈妈",t:"家人",h:[],affinity:50,isCohabiting:false},{id:2,n:"爸爸",t:"家人",h:[],affinity:50,isCohabiting:false},{id:3,n:"经纪人",t:"工作伙伴",h:[],affinity:30,isCohabiting:false}];
+      
+      initCos(); initNPCs(); genMarket(); updAttr(); updTimeUI(); updateAlbProjUI(); renderMapCompany();
+      saveGame();
+  } catch(e) {
+      console.error(e);
+      alert("初始化遇到小波动，已尝试强制进入！");
+  } finally {
+      // 绝对强制跳转，无视报错
+      document.getElementById("createPage").classList.remove("active"); 
+      document.getElementById("createPage").style.display = "none";
+      document.getElementById("gameMain").classList.add("active"); 
+      document.getElementById("gameMain").style.display = "block";
+      document.getElementById("topBar").style.display="flex"; 
+  }
 }
 
 function calcSeval(C, V){ return Math.min(100, Math.max(10, (C*0.55 + ((Math.random()*20)-10) + ((Math.random()*30)-15))*((Math.random()*0.4)+0.8) + V*0.25)); }

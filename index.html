@@ -210,7 +210,7 @@ function forceVerifyKey() {
     <div class="card">
       <h2 class="tg" style="margin-bottom:10px;">💾 存档管理</h2>
       <select id="selSaveSlot" style="margin-bottom:5px;"><option value="1">存档槽位 1</option><option value="2">存档槽位 2</option><option value="3">存档槽位 3</option></select>
-      <div style="display:flex;gap:5px;"><button onclick="saveGame()">保存当前进度</button><button class="sec" onclick="loadGame(0)">读取</button></div>
+      <div style="display:flex;gap:5px;"><button onclick="saveGameImmediate()">保存当前进度</button><button class="sec" onclick="loadGame(0)">读取</button></div>
       <button class="red" onclick="exitToMainMenu()">🚪 退出存档 (返回主菜单)</button>
       <div style="margin-top:15px;border-top:1px solid #eee;padding-top:15px;">
         <p style="font-size:12px;color:#888;margin-top:5px;">推演流速设定 (右上角按钮生效)：</p>
@@ -522,18 +522,28 @@ let conts=[
 ];
 const aKs=[{k:"v",n:"唱功"},{k:"d",n:"舞蹈"},{k:"r",n:"Rap"},{k:"w",n:"创作"},{k:"f",n:"颜值"},{k:"s",n:"台风"},{k:"fa",n:"时尚"},{k:"va",n:"综艺"}];
 
-// ==================== 存档与防爆档保护 ====================
+// ==================== 存档与防爆档保护 (防抖优化版) ====================
 function getSaveKey(){ return "starProSave_" + ($("selSaveSlot")?$("selSaveSlot").value:"1"); }
-window.saveGame = function(){
+
+// 立即保存（用于退出、关键节点）
+window.saveGameImmediate = function(){
   try {
       let s = { version: GAME_VERSION, ad:ad, lib:lib, std:std, albs:albs, trackPool:trackPool, marketSongs:marketSongs, time:time, Mt:Mt, posts:posts, curPj:curPj, prog:prog, curAlbPj:curAlbPj, historyAwards:historyAwards, conts:conts, worldArtists:worldArtists, writers:writers, myWorks:myWorks };
       localStorage.setItem(getSaveKey(), JSON.stringify(s));
   } catch(e) {
       if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-          alert("⚠️ 严重警告：存档空间不足！图片超出了浏览器 5MB 限制，请停止发图以免丢档。");
+          console.log("⚠️ 严重警告：存档空间不足！");
       }
   }
 }
+
+// 延迟保存（防抖），防止循环和频繁点击时卡死主线程
+let saveTimer = null;
+window.saveGame = function(){
+    if(saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(window.saveGameImmediate, 300);
+}
+
 window.loadGame = function(slotOverride){
   try {
       let k = slotOverride ? "starProSave_"+slotOverride : getSaveKey();
@@ -552,7 +562,6 @@ window.loadGame = function(slotOverride){
   } catch(e) {
       alert("存档存在异常，已尝试强行读取修复！");
   } finally {
-      // 绝对强制跳转，无视任何报错
       document.getElementById("createPage").classList.remove("active"); 
       document.getElementById("createPage").style.display = "none";
       document.getElementById("gameMain").classList.add("active"); 
@@ -561,7 +570,7 @@ window.loadGame = function(slotOverride){
   }
 }
 window.clearSave = function(){ if(confirm("⚠️ 确定清空当前槽位吗？此操作不可逆！")){ localStorage.removeItem(getSaveKey()); location.reload(); } }
-window.exitToMainMenu = function() { saveGame(); location.reload(); }
+window.exitToMainMenu = function() { saveGameImmediate(); location.reload(); }
 
 // ==================== API ====================
 window.saveApiConfig = function() { localStorage.setItem('savedApiEndpoint',$("apiHost").value); localStorage.setItem('savedApiPath',$("apiPath").value); localStorage.setItem('savedApiKey',$("apiToken").value); alert("API配置保存成功！"); }
@@ -617,7 +626,6 @@ function initG(){
   $("phoneGrid").innerHTML = phtml;
 }
 
-// 在页面加载后调用初始化
 window.addEventListener("load", function() {
     initG();
     loadApiConfig();
@@ -655,12 +663,11 @@ window.startGame = function(){
       conts=[{id:1,n:"妈妈",t:"家人",h:[],affinity:50,isCohabiting:false},{id:2,n:"爸爸",t:"家人",h:[],affinity:50,isCohabiting:false},{id:3,n:"经纪人",t:"工作伙伴",h:[],affinity:30,isCohabiting:false}];
       
       initCos(); initNPCs(); genMarket(); updAttr(); updTimeUI(); updateAlbProjUI(); renderMapCompany();
-      saveGame();
+      saveGameImmediate();
   } catch(e) {
       console.error(e);
       alert("初始化遇到小波动，已尝试强制进入！");
   } finally {
-      // 绝对强制跳转，无视报错
       document.getElementById("createPage").classList.remove("active"); 
       document.getElementById("createPage").style.display = "none";
       document.getElementById("gameMain").classList.add("active"); 
@@ -690,7 +697,6 @@ function initNPCs(){
     let f = Math.floor(Math.random()*5000000)+50000; let g = gs[Math.floor(Math.random()*gs.length)];
     worldArtists.push({id:"npc_"+i, n:art, fans:f, age:20+Math.floor(Math.random()*15), gender:Math.random()>0.5?"女":"男", alb:ts[Math.floor(Math.random()*ts.length)]+" Album"});
     
-    // NPC 随机抽取好听的歌名
     let rNameAlb = ts[Math.floor(Math.random()*ts.length)] + " " + ts[Math.floor(Math.random()*ts.length)];
     let rNameTk = ts[Math.floor(Math.random()*ts.length)];
     
@@ -867,7 +873,20 @@ window.confirmDeluxe = function(){
 // ==================== 时间推演核心与排行榜 ====================
 function updTimeUI(){ let s = `${time.y}年 ${time.m}月 第${time.w}周 星期${time.d}`; let els=document.querySelectorAll(".uiDateMap"); for(var i=0;i<els.length;i++) els[i].innerText = s; if($("sysTimeTxt")) $("sysTimeTxt").innerText = s; if($("uiEnergy")) $("uiEnergy").innerText = ad.energy; }
 window.setSysTime = function(){ let y=parseInt($("sysInY").value), m=parseInt($("sysInM").value), w=parseInt($("sysInW").value); if(y) time.y=y; if(m) time.m=m; if(w) time.w=w; updTimeUI(); alert("时间已修改！"); saveGame(); }
-window.advHour = function(h){ for(let i=0; i<h; i++){ time.h++; if(time.h >= 24) { time.h = 0; advTime(1, false); ad.energy=ad.maxEnergy; } } updTimeUI(); saveGame(); }
+
+// 优化: 修改小时推进触发的存档
+window.advHour = function(h){ 
+    for(let i=0; i<h; i++){ 
+        time.h++; 
+        if(time.h >= 24) { 
+            time.h = 0; 
+            advTime(1, false); 
+            ad.energy=ad.maxEnergy; 
+        } 
+    } 
+    updTimeUI(); 
+    saveGame(); // 因为这里已经用了 setTimeout 防抖，所以循环外面调一次没问题，不会卡死了
+}
 window.advTimeByFlow = function(){ let v = parseInt($("selTimeFlow").value) || 7; advTime(Math.floor(v/7)||1, true); }
 
 function updatePeakRanks(){
@@ -918,16 +937,17 @@ function advTime(weeks, showMsg){
 function renderRankRow(x,i,durKey,peakKey,valKey,isAlb){ let diff = x.lastW ? x.lastW-(i+1) : 0; let chg = diff>0?`<span class="rank-up">▲${diff}</span>`:diff<0?`<span class="rank-down">▼${-diff}</span>`:(!x.lastW?'<span class="rank-new">NEW</span>':'-'); let dText = durKey=='days'?'天':'周'; return `<div class="card" style="${x.isMe?'background:#fff8e0;':''}padding:10px;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:16px;">#${i+1} <span style="font-size:12px;margin:0 4px;">${chg}</span></b><div style="text-align:right;">${escapeHTML(x.n)}<br><span style="font-size:11px;color:#888;">by ${escapeHTML(x.artist)}</span></div></div><div style="font-size:11px;color:#666;margin:4px 0;display:flex;justify-content:space-between;"><span>在榜: ${x[durKey]}${dText}</span><span>Peak: #${x[peakKey]} (×${x.peakW}周)</span><span>上周: #${x.lastW||'-'}</span></div><b class="tg" style="font-size:12px;display:block;text-align:right;">${x[valKey].toLocaleString()} ${valKey.includes('stm')?'播放':(isAlb?'张':'Pts')}</b></div>`; }
 function getCert(sl){ if(sl>=10000000) return `<span class="cert-badge" style="background:#b9f2ff;border-color:#00bfff;">💎 钻石(x${Math.floor(sl/10000000)})</span>`; if(sl>=1000000) return `<span class="cert-badge" style="background:#f1f5f9;border-color:#94a3b8;">💿 白金(x${Math.floor(sl/1000000)})</span>`; if(sl>=500000) return `<span class="cert-badge" style="background:#fef3c7;border-color:#f59e0b;">📀 金唱片</span>`; return ""; }
 
+// 优化：查榜时渲染大量DOM节点卡死的问题 (使用 .slice(0, 100) 截断，只渲染前 100)
 window.openApp = function(id){
   if(['Wb','Ins','X','TikTok'].includes(id)){ curApp = id; $("mTextTitle").innerText=id; $("mText").classList.add("open"); drawP(id);
   } else if(id=='NPC'){ $("mCustomNPC").classList.add("open"); renderNpcList();
   } else if(id=='V'){ $("mV").classList.add("open"); $("vList").style.display="block"; $("vChat").style.display="none"; $("vList").innerHTML=conts.map(function(c,i){return `<div class="row"><b>${escapeHTML(c.n)}</b><button class="inline" onclick="oChat(${i})">聊</button></div>`}).join('');
-  } else if(id=='Spot'){ $("mInfoTitle").innerText = "🎵 Spotify 流媒体榜 (单曲)"; $("mInfoContent").innerHTML = `<div class="sub-tab-bar"><div class="sub-tab active" onclick="switchSubTab(this,'sD','spoT')">日榜</div><div class="sub-tab" onclick="switchSubTab(this,'sW','spoT')">周榜</div><div class="sub-tab" onclick="switchSubTab(this,'sY','spoT')">年榜</div><div class="sub-tab" onclick="switchSubTab(this,'sDec','spoT')">10年榜</div></div><div id="spoT"><div id="sD" class="sub-page active"></div><div id="sW" class="sub-page"></div><div id="sY" class="sub-page"></div><div id="sDec" class="sub-page"></div></div>`; let tks=trackPool.filter(function(x){return x.type=="track"}); tks.sort(function(a,b){return b.stmDly-a.stmDly}); $("sD").innerHTML = tks.map(function(x,i){return renderRankRow(x,i,"days","peakS","stmDly")}).join(''); tks.sort(function(a,b){return b.stm-a.stm}); $("sW").innerHTML = tks.map(function(x,i){return renderRankRow(x,i,"weeks","peakS","stm")}).join(''); tks.sort(function(a,b){return b.stmY-a.stmY}); $("sY").innerHTML = tks.map(function(x,i){return renderRankRow(x,i,"weeks","peakS","stmY")}).join(''); tks.sort(function(a,b){return b.stmD-a.stmD}); $("sDec").innerHTML = tks.map(function(x,i){return renderRankRow(x,i,"weeks","peakS","stmD")}).join(''); $("mInfo").classList.add("open");
-  } else if(id=='BB'){ $("mInfoTitle").innerText = "📊 Billboard 综合榜"; $("mInfoContent").innerHTML = `<div class="sub-tab-bar"><div class="sub-tab active" onclick="switchSubTab(this,'bW','bbT')">周榜(Hot100)</div><div class="sub-tab" onclick="switchSubTab(this,'bY','bbT')">年榜</div><div class="sub-tab" onclick="switchSubTab(this,'bDec','bbT')">10年榜</div></div><div id="bbT"><div id="bW" class="sub-page active"></div><div id="bYear" class="sub-page"></div><div id="bDec" class="sub-page"></div></div>`; let tks=trackPool.filter(function(x){return x.type=="track"}); tks.sort(function(a,b){return b.pts-a.pts}); $("bW").innerHTML = tks.map(function(x,i){return renderRankRow(x,i,"weeks","peakB","pts")}).join(''); tks.sort(function(a,b){return b.ptsY-a.ptsY}); $("bY").innerHTML = tks.map(function(x,i){return renderRankRow(x,i,"weeks","peakB","ptsY")}).join(''); tks.sort(function(a,b){return b.ptsD-a.ptsD}); $("bDec").innerHTML = tks.map(function(x,i){return renderRankRow(x,i,"weeks","peakB","ptsD")}).join(''); $("mInfo").classList.add("open");
-  } else if(id=='Sale' || id=='Daily'){ $("mInfoTitle").innerText = id=='Sale' ? "📈 专辑总销量榜" : "📉 专辑日增榜"; let albsOnly = trackPool.filter(function(x){return x.type==="album"}).sort(function(a,b){return (id=='Sale'?b.slTotal-a.slTotal : b.stmDlyAlb-a.stmDlyAlb)}); $("mInfoContent").innerHTML = albsOnly.map(function(x,i){return `<div class="row" style="${x.isMe?'background:#fff8e0;font-weight:bold;':''}"><span>#${i+1} ${escapeHTML(x.n)} - ${escapeHTML(x.artist)} <br>${getCert(x.slTotal)}</span><b class="tg">${id=='Sale'?x.slTotal.toLocaleString()+' 张':'+'+x.stmDlyAlb.toLocaleString()+'/日'}</b></div>`}).join(''); $("mInfo").classList.add("open");
+  } else if(id=='Spot'){ $("mInfoTitle").innerText = "🎵 Spotify 流媒体榜 (单曲)"; $("mInfoContent").innerHTML = `<div class="sub-tab-bar"><div class="sub-tab active" onclick="switchSubTab(this,'sD','spoT')">日榜</div><div class="sub-tab" onclick="switchSubTab(this,'sW','spoT')">周榜</div><div class="sub-tab" onclick="switchSubTab(this,'sY','spoT')">年榜</div><div class="sub-tab" onclick="switchSubTab(this,'sDec','spoT')">10年榜</div></div><div id="spoT"><div id="sD" class="sub-page active"></div><div id="sW" class="sub-page"></div><div id="sY" class="sub-page"></div><div id="sDec" class="sub-page"></div></div>`; let tks=trackPool.filter(function(x){return x.type=="track"}); tks.sort(function(a,b){return b.stmDly-a.stmDly}); $("sD").innerHTML = tks.slice(0,100).map(function(x,i){return renderRankRow(x,i,"days","peakS","stmDly")}).join(''); tks.sort(function(a,b){return b.stm-a.stm}); $("sW").innerHTML = tks.slice(0,100).map(function(x,i){return renderRankRow(x,i,"weeks","peakS","stm")}).join(''); tks.sort(function(a,b){return b.stmY-a.stmY}); $("sY").innerHTML = tks.slice(0,100).map(function(x,i){return renderRankRow(x,i,"weeks","peakS","stmY")}).join(''); tks.sort(function(a,b){return b.stmD-a.stmD}); $("sDec").innerHTML = tks.slice(0,100).map(function(x,i){return renderRankRow(x,i,"weeks","peakS","stmD")}).join(''); $("mInfo").classList.add("open");
+  } else if(id=='BB'){ $("mInfoTitle").innerText = "📊 Billboard 综合榜"; $("mInfoContent").innerHTML = `<div class="sub-tab-bar"><div class="sub-tab active" onclick="switchSubTab(this,'bW','bbT')">周榜(Hot100)</div><div class="sub-tab" onclick="switchSubTab(this,'bY','bbT')">年榜</div><div class="sub-tab" onclick="switchSubTab(this,'bDec','bbT')">10年榜</div></div><div id="bbT"><div id="bW" class="sub-page active"></div><div id="bYear" class="sub-page"></div><div id="bDec" class="sub-page"></div></div>`; let tks=trackPool.filter(function(x){return x.type=="track"}); tks.sort(function(a,b){return b.pts-a.pts}); $("bW").innerHTML = tks.slice(0,100).map(function(x,i){return renderRankRow(x,i,"weeks","peakB","pts")}).join(''); tks.sort(function(a,b){return b.ptsY-a.ptsY}); $("bY").innerHTML = tks.slice(0,100).map(function(x,i){return renderRankRow(x,i,"weeks","peakB","ptsY")}).join(''); tks.sort(function(a,b){return b.ptsD-a.ptsD}); $("bDec").innerHTML = tks.slice(0,100).map(function(x,i){return renderRankRow(x,i,"weeks","peakB","ptsD")}).join(''); $("mInfo").classList.add("open");
+  } else if(id=='Sale' || id=='Daily'){ $("mInfoTitle").innerText = id=='Sale' ? "📈 专辑总销量榜" : "📉 专辑日增榜"; let albsOnly = trackPool.filter(function(x){return x.type==="album"}).sort(function(a,b){return (id=='Sale'?b.slTotal-a.slTotal : b.stmDlyAlb-a.stmDlyAlb)}); $("mInfoContent").innerHTML = albsOnly.slice(0,100).map(function(x,i){return `<div class="row" style="${x.isMe?'background:#fff8e0;font-weight:bold;':''}"><span>#${i+1} ${escapeHTML(x.n)} - ${escapeHTML(x.artist)} <br>${getCert(x.slTotal)}</span><b class="tg">${id=='Sale'?x.slTotal.toLocaleString()+' 张':'+'+x.stmDlyAlb.toLocaleString()+'/日'}</b></div>`}).join(''); $("mInfo").classList.add("open");
   } else {
     $("mInfoTitle").innerText=id; $("mInfo").classList.add("open"); let h="暂无数据"; 
-    if(id=='Bitch'||id=='RS'){ h = trackPool.map(function(x,i){return `<div class="card" style="padding:10px;margin:5px 0;"><b>${escapeHTML(x.n)} - ${escapeHTML(x.artist)}</b><br><span style="color:#cc0000;font-size:12px;">${id=='Bitch'?x.bx:x.rs}</span><br><span style="font-size:11px;color:#666;">${x.pub}</span><br><button class="sec" onclick="getFanCmts('${escapeHTML(x.n)}','${x.gnr}',this)" style="font-size:11px;margin-top:4px;">看粉丝留言(需API)</button><div style="margin-top:4px;"></div></div>`}).join('');
+    if(id=='Bitch'||id=='RS'){ h = trackPool.slice(0,100).map(function(x,i){return `<div class="card" style="padding:10px;margin:5px 0;"><b>${escapeHTML(x.n)} - ${escapeHTML(x.artist)}</b><br><span style="color:#cc0000;font-size:12px;">${id=='Bitch'?x.bx:x.rs}</span><br><span style="font-size:11px;color:#666;">${x.pub}</span><br><button class="sec" onclick="getFanCmts('${escapeHTML(x.n)}','${x.gnr}',this)" style="font-size:11px;margin-top:4px;">看粉丝留言(需API)</button><div style="margin-top:4px;"></div></div>`}).join('');
     } else if(id=='Market'){ $("mInfoContent").innerHTML = `<div class="sub-tab-bar"><div class="sub-tab active" onclick="switchSubTab(this,'mkDemo','mktT')">Demo 市场</div><div class="sub-tab" onclick="switchSubTab(this,'mkWriter','mktT')">写手排行榜</div></div><div id="mktT"><div id="mkDemo" class="sub-page active">${marketSongs.map(function(x,i){return `<div class="row"><span><b>${escapeHTML(x.n)}</b><br><i style="font-size:11px;color:#888;">${x.g.join()} | by ${escapeHTML(x.author)}</i></span><button onclick="buySong(${i})">$${x.price.toLocaleString()}</button></div>`}).join('')}</div><div id="mkWriter" class="sub-page">${[...writers].sort(function(a,b){return b.hot-a.hot}).map(function(w,i){return `<div class="row"><span>#${i+1} <b>${escapeHTML(w.n)}</b></span><span style="font-size:12px;color:#888;">热度: ${w.hot} | 功底: ${w.sk}</span></div>`}).join('')}</div></div>`; return; }
     $("mInfoContent").innerHTML=h;
   }

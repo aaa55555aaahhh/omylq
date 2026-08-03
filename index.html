@@ -172,7 +172,7 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
 function escapeHTML(str) { if(!str) return ''; return String(str).replace(/[&<>'"]/g, function(tag){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'}[tag] || tag; }); }
 
 // ==================== 全局变量 ====================
-const GAME_VERSION = "2.5.0"; 
+const GAME_VERSION = "2.6.0"; 
 const $ = function(id) { return document.getElementById(id); };
 let ad={}; let lib=[]; let std=[]; let albs=[]; let trackPool=[]; let marketSongs=[]; let worldArtists=[]; let writers=[]; let myWorks=[];
 let selG=[]; let selAG=[]; let posts={Wb:[],X:[],Ins:[],TikTok:[]}; let curApp="";
@@ -199,8 +199,7 @@ window.loadGame = function(slotOverride){
   try {
       let data = JSON.parse(s);
       ad=data.ad; lib=data.lib||[]; std=data.std||[]; albs=data.albs||[]; trackPool=data.trackPool||[]; marketSongs=data.marketSongs||[]; time=data.time; Mt=data.Mt; posts=data.posts||{Wb:[],X:[],Ins:[],TikTok:[]}; curPj=data.curPj; prog=data.prog; curAlbPj=data.curAlbPj; historyAwards=data.historyAwards||[]; conts=data.conts||[]; worldArtists=data.worldArtists||[]; writers=data.writers||[]; myWorks=data.myWorks||[];
-      initCos(); initPhone(); updTimeUI(); updAttr(); updateAlbProjUI(); updateFeatList(); renderMapCompany(); genMarket(false);
-      if(curPj){ $("boxWriteProgress").style.display="block"; $("btnStartWriteProj").style.display="none"; }
+      initCos(); initPhone(); updTimeUI(); updAttr(); updateFeatList(); renderMapCompany(); genMarket(false);
       $("createPage").classList.remove("active"); $("gameMain").classList.add("active"); $("topBar").style.display="flex"; 
       alert("🎉 读取成功！欢迎回来。");
   } catch (err) { alert("存档可能已损坏！"); }
@@ -208,15 +207,24 @@ window.loadGame = function(slotOverride){
 
 window.startGame = function(){
   let rName = $("inRealName").value.trim(); if(!rName) return alert("❌ 必须填写真实姓名！");
-  let btn = $("btnCreate"); if(btn) { btn.disabled = true; btn.innerText = "生成娱乐圈大盘中..."; }
+  let btn = $("btnCreate"); if(btn) { btn.disabled = true; btn.innerText = "⏳ 正在生成娱乐圈大盘，请稍候..."; }
 
-  ad={ r: escapeHTML(rName), s: escapeHTML($("inStageName").value.trim())||escapeHTML(rName), g: escapeHTML($("inGender").value.trim())||"保密", co:"独立", cot:"indie", m:50000, H:1.0, D:1.0, Elead:1.0, Kalbum:1.0, Geffect: 0.55, st:{f:5000,h:10}, sk:{v:50,d:50,r:50,w:50,f:50,s:50,fa:50,va:50}, ws:[], awd:[], shows:[], contractEnd:0, energy: 100, maxEnergy: 100 };
-  trackPool=[]; myWorks=[]; curPj=null; prog=0; curAlbPj=null; historyAwards=[]; lib=[]; std=[]; worldArtists=[]; writers=[]; conts=[{id:1,n:"经纪人",t:"工作伙伴",h:[],affinity:30}];
-  
-  initCos(); initPhone(); initNPCs(); genMarket(true); updAttr(); updTimeUI(); updateAlbProjUI(); renderMapCompany();
-  $("createPage").classList.remove("active"); $("gameMain").classList.add("active"); $("topBar").style.display="flex"; 
-  saveGame();
-  if(btn) { btn.disabled = false; btn.innerText = "✓ 创建并进入演艺圈"; }
+  // 缓冲0.5秒防止手机黑屏假死
+  setTimeout(() => {
+      try {
+          ad={ r: escapeHTML(rName), s: escapeHTML($("inStageName").value.trim())||escapeHTML(rName), g: escapeHTML($("inGender").value.trim())||"保密", co:"独立", cot:"indie", m:50000, H:1.0, D:1.0, Elead:1.0, Kalbum:1.0, Geffect: 0.55, st:{f:5000,h:10}, sk:{v:50,d:50,r:50,w:50,f:50,s:50,fa:50,va:50}, ws:[], awd:[], shows:[], contractEnd:0, energy: 100, maxEnergy: 100 };
+          trackPool=[]; myWorks=[]; curPj=null; prog=0; curAlbPj=null; historyAwards=[]; lib=[]; std=[]; worldArtists=[]; writers=[]; conts=[{id:1,n:"经纪人",t:"工作伙伴",h:[],affinity:30}];
+          
+          initCos(); initPhone(); initNPCs(); genMarket(true); updAttr(); updTimeUI(); renderMapCompany();
+          $("createPage").classList.remove("active"); $("gameMain").classList.add("active"); $("topBar").style.display="flex"; 
+          saveGame();
+          alert("🎉 娱乐圈生成完毕，出道成功！");
+      } catch (err) {
+          alert("生成大盘时出错: " + err.message);
+      } finally {
+          if(btn) { btn.disabled = false; btn.innerText = "✓ 创建并进入演艺圈"; }
+      }
+  }, 500);
 }
 
 function initCos(){ coList = [{n:"UMG", l:"T0", m:500000, f:2000000, attr:90}, {n:"SME", l:"T0", m:450000, f:2000000, attr:90}, {n:"WMG", l:"T0", m:400000, f:2000000, attr:90}, {n:"Nova Records", l:"T1", m:200000, f:800000, attr:80}, {n:"Echo Sound", l:"T2", m:80000, f:300000, attr:70}]; }
@@ -230,7 +238,7 @@ function initPhone(){
 // ==================== 大盘与NPC生成 (新增10~20人) ====================
 function initNPCs(){
   worldArtists = []; writers = [];
-  let count = Math.floor(Math.random() * 11) + 10; // 10 到 20 名艺人
+  let count = Math.floor(Math.random() * 11) + 10; 
   for(let i=0; i<count; i++){
     let art = npcNames[i % npcNames.length] + (i>npcNames.length?"_"+i:""); 
     let f = Math.floor(Math.random()*5000000)+10000;
@@ -248,13 +256,30 @@ function createEntity(name, artist, isMe, type, fans, C, V){
   return { id: "tk_"+Date.now()+"_"+Math.floor(Math.random()*10000), n: escapeHTML(name), artist: escapeHTML(artist), isMe: isMe, type: type, y: time.y, m: time.m, w: time.w, stm: baseStm, stmDly: Math.floor(baseStm/7), slTotal: Math.floor(baseStm/150), slWk: Math.floor(baseStm/150), rad: Math.floor(baseStm*1.5), pts: 0, days: 1, weeks: 1, peakS: 999, peakB: 999, peakW: 0, lastW: 0, isSleeping: false, isDead: false, price: 1 };
 }
 
-window.updateFeatList = function(){ $("inFeat").innerHTML = '<option value="">🎤 Solo (独唱)</option>' + worldArtists.map(a => `<option value="${a.n}">与 ${a.n} 合作</option>`).join(''); }
+window.updateFeatList = function(){ 
+    let el = $("inFeat");
+    if(el) el.innerHTML = '<option value="">🎤 Solo (独唱)</option>' + worldArtists.map(a => `<option value="${a.n}">与 ${a.n} 合作</option>`).join(''); 
+}
 window.submitCustomNPC = function(){ 
     let n = $("aNpcName").value; if(!n) return; 
-    let fans = parseInt($("aNpcFans").value) || 0; // 0粉丝素人
+    let fans = parseInt($("aNpcFans").value) || 0; 
     worldArtists.push({id:"npc_"+Date.now(), n:n, fans:fans}); 
     alert(`注入成功！${n} 以 ${fans} 粉丝进入大盘！`); 
     updateFeatList(); closeM('mCustomNPC'); 
+}
+
+// ==================== 缺失的企划与创作功能补全 ====================
+window.startWrite = function(){ 
+    if(!costEnergy(10)) return; advHour(1);
+    let n = $("inSName").value || "未命名单曲";
+    lib.push({id:"lb_"+Date.now(), n:n, g:["流行"], c:"自编自填自唱"}); 
+    alert(`✅ 单曲《${n}》灵感记录完毕，已存入曲库！`); saveGame(); 
+}
+
+window.startAlbum = function(){ 
+    let n = $("inAName").value || "未命名专辑";
+    albs.push({id:"alb_"+Date.now(), n:n, s:[]});
+    alert(`💿 专辑文件夹【${n}】创建成功！\n注意：此功能界面还在扩建中，当前仅为占位体验。`); saveGame(); 
 }
 
 // ==================== 随机与AI起名 ====================
@@ -271,12 +296,12 @@ window.aiGenName = async function(type, targetId, btn){
 
 // ==================== 市场与写手系统 ====================
 function genMarket(force){
-    if(!force && time.m % 2 !== 0) return; // 模拟每隔1个月刷新
+    if(!force && time.m % 2 !== 0) return;
     marketSongs = writers.sort(() => 0.5 - Math.random()).slice(0, 5).map(w => ({ n: "未命名Demo", author: w.n, price: Math.floor(w.sk*150 + w.hot*50) }));
-    if($('mapMarket').style.display === 'block') renderMarket();
+    if($('mapMarket') && $('mapMarket').style.display === 'block') renderMarket();
 }
 function renderMarket(){
-    $("marketSongList").innerHTML = marketSongs.map((s,i) => `<div class='card' style='display:flex;justify-content:space-between;align-items:center;'><span><b>${s.n}</b> <br><small>作词曲: ${s.author}</small></span> <button class='inline' onclick='buySong(${i})'>买断 $${s.price.toLocaleString()}</button></div>`).join('');
+    if($("marketSongList")) $("marketSongList").innerHTML = marketSongs.map((s,i) => `<div class='card' style='display:flex;justify-content:space-between;align-items:center;'><span><b>${s.n}</b> <br><small>作词曲: ${s.author}</small></span> <button class='inline' onclick='buySong(${i})'>买断 $${s.price.toLocaleString()}</button></div>`).join('');
 }
 window.buySong = function(i){
     let s = marketSongs[i]; if(ad.m < s.price) return alert("资金不足！");
@@ -288,8 +313,9 @@ window.showWriterBoard = function() {
     $("mInfoTitle").innerText = "🏆 金牌写手排行榜"; $("mInfoContent").innerHTML = html; $("mInfo").classList.add("open");
 }
 
-// ==================== 唱片公司签约 (双条件) ====================
+// ==================== 唱片公司签约 ====================
 window.renderMapCompany = function(){ 
+    if(!$("boxSignCompany")) return;
     if(ad.co === "独立"){ 
         $("boxSignCompany").style.display = "block"; $("boxMyCompany").style.display = "none"; 
         $("listLabel").innerHTML = coList.map((c,i)=>`<div class="card"><b>${c.n} (${c.l})</b><br><span style="font-size:12px;color:#666">预付金: $${c.m.toLocaleString()} | 要求均属性:${c.attr} 或 粉丝:${c.f.toLocaleString()}</span><button class="inline sec" onclick="openSign(${i})" style="margin-top:5px;">申请签约</button></div>`).join('');
@@ -336,7 +362,7 @@ window.doInvite = function(id) {
     alert(`和 ${c.n} 度过了愉快的时光，好感度增加了！`); openInviteList(); saveGame();
 }
 
-// ==================== 社交媒体：发帖与发视频 (核心升级) ====================
+// ==================== 社交媒体：发帖与发视频 ====================
 window.openApp = function(id){
   if(['Wb','X','Ins','TikTok'].includes(id)){ 
       curApp = id; $("mText").classList.add("open"); $("mTextTitle").innerText = id + " 社交中心";
@@ -375,7 +401,7 @@ window.openPostUI = function(type) {
     $("socialContainer").innerHTML = `
         <h4 class="tg" style="margin-bottom:10px;">${type==='video'?'🎥 录制宣发视频 (需5精力)':'📝 编写帖子 (无消耗)'}</h4>
         <label style="font-size:12px;">宣传目标：</label>
-        <select id="postTarget">${opts}</select>
+        <select id="postTarget" style="margin-bottom:10px;width:100%;padding:8px;">${opts}</select>
         <textarea id="postContent" style="height:70px;" placeholder="写点什么配文..."></textarea>
         <button onclick="doPost('${type}')">立即发布</button>
     `;
@@ -386,7 +412,6 @@ window.doPost = function(type) {
     let tgt = $("postTarget").value; let txt = escapeHTML($("postContent").value) || "分享生活！";
     let eff = type === 'video' ? 1.5 : 1.0;
     
-    // 如果是打单宣传，给歌曲加脉冲热度
     if(tgt.startsWith('tk_')) {
         let t = trackPool.find(x => x.id === tgt.replace('tk_',''));
         if(t) { t.stm += Math.floor(1000 * eff); t.rad += Math.floor(500 * eff); alert("宣传成功！歌曲播放量得到提振！"); }
@@ -400,7 +425,7 @@ window.doPost = function(type) {
 
 function renderRankRow(x,i,valKey,valLabel){ let diff = x.lastW && x.lastW!==999 ? x.lastW-(i+1) : 0; let chg = diff>0?`<span class="rank-up">▲${diff}</span>`:diff<0?`<span class="rank-down">▼${-diff}</span>`:((!x.lastW || x.lastW===999)?'<span class="rank-new">NEW</span>':'-'); return `<div class="card" style="${x.isMe?'background:#fff8e0;':''}padding:10px;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:16px;">#${i+1} <span style="font-size:12px;margin:0 4px;">${chg}</span></b><div style="text-align:right;">${escapeHTML(x.n)}<br><span style="font-size:11px;color:#888;">by ${escapeHTML(x.artist)}</span></div></div><div style="font-size:11px;color:#666;margin:4px 0;display:flex;justify-content:space-between;"><span>在榜: ${x.weeks}周</span><span>Peak: #${x.peakB||x.peakS}</span></div><b class="tg" style="font-size:12px;display:block;text-align:right;">${x[valKey].toLocaleString()} ${valLabel}</b></div>`; }
 
-// ==================== 时间引擎、企划与常规系统缩略 ====================
+// ==================== 时间引擎与推演 ====================
 function updTimeUI(){ let dMap = ["日","一","二","三","四","五","六"]; if($("uiDate")) $("uiDate").innerText = `${time.y}年 ${time.m}月 第${time.w}周 星期${dMap[time.d % 7]}`; if($("uiEnergy")) $("uiEnergy").innerText = ad.energy; }
 function costEnergy(amt){ if(ad.energy < amt){ alert(`⚠️ 精力不足！`); return false; } ad.energy -= amt; updTimeUI(); return true; }
 window.advHour = function(h){ for(let i=0; i<h; i++){ time.h++; if(time.h >= 24) { time.h=0; time.d++; ad.energy=ad.maxEnergy; } } if(time.d > 7) { time.d=1; advTime(1, false); } updTimeUI(); saveGame(); }

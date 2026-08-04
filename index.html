@@ -171,7 +171,7 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
         <button onclick="doTour()">开启巡演</button>
       </div>
       <div id="mapFashion" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
-        <h3 class="tg">✨ 巴黎时装周</h3><p style="font-size:12px;color:#888;margin-bottom:10px;">粉丝>500w且时尚>70免票，否则$20w买门票。</p><button onclick="joinFashion()">出席时装大秀 (耗1天/10精)</button>
+        <h3 class="tg">✨ 巴黎时装周</h3><p style="font-size:12px;color:#888;margin-bottom:10px;">粉丝>500w且时尚>70免票，否则\$20w买门票。</p><button onclick="joinFashion()">出席时装大秀 (耗1天/10精)</button>
       </div>
       <div id="mapLabel" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
         <div id="boxSignCompany"><h3 class="tg">🏢 唱片公司签约</h3><div id="listLabel" style="margin-top:10px;"></div></div>
@@ -183,7 +183,8 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
       <div id="mapAwards" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
         <h3 class="tg">🏆 历届大奖档案馆</h3><p id="txtAwardStatus" style="font-size:12px;color:#888;"></p><button id="btnJoinAward" style="display:none;margin-top:10px;">🎟️ 出席颁奖典礼</button><div id="listAwardsLog" style="font-size:12px;margin-top:10px;max-height:250px;overflow-y:auto;"></div>
       </div>
-      <div id="mapHome" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
+      <div id
+="mapHome" class="card" style="display:none;margin-top:15px;background:#fefcf5;">
         <h3 class="tg">🏠 我的家</h3><p style="font-size:12px;color:#888;">休息回血，必定恢复20精力并流逝1小时。</p>
         <button onclick="relaxHome()">🧘 放空灵魂 (有概率写出Demo)</button>
         <button onclick="openInviteList()">☕ 邀请好友来聚会/互动</button>
@@ -552,7 +553,7 @@ window.startGame = function(){
       let inGenderDom = document.getElementById("inGender");
       if(!inNameDom) { alert("错误：未能获取到输入框元素！请刷新页面重试。"); return; }
       let rName = escapeHTML(inNameDom.value.trim()); 
-      if(!rName) { alert("⚠️ 必须填写真实姓名才能踏入星途！"); return; }
+      if(!rName) { alert("⚠️ 必须填真实姓名才能踏入星途！"); return; }
       ad={
         r: rName, s: escapeHTML(inStageDom.value.trim()) || rName, g: escapeHTML(inGenderDom.value.trim()) || "保密",
         co:"独立", cot:"indie", m:50000, H:1.0, D:1.0, Elead:1.0, Kalbum:1.0, Geffect: 0.55,
@@ -697,7 +698,7 @@ window.openSign = function(i){ tempIdx = i; $("signTitle").innerText = `签约 $
 window.confirmSign = function(){ let c = coList[tempIdx]; let deal = $("selDealType").value; let years = parseInt($("signYears").value) || 3; ad.co = c.n; ad.cot = c.t; ad.m += c.m; ad.contractEnd = time.y + years; ad.dealType = deal=="1" ? "7/3" : "2/8"; ad.Geffect = c.grade * (deal=="1" ? 1.0 : 0.6); updAttr(); alert(`签约成功！资源乘数: ${ad.Geffect.toFixed(2)}`); closeM('mSign'); renderMapCompany(); saveGame(); }
 function renderShows(){ let f = ad.st.f; let s1 = f>=10000000, s2 = f>=30000000, s3 = f>=50000000; $("listShows").innerHTML = `<div class="card" style="${s1?'':'opacity:0.5'}"><b>🌴 科切拉音乐节</b><br><span style="font-size:12px">要求: 1000万粉</span><br>${s1&&!ad.shows.includes('c1')?`<button onclick="doShow('c1','科切拉')">接受邀约</button>`: (ad.shows.includes('c1')?`<span style="color:#25d366;font-size:12px">已演出</span>`:'')}</div><div class="card" style="${s2?'':'opacity:0.5'}"><b>⚽ 世界杯开幕式</b><br><span style="font-size:12px">要求: 3000万粉</span><br>${s2&&!ad.shows.includes('c2')?`<button onclick="doShow('c2','世界杯')">接受邀约</button>`: (ad.shows.includes('c2')?`<span style="color:#25d366;font-size:12px">已演出</span>`:'')}</div><div class="card" style="${s3?'':'opacity:0.5'}"><b>🏈 超级碗中场秀</b><br><span style="font-size:12px">要求: 5000万粉</span><br>${s3&&!ad.shows.includes('c3')?`<button onclick="doShow('c3','超级碗')">接受邀约</button>`: (ad.shows.includes('c3')?`<span style="color:#25d366;font-size:12px">已演出</span>`:'')}</div>`; }
 window.doShow = function(id, name){ ad.shows.push(id); advTime(7, false); let gain = id=='c1'?2000000 : (id=='c2'?5000000:10000000); ad.st.f += gain; ad.st.h += 50; ad.awd.unshift(`${time.y}年 - 登顶【${name}】舞台！`); updAttr(); renderShows(); alert(`🎉 震撼全球！狂揽 ${gain.toLocaleString()} 粉丝！`); saveGame(); }
-</script>
+
 // ==================== 奖项系统 ====================
 function renderAwardsMap(){ let isAwardMonth = [2,5,8,11].includes(time.m); let awdName = time.m==2?"星耀留声机大奖":time.m==5?"BB榜音乐盛典":time.m==8?"V-视听大奖":time.m==11?"全星音乐盛典":""; if(isAwardMonth){ $("txtAwardStatus").innerText = `⭐ 本月正在举办【${awdName}】！`; $("btnJoinAward").style.display = "block"; $("btnJoinAward").onclick = function(){joinAward(awdName)}; } else { $("txtAwardStatus").innerText = "非颁奖季(固定 2,5,8,11 月)"; $("btnJoinAward").style.display = "none"; } $("listAwardsLog").innerHTML = historyAwards.length ? historyAwards.map(function(x){return `<div style="padding:4px;border-bottom:1px solid #eee;margin-bottom:8px;">${x}</div>`}).join('') : "暂无历史记录"; }
 window.checkAutoAward = function(){
@@ -752,7 +753,6 @@ window.checkAutoAward = function(){
   $("txtAwardBannerMsg").innerHTML = `🏆 本月举办了【${awdName}】！<br><br><div style="text-align:left;font-size:13px;line-height:1.6;background:#222;padding:10px;border-radius:8px;">${resultMsg.replace(/\n/g,'<br>')}</div><br>${isMeWin ? "<b style='color:#25d366;'>🎉 恭喜！成功斩获了奖项！荣誉已载入史册。</b>" : "<span style='color:#888;'>遗憾的是，你本次陪跑了，继续努力吧！</span>"}`; $("mAwardBanner").classList.add("open");
 }
 window.joinAward = function(awdName){ window.checkAutoAward(); renderAwardsMap(); saveGame(); }
-
 // ==================== MV与打单 ====================
 function renderMVMap(){ let trks = trackPool.filter(function(x){return x.isMe && x.type==="track"}); $("listMV").innerHTML = trks.length ? trks.map(function(t){return `<div class="card" style="padding:10px;margin-bottom:8px;"><b>${escapeHTML(t.n)}</b> <span style="font-size:11px;color:#c8a440;">(在榜${t.weeks}周)</span><br><span style="font-size:11px;color:#888;">流媒: ${t.stm.toLocaleString()} | 历史MV次数: ${t.mvN||0}</span><div style="margin-top:6px;"><button class="sec inline" onclick="shootMV('${t.id}', 0)">纸片MV($2K, 耗10精)</button><button class="inline" onclick="shootMV('${t.id}', 1)">真人MV($1W, 耗10精, 1天)</button></div></div>`}).join('') : "<p style='font-size:12px;color:#888;'>没有可拍MV的单曲</p>"; }
 window.shootMV = function(tid, type){ 
@@ -1170,6 +1170,37 @@ window.vSendMsg = function(){
     }
 }
 window.vSendMom = function(){ let v=$("vMomIn").value; if(!v)return; posts.mom.unshift(escapeHTML(v)); $("vMomIn").value=""; $("vMomList").innerHTML = posts.mom.map(function(x){return `<div class="card" style="padding:10px;margin:5px 0;">${x}</div>`}).join(''); saveGame(); }
+
+// ==================== 密码与静默验证系统 ====================
+window.forceVerifyKey = function() {
+    let key = document.getElementById("inGameKey").value.trim();
+    
+    // 把你允许的所有密码都写在这个数组里，注意一定要用英文双引号和英文逗号！
+    let validKeys = ["dhtjuffuyjg", "123456"]; 
+
+    if (validKeys.includes(key)) { 
+        localStorage.setItem("starProAuth", "true"); // 写入本地免密通行证
+        alert("✅ 验证成功！欢迎进入《星路制作人》！");
+        document.getElementById("keyAuthBox").style.display = "none";
+        document.getElementById("gameStartBox").style.display = "block";
+    } else {
+        alert("❌ 密钥错误，请检查是否输入正确！");
+    }
+}
+
+// 在页面加载完毕时，自动检测是否已有存档或通行证
+window.addEventListener("DOMContentLoaded", function() {
+    let hasSave = localStorage.getItem("starProSave_1") || localStorage.getItem("starProSave_2") || localStorage.getItem("starProSave_3");
+    let hasAuth = localStorage.getItem("starProAuth") === "true";
+    
+    // 如果有存档或者已经激活过，直接隐藏密码框，显示开始游戏/读档界面
+    if (hasSave || hasAuth) {
+        let authBox = document.getElementById("keyAuthBox");
+        let startBox = document.getElementById("gameStartBox");
+        if(authBox) authBox.style.display = "none";
+        if(startBox) startBox.style.display = "block";
+    }
+});
 </script>
 </body>
 </html>

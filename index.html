@@ -1451,9 +1451,35 @@ window.relWipAlb = async function(){
   tAlb.stmUS = Math.floor(tAlb.stmGlobal * 0.4);
   tAlb.slTotal = Math.floor(tAlb.stmGlobal / 100); 
   
-  a.trackRef = tAlb; trackPool.push(tAlb); 
+   a.trackRef = tAlb; trackPool.push(tAlb); 
   myWorks.push({id:tAlb.id, n:`《${a.n}》[全专]`, slTotal:tAlb.slTotal, revenue:0}); 
-  ad.st.f += Math.floor(tAlb.slTotal * 2);
+  
+  // 修复1：大幅提升全专空壳带来的基本粉丝奖励 (把原来的乘2倍放大到正常的流媒吸粉比例)
+  let albumFanGain = Math.floor(tAlb.stmGlobal / 120); 
+
+  a.s.forEach(function(song, idx){ 
+      if(!song.released){ 
+          let tTrk = createEntity(song.n, ad.s, true, "track", a.g.join(), ad.st.f, ad.sk.w, ad.sk.v, time.y, time.m, time.w, false, song.ff); 
+          tTrk.stmGlobal = Math.floor(tAlb.stmGlobal * 0.2 * Math.pow(0.85, idx) * ad.Geffect); 
+          
+          // 确保新歌拥有当周初始流媒数据，防止榜单BUG
+          tTrk.stmGlobal_Day = Math.floor(tTrk.stmGlobal/7);
+          tTrk.stmUS_Day = Math.floor(tTrk.stmUS/7);
+          tTrk.stmGlobal_Week = tTrk.stmGlobal; 
+          tTrk.stmUS_Week = tTrk.stmUS;
+          
+          tTrk.stmUS = Math.floor(tTrk.stmGlobal * 0.4);
+          tTrk.slTotal = Math.floor(tTrk.stmGlobal/150);  
+          trackPool.push(tTrk); 
+          
+          // 修复2：补发专辑中收录的每一首全新单曲的粉丝奖励！
+          albumFanGain += Math.floor(tTrk.stmGlobal / 120);
+      } 
+  });
+  
+  // 统一把算好的大量粉丝加给玩家
+  ad.st.f += albumFanGain;
+
   
   a.s.forEach(function(song, idx){ 
       if(!song.released){ 

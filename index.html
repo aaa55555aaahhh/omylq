@@ -677,6 +677,11 @@ window.loadGame = function(slotOverride){
       });
 
       initCos(); initG(); updTimeUI(); updAttr(); updateAlbProjUI(); updateFeatList(); renderMapCompany();
+           // 清理因报错导致的坏档状态，强行拯救旧档
+      if(curAlbPj && (!curAlbPj.s || !Array.isArray(curAlbPj.s))) {
+          curAlbPj = null; // 强行清理已损坏的专辑企划
+      }
+
       if(curPj){ 
           let wp = document.getElementById("boxWriteProgress");
           if(wp) { wp.style.display="block"; document.getElementById("btnStartWriteProj").style.display="none"; document.getElementById("txtProg").innerText=prog+"%"; document.getElementById("barProg").style.width=prog+"%"; }
@@ -1429,8 +1434,8 @@ window.relWipAlb = async function(){
   if(!curAlbPj || !curAlbPj.s.length) return alert("全专没歌！"); 
   let price = parseInt($("albPrice")?$("albPrice").value:10) || 10; 
   let a = {n:curAlbPj.n, g:curAlbPj.g, core:curAlbPj.core, s:curAlbPj.s, st:"已发", deluxeLevel:0}; 
+  
   let Dleak = 1 - (a.s.filter(function(x){return x.released}).length / a.s.length) * 0.35; 
-  a.s.forEach(function(x){x.released=true});
   
   let tAlb = createEntity(a.n, ad.s, true, "album", a.g.join(), ad.st.f, ad.sk.w, ad.sk.v, time.y, time.m, time.w); 
   tAlb.price = price; tAlb.revenue = 0;
@@ -1451,10 +1456,9 @@ window.relWipAlb = async function(){
   tAlb.stmUS = Math.floor(tAlb.stmGlobal * 0.4);
   tAlb.slTotal = Math.floor(tAlb.stmGlobal / 100); 
   
-   a.trackRef = tAlb; trackPool.push(tAlb); 
+  a.trackRef = tAlb; trackPool.push(tAlb); 
   myWorks.push({id:tAlb.id, n:`《${a.n}》[全专]`, slTotal:tAlb.slTotal, revenue:0}); 
   
-  // 修复1：大幅提升全专空壳带来的基本粉丝奖励 (把原来的乘2倍放大到正常的流媒吸粉比例)
   let albumFanGain = Math.floor(tAlb.stmGlobal / 120); 
 
   a.s.forEach(function(song, idx){ 
@@ -1462,7 +1466,6 @@ window.relWipAlb = async function(){
           let tTrk = createEntity(song.n, ad.s, true, "track", a.g.join(), ad.st.f, ad.sk.w, ad.sk.v, time.y, time.m, time.w, false, song.ff); 
           tTrk.stmGlobal = Math.floor(tAlb.stmGlobal * 0.2 * Math.pow(0.85, idx) * ad.Geffect); 
           
-          // 确保新歌拥有当周初始流媒数据，防止榜单BUG
           tTrk.stmGlobal_Day = Math.floor(tTrk.stmGlobal/7);
           tTrk.stmUS_Day = Math.floor(tTrk.stmUS/7);
           tTrk.stmGlobal_Week = tTrk.stmGlobal; 
@@ -1472,29 +1475,28 @@ window.relWipAlb = async function(){
           tTrk.slTotal = Math.floor(tTrk.stmGlobal/150);  
           trackPool.push(tTrk); 
           
-          // 修复2：补发专辑中收录的每一首全新单曲的粉丝奖励！
           albumFanGain += Math.floor(tTrk.stmGlobal / 120);
+          song.released = true;
       } 
   });
   
-  // 统一把算好的大量粉丝加给玩家
   ad.st.f += albumFanGain;
-
-  
-  a.s.forEach(function(song, idx){ 
-      if(!song.released){ 
-          let tTrk = createEntity(song.n, ad.s, true, "track", a.g.join(), ad.st.f, ad.sk.w, ad.sk.v, time.y, time.m, time.w, false, song.ff); 
-          tTrk.stmGlobal = Math.floor(tAlb.stmGlobal * 0.2 * Math.pow(0.85, idx) * ad.Geffect); 
-          tTrk.stmUS = Math.floor(tTrk.stmGlobal * 0.4);
-          tTrk.slTotal = Math.floor(tTrk.stmGlobal/150);  
-          trackPool.push(tTrk); 
-      } 
-  });
-  
   albs.push(a); curAlbPj = null; updateAlbProjUI(); updAttr(); renderAlb(); saveGame(); 
   alert(`🚀 全专上线！首周销量: ${tAlb.slTotal.toLocaleString()}`);
 }
-window.scrapAlb = function(){ let cost = Math.floor(ad.m * 0.2); ad.m -= cost; alert(`🗑️ 已推翻专辑！损失 $${cost.toLocaleString()}。`); curAlbPj = null; updateAlbProjUI(); updAttr(); saveGame(); }
+window.scrapAlb = function(){ 
+    let cost = Math.floor(ad.m * 0.2); ad.m -= cost; 
+    
+    // 退回歌曲：把专辑里还没发行的单曲，安全退回录音室成品库里
+    if(curAlbPj && curAlbPj.s) {
+        curAlbPj.s.forEach(function(song){
+            if(!song.released) std.push(song);
+        });
+    }
+    
+    alert(`🗑️ 已推翻专辑！损失 $${cost.toLocaleString()}。\n(未发行的成品曲目已安全退回录音室)`); 
+    curAlbPj = null; updateAlbProjUI(); updAttr(); renderStdMap(); saveGame(); 
+}
 
 function renderAlb(){ $("listAList").innerHTML=albs.map(function(a,i){ let dlxBtn = `<button class="sec inline" style="margin-top:5px;" onclick="openDeluxe(${i})">🌟追加豪华版</button>`; let detailBtn = `<button class="sec inline" style="margin-top:5px;" onclick="openAlbDetail(${i})">📖歌曲一览/打单</button>`; return `<div class="card"><b>${escapeHTML(a.n)}</b> (${a.st}) <br><span style="font-size:12px;color:#666;">收录:${a.s.length}首歌曲</span><br>感知分: ${a.trackRef.Spub.toFixed(1)} <br>累计销量: ${a.trackRef.slTotal.toLocaleString()} <br>${dlxBtn} ${detailBtn}</div>`; }).join(''); }
 

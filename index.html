@@ -184,7 +184,18 @@ input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px soli
 
   <!-- ================= API与系统存档 ================= -->
   <div id="pApi" class="tab-page">
-    <div class="card">
+        <div class="card">
+      <h2 class="tg" style="margin-bottom:10px;">🧹 数据瘦身 (防爆档清理)</h2>
+      <p style="font-size:12px;color:#888;margin-bottom:10px;">当游戏游玩时间过长，存档过大导致保存失败或结算卡顿时，请清理历史数据。</p>
+      
+      <button onclick="cleanNPCOldSongs()" style="background:#e0e0e0; color:#333;">🗑️ 清理一年前的 NPC 歌曲</button>
+      
+      <div style="display:flex; gap:5px; margin-top:5px;">
+          <button class="sec" onclick="cleanMyOldSongs(false)" style="font-size:12px; padding:10px;">🗑️ 删我的一年前【非主打】</button>
+          <button class="sec" onclick="cleanMyOldSongs(true)" style="font-size:12px; padding:10px;">🗑️ 删我的一年前【主打】</button>
+      </div>
+    </div>
+<div class="card">
       <h2 class="tg" style="margin-bottom:10px;">⏰ 系统时间管理</h2>
       <div style="display:flex;gap:5px;align-items:center;margin-bottom:10px;">
         <input id="sysInY" type="number" placeholder="年" style="margin:0;">
@@ -1179,8 +1190,10 @@ window.doTVPromo = function(){
     if(!myTrks.length) { alert("⚠️ 没有处于宣发期(发行12周以内)的新歌，电视台拒绝了你的打歌申请！"); return; } 
     advHour(24); 
     // 修复：改用 stmGlobal 排序和计算
-    let t = myTrks.sort(function(a,b){return (b.stmGlobal||0) - (a.stmGlobal||0)})[0]; 
-    let safeStm = t.stmGlobal || 50000; // 防错保底
+ let t = myTrks.sort(function(a,b){return (b.stmGlobal||0) - (a.stmGlobal||0)})[0]; 
+if(!t) return alert("当前没有可打榜的歌曲数据！");
+let safeStm = t.stmGlobal || 50000;
+ // 防错保底
     let extraStm = Math.floor(safeStm * 0.15 * ad.Geffect + 50000); 
     
     t.stmGlobal += extraStm; 
@@ -2687,6 +2700,537 @@ window.confirmPick = async function() {
         // 如果不是处理奖项的指令，就交回给原本的发歌/打单逻辑去执行
         originalConfirmPickForAwards();
     }
+};
+// ==================== 恢复并升级动态颁奖弹窗系统 ====================
+
+// 1. 重写颁奖检测逻辑，全面接入你的动态大奖库 (awardRegistry)
+window.checkAutoAward = function() {
+    let isAwardMonth = [2, 5, 8, 11].includes(time.m); 
+    // 检查本月是否是颁奖季，且是否已经颁过奖
+    if(!isAwardMonth || (historyAwards.length > 0 && historyAwards[0].includes(`${time.y}年${time.m}月`))) return;
+    
+    let trks = trackPool.filter(x => x.type === "track");
+    let albsOnly = trackPool.filter(x => x.type === "album");
+    
+    // 动态分配本月举办哪些大奖 (包含你实装的6大奖，以及你未来自创的奖)
+    let targetAwardIndices = [];
+    awardRegistry.forEach((awd, idx) => {
+        if (time.m === 2 && (idx === 0 || idx === 1 || (idx >= 6 && idx % 4 === 0))) targetAwardIndices.push(idx); // 格莱美、全英
+        if (time.m === 5 && (idx === 2 || (idx >= 6 && idx % 4 === 1))) targetAwardIndices.push(idx); // EMA
+        if (time.m === 8 && (idx === 3 || (idx >= 6 && idx % 4 === 2))) targetAwardIndices.push(idx); // VMA
+        if (time.m === 11 && (idx === 4 || idx === 5 || (idx >= 6 && idx % 4 === 3))) targetAwardIndices.push(idx); // AMA, BBMA
+    });
+    
+    if(targetAwardIndices.length === 0) return;
+    
+    let resultMsg = "";
+    let isMeWin = false;
+    let myWinNames = [];
+    
+    targetAwardIndices.forEach(idx => {
+        let awd = awardRegistry[idx];
+        resultMsg += `<div style="color:#c8a440;font-weight:bold;margin-top:10px;border-bottom:1px dashed #555;padding-bottom:5px;">🏆 【${escapeHTML(awd.name)}】</div>`;
+        
+        let w_spub = awd.rules.weightSpub || 0.33;
+        let w_sales = awd.rules.weightSales || 0.33;
+        let w_catchy = awd.rules.weightCatchy || 0.34;
+        
+        awd.categories.forEach(cat => {
+            let pool = [];
+            if (cat.targetType === 'album') pool = [...albsOnly];
+            else if (cat.targetType === 'track') pool = [...trks];
+            else if (cat.targetType === 'artist') pool = [...worldArtists, { n: ad.s, fans: ad.st.f, isMe: true }];
+            
+            // 如果奖项限制了流派 (比如最佳流行歌手)
+            if (cat.targetGenre && cat.targetGenre !== "ALL") {
+                pool = pool.filter(x => x.gnr && x.gnr.includes(cat.targetGenre));
+            }
+            
+            if (pool.length === 0) {
+                resultMsg += `<span style="color:#aaa;">【${cat.name}】：(空缺)</span><br>`;
+                return;
+            }
+            
+            // 根据各自奖项的规则权重进行打分
+            pool.forEach(item => {
+                if(cat.targetType === 'artist') {
+                    item._awdScore = (item.fans || 0) * (Math.random() * 0.4 + 0.8);
+                } else {
+                    let s_spub = item.Spub || 50;
+                    let s_sales = item.slTotal || 0;
+                    let s_catchy = item.catchiness || 1.0;
+                    
+                    let normSpub = s_spub * 10000; 
+                    let normSales = s_sales; 
+                    let normCatchy = s_catchy * 200000;
+                    
+                    item._awdScore = (normSpub * w_spub) + (normSales * w_sales) + (normCatchy * w_catchy);
+                    item._awdScore *= (Math.random() * 0.4 + 0.8); // 加入评委随机主观分
+                }
+            });
+            
+            pool.sort((a,b) => b._awdScore - a._awdScore);
+            
+            let winner = pool[0];
+            
+            // 玩家光环逆袭干预 (如果你分差不算太大，有概率暗箱操作拿奖)
+            let playerEntries = pool.filter(x => x.isMe);
+            if(playerEntries.length > 0 && playerEntries[0]._awdScore > winner._awdScore * 0.35) {
+                if(Math.random() < 0.4) winner = playerEntries[0]; 
+            }
+            
+            let winnerName = "";
+            if(cat.targetType === 'artist') {
+                winnerName = escapeHTML(winner.n);
+            } else {
+                winnerName = escapeHTML(winner.artist) + `《${escapeHTML(winner.n)}》`;
+            }
+            
+            // 把玩家获奖高亮变绿显示
+            if(winner.isMe) {
+                isMeWin = true;
+                myWinNames.push(`【${awd.name} - ${cat.name}】`);
+                resultMsg += `<span style="color:#25d366;font-weight:bold;">【${cat.name}】：${winnerName} (你)</span><br>`;
+            } else {
+                resultMsg += `<span style="color:#ddd;">【${cat.name}】：${winnerName}</span><br>`;
+            }
+        });
+    });
+    
+    let rec = `<b>${time.y}年${time.m}月 - 颁奖季</b><br><span style="font-size:11px;color:#555;">${resultMsg}</span>`; 
+    historyAwards.unshift(rec); 
+    
+    // 如果玩家获奖，加入档案履历，并发放粉丝奖励
+    if(isMeWin) { 
+        ad.awd.unshift(`${time.y}年${time.m}月 狂揽：` + myWinNames.join('、')); 
+        ad.st.f += myWinNames.length * 200000; 
+        updAttr(); 
+    }
+    
+    document.getElementById("txtAwardBannerMsg").innerHTML = `本月颁奖典礼已落幕！<br><div style="text-align:left;font-size:13px;line-height:1.6;background:#1a1a1a;padding:10px;border-radius:8px;max-height:40vh;overflow-y:auto;margin-top:10px;">${resultMsg}</div><br>${isMeWin ? "<b style='color:#25d366;'>🎉 恭喜！你成功斩获了奖项！奖杯已放入档案室。</b>" : "<span style='color:#888;'>遗憾的是，你本次陪跑了，继续努力吧！</span>"}`; 
+    document.getElementById("mAwardBanner").classList.add("open");
+    
+    if(typeof renderAwardsMap === 'function') renderAwardsMap();
+};
+
+// 2. 拦截推演时间函数，确保跨月时触发上面写好的颁奖典礼
+let originalAdvTimeForPopup = window.advTime;
+window.advTime = function(weeks, showMsg) {
+    originalAdvTimeForPopup(weeks, showMsg);
+    
+    // 只要时间推移，就去检查一下这个月是不是颁奖月
+    if (typeof checkAutoAward === 'function') {
+        checkAutoAward();
+    }
+};
+// ==================== 大奖系统：新增创作/唱功门槛判定 ====================
+
+document.addEventListener("DOMContentLoaded", function() {
+    // 拦截并向已有的弹窗注入“奖项侧重”的新下拉框
+    let formSelect = document.getElementById("selCatForm");
+    if(formSelect && !document.getElementById("selCatFocus")) {
+        formSelect.insertAdjacentHTML('afterend', `
+        <label style="font-size:12px;color:#666;margin-top:5px;display:block;">奖项考核侧重 (核心要求):</label>
+        <select id="selCatFocus">
+            <option value="balance">⚖️ 综合考量 (默认，兼顾销量热度与口碑)</option>
+            <option value="songwriting">✍️ 词曲创作 (仅限原创/唱作人，极度看重乐评与创作力)</option>
+            <option value="vocal">🎤 极致唱功 (看重Vocal表现，糊歌也有机会拿奖)</option>
+        </select>
+        `);
+    }
+});
+
+// 重写保存类目逻辑，存入 focus 属性
+window.saveCategoryAdd = function() {
+    if(curEditAwardIdx === -1 || !awardRegistry[curEditAwardIdx]) return;
+    let n = document.getElementById("inCatName").value.trim();
+    let type = document.getElementById("selCatType").value;
+    let genre = document.getElementById("selCatGenre").value;
+    let form = document.getElementById("selCatForm").value;
+    let focus = document.getElementById("selCatFocus") ? document.getElementById("selCatFocus").value : "balance";
+    
+    if(!n) return alert("类目名称不能为空！");
+    
+    awardRegistry[curEditAwardIdx].categories.push({
+        id: "c_custom_" + Date.now(),
+        name: n, targetType: type, targetGenre: genre, targetForm: form, focus: focus
+    });
+    
+    alert(`✅ 成功为【${awardRegistry[curEditAwardIdx].name}】增设了新奖项：\n${n}！\n(考核侧重: ${focus==='songwriting'?'词曲创作':(focus==='vocal'?'唱功':'综合')})`);
+    closeM('mCatAddUI');
+    renderAwardRegistry();
+    saveGame();
+};
+
+// 重写终极版自动颁奖系统：实现曲风、合唱、创作门槛的真实打分逻辑！
+window.checkAutoAward = function() {
+    let isAwardMonth = [2, 5, 8, 11].includes(time.m); 
+    if(!isAwardMonth || (historyAwards.length > 0 && historyAwards[0].includes(`${time.y}年${time.m}月`))) return;
+    
+    // 给所有歌曲动态标记是否为合唱
+    trackPool.forEach(t => { t.isCollab = (t.f && t.f !== ""); });
+
+    let trks = trackPool.filter(x => x.type === "track");
+    let albsOnly = trackPool.filter(x => x.type === "album");
+    
+    let targetAwardIndices = [];
+    awardRegistry.forEach((awd, idx) => {
+        if (time.m === 2 && (idx === 0 || idx === 1 || (idx >= 6 && idx % 4 === 0))) targetAwardIndices.push(idx); 
+        if (time.m === 5 && (idx === 2 || (idx >= 6 && idx % 4 === 1))) targetAwardIndices.push(idx); 
+        if (time.m === 8 && (idx === 3 || (idx >= 6 && idx % 4 === 2))) targetAwardIndices.push(idx); 
+        if (time.m === 11 && (idx === 4 || idx === 5 || (idx >= 6 && idx % 4 === 3))) targetAwardIndices.push(idx); 
+    });
+    
+    if(targetAwardIndices.length === 0) return;
+    
+    let resultMsg = "";
+    let isMeWin = false;
+    let myWinNames = [];
+    
+    targetAwardIndices.forEach(idx => {
+        let awd = awardRegistry[idx];
+        resultMsg += `<div style="color:#c8a440;font-weight:bold;margin-top:10px;border-bottom:1px dashed #555;padding-bottom:5px;">🏆 【${escapeHTML(awd.name)}】</div>`;
+        
+        awd.categories.forEach(cat => {
+            let pool = [];
+            if (cat.targetType === 'album') pool = [...albsOnly];
+            else if (cat.targetType === 'track') pool = [...trks];
+            else if (cat.targetType === 'artist') pool = [...worldArtists, { n: ad.s, fans: ad.st.f, isMe: true }];
+            
+            // 1. 【曲风要求过滤】
+            if (cat.targetGenre && cat.targetGenre !== "ALL") {
+                pool = pool.filter(x => x.gnr && x.gnr.includes(cat.targetGenre));
+            }
+            
+            // 2. 【合唱/独唱要求过滤】
+            if (cat.targetForm === 'solo') {
+                pool = pool.filter(x => !x.isCollab);
+            } else if (cat.targetForm === 'collab') {
+                pool = pool.filter(x => x.isCollab);
+            }
+
+            let w_spub = awd.rules.weightSpub || 0.33;
+            let w_sales = awd.rules.weightSales || 0.33;
+            let w_catchy = awd.rules.weightCatchy || 0.34;
+
+            // 3. 【门槛资质过滤：看重创作还是唱功】
+            pool = pool.filter(item => {
+                let artistName = item.isMe ? ad.s : (item.artist || item.n);
+                // 算出一个基于名字的固定随机值，用来判断 NPC 是不是创作歌手/Vocal歌手
+                let hash = 0; for (let i = 0; i < artistName.length; i++) hash = artistName.charCodeAt(i) + ((hash << 5) - hash);
+                
+                if (cat.focus === 'songwriting') {
+                    // 玩家如果是从市场“外购”的歌，直接剥夺创作奖资格！
+                    if(item.isMe && item.c === "外购获得") return false; 
+                    // 只有约 50% 的 NPC 被界定为会自己写歌的唱作人
+                    if(!item.isMe && (Math.abs(hash) % 100 > 50)) return false; 
+                    w_spub = 0.8; w_sales = 0.1; w_catchy = 0.1; // 创作奖极其看重乐评打分
+                }
+                if (cat.focus === 'vocal') {
+                    // 只有约 60% 的 NPC 是大 Vocal
+                    if(!item.isMe && (Math.abs(hash) % 100 > 60)) return false; 
+                    w_spub = 0.5; w_sales = 0.2; w_catchy = 0.3; // 唱功奖允许糊歌拿奖
+                }
+                return true;
+            });
+            
+            if (pool.length === 0) {
+                resultMsg += `<span style="color:#aaa;">【${cat.name}】：(未达标/空缺)</span><br>`;
+                return;
+            }
+            
+            // 4. 【正式算分】
+            pool.forEach(item => {
+                if(cat.targetType === 'artist') {
+                    item._awdScore = (item.fans || 0) * (Math.random() * 0.4 + 0.8);
+                } else {
+                    let s_spub = item.Spub || 50;
+                    let s_sales = item.slTotal || 0;
+                    let s_catchy = item.catchiness || 1.0;
+                    
+                    let normSpub = s_spub * 10000; 
+                    let normSales = s_sales; 
+                    let normCatchy = s_catchy * 200000;
+                    
+                    item._awdScore = (normSpub * w_spub) + (normSales * w_sales) + (normCatchy * w_catchy);
+                    item._awdScore *= (Math.random() * 0.4 + 0.8); 
+                    
+                    // 【关键爽点：八维属性碾压大盘！】
+                    if(item.isMe) {
+                        if(cat.focus === 'songwriting') item._awdScore += (ad.sk.w * 50000); // 创作力加分
+                        if(cat.focus === 'vocal') item._awdScore += (ad.sk.v * 50000);       // 唱功加分
+                    }
+                }
+            });
+            
+            pool.sort((a,b) => b._awdScore - a._awdScore);
+            let winner = pool[0];
+            
+            // 玩家光环逆袭干预
+            let playerEntries = pool.filter(x => x.isMe);
+            if(playerEntries.length > 0 && playerEntries[0]._awdScore > winner._awdScore * 0.35) {
+                if(Math.random() < 0.4) winner = playerEntries[0]; 
+            }
+            
+            let winnerName = cat.targetType === 'artist' ? escapeHTML(winner.n) : escapeHTML(winner.artist) + `《${escapeHTML(winner.n)}》`;
+            
+            if(winner.isMe) {
+                isMeWin = true;
+                myWinNames.push(`【${awd.name} - ${cat.name}】`);
+                resultMsg += `<span style="color:#25d366;font-weight:bold;">【${cat.name}】：${winnerName} (你)</span><br>`;
+            } else {
+                resultMsg += `<span style="color:#ddd;">【${cat.name}】：${winnerName}</span><br>`;
+            }
+        });
+    });
+    
+    let rec = `<b>${time.y}年${time.m}月 - 颁奖季</b><br><span style="font-size:11px;color:#555;">${resultMsg}</span>`; 
+    historyAwards.unshift(rec); 
+    
+    if(isMeWin) { 
+        ad.awd.unshift(`${time.y}年${time.m}月 狂揽：` + myWinNames.join('、')); 
+        ad.st.f += myWinNames.length * 200000; 
+        updAttr(); 
+    }
+    
+    document.getElementById("txtAwardBannerMsg").innerHTML = `本月颁奖典礼已落幕！<br><div style="text-align:left;font-size:13px;line-height:1.6;background:#1a1a1a;padding:10px;border-radius:8px;max-height:40vh;overflow-y:auto;margin-top:10px;">${resultMsg}</div><br>${isMeWin ? "<b style='color:#25d366;'>🎉 恭喜！你成功斩获了奖项！奖杯已放入档案室。</b>" : "<span style='color:#888;'>遗憾的是，你本次陪跑了，继续努力吧！</span>"}`; 
+    document.getElementById("mAwardBanner").classList.add("open");
+    
+    if(typeof renderAwardsMap === 'function') renderAwardsMap();
+};
+// ==================== 大奖系统终极深度定制UI与逻辑 ====================
+
+document.addEventListener("DOMContentLoaded", function() {
+    // 注入专门用于深度定制奖项的专属弹窗 UI
+    if(!document.getElementById("mAwardEditUI")) {
+        document.body.insertAdjacentHTML('beforeend', `
+        <!-- 修改/创建大奖弹窗 -->
+        <div class="modal" id="mAwardEditUI" style="z-index:300;">
+            <div class="modal-box">
+                <h3 class="tg" id="mAwardEditTitle" style="text-align:center;margin-bottom:15px;">🏆 创立/修改大奖</h3>
+                <label style="font-size:12px;color:#666;">大奖名称:</label>
+                <input type="text" id="inAwdName" placeholder="例如：乡村音乐大奖 (CMA)">
+                <label style="font-size:12px;color:#666;">大奖简介:</label>
+                <input type="text" id="inAwdDesc" placeholder="简单描述这个奖项...">
+                <button onclick="saveAwardEdit()" style="margin-top:15px;">确认保存</button>
+                <button class="sec" onclick="closeM('mAwardEditUI')">取消</button>
+            </div>
+        </div>
+        
+        <!-- 添加定制分支类目弹窗 -->
+        <div class="modal" id="mCatAddUI" style="z-index:300;">
+            <div class="modal-box">
+                <h3 class="tg" id="mCatAddTitle" style="text-align:center;margin-bottom:15px;">➕ 创立定制类目</h3>
+                <label style="font-size:12px;color:#666;">奖项类目名称:</label>
+                <input type="text" id="inCatName" placeholder="例如：最佳乡村独唱单曲">
+                
+                <label style="font-size:12px;color:#666;margin-top:5px;display:block;">评选对象 (评什么):</label>
+                <select id="selCatType">
+                    <option value="track">🎵 单曲 (Track)</option>
+                    <option value="album">💿 专辑 (Album)</option>
+                    <option value="artist">🧑 艺人本人 (Artist)</option>
+                </select>
+                
+                <label style="font-size:12px;color:#666;margin-top:5px;display:block;">限定曲风 (选ALL为不限风格):</label>
+                <select id="selCatGenre" class="dynamic-genre-select">
+                    <option value="ALL">🌍 不限曲风 (ALL)</option>
+                </select>
+                
+                <label style="font-size:12px;color:#666;margin-top:5px;display:block;">限定形式 (独唱/合唱):</label>
+                <select id="selCatForm">
+                    <option value="ALL">🤝 不限形式 (独唱合唱皆可)</option>
+                    <option value="solo">🎤 仅限独唱 (Solo)</option>
+                    <option value="collab">👯 仅限合作/合唱 (Collab)</option>
+                </select>
+
+                <label style="font-size:12px;color:#666;margin-top:5px;display:block;">奖项考核侧重 (核心要求):</label>
+                <select id="selCatFocus">
+                    <option value="balance">⚖️ 综合考量 (默认，兼顾销量与口碑)</option>
+                    <option value="songwriting">✍️ 词曲创作 (必须为原创，极度看重乐评与创作力)</option>
+                    <option value="vocal">🎤 极致唱功 (看重Vocal表现，糊歌也能拿奖)</option>
+                </select>
+
+                <button onclick="saveCategoryAdd()" style="margin-top:15px;">确认添加类目</button>
+                <button class="sec" onclick="closeM('mCatAddUI')">取消</button>
+            </div>
+        </div>
+        `);
+    }
+});
+
+let curEditAwardIdx = -1;
+
+// 1. 创立全新大奖按钮
+window.createCustomAward = function() {
+    curEditAwardIdx = -1; // -1 代表新建
+    document.getElementById("mAwardEditTitle").innerText = "✨ 创立全新颁奖典礼";
+    document.getElementById("inAwdName").value = "";
+    document.getElementById("inAwdDesc").value = "玩家自创的顶级大奖";
+    document.getElementById("mAwardEditUI").classList.add("open");
+};
+
+// 2. 重命名大奖按钮
+window.renameAward = function() {
+    if(!awardRegistry || awardRegistry.length === 0) return alert("大奖库为空！");
+    pickAction = "renameAwardSelect";
+    document.getElementById("mPickTitle").innerText = "✏️ 选择要修改的大奖";
+    document.getElementById("mPickExt").style.display = "none";
+    document.getElementById("mPickList").innerHTML = awardRegistry.map((awd, i) => 
+        `<div style="padding:5px 0;border-bottom:1px solid #eee;"><input type="radio" name="awdSel" value="${i}"> <b>${escapeHTML(awd.name)}</b></div>`
+    ).join('');
+    document.getElementById("mPick").classList.add("open");
+};
+
+// 3. 为现有大奖添加分支类目按钮
+window.addCustomCategory = function() {
+    if(!awardRegistry || awardRegistry.length === 0) return alert("大奖库为空！");
+    pickAction = "addCategorySelect";
+    document.getElementById("mPickTitle").innerText = "➕ 选择要添加类目的大奖";
+    document.getElementById("mPickExt").style.display = "none";
+    document.getElementById("mPickList").innerHTML = awardRegistry.map((awd, i) => 
+        `<div style="padding:5px 0;border-bottom:1px solid #eee;"><input type="radio" name="awdSel" value="${i}"> <b>${escapeHTML(awd.name)}</b></div>`
+    ).join('');
+    document.getElementById("mPick").classList.add("open");
+};
+
+// 4. 接管原本冲突的 confirmPick，独立处理大奖的选择逻辑
+let fallbackConfirmPick = window.confirmPick;
+window.confirmPick = async function() {
+    if (pickAction === "renameAwardSelect") {
+        let radios = document.getElementsByName("awdSel"); let selIdx = -1;
+        for(let i=0; i<radios.length; i++) if(radios[i].checked) selIdx = parseInt(radios[i].value);
+        if(selIdx === -1) return alert("请选择一个奖项！");
+        closeM('mPick');
+        
+        curEditAwardIdx = selIdx;
+        let awd = awardRegistry[selIdx];
+        document.getElementById("mAwardEditTitle").innerText = "✏️ 修改大奖资料";
+        document.getElementById("inAwdName").value = awd.name;
+        document.getElementById("inAwdDesc").value = awd.desc;
+        document.getElementById("mAwardEditUI").classList.add("open");
+    } 
+    else if (pickAction === "addCategorySelect") {
+        let radios = document.getElementsByName("awdSel"); let selIdx = -1;
+        for(let i=0; i<radios.length; i++) if(radios[i].checked) selIdx = parseInt(radios[i].value);
+        if(selIdx === -1) return alert("请选择一个大奖！");
+        closeM('mPick');
+        
+        curEditAwardIdx = selIdx;
+        document.getElementById("mCatAddTitle").innerText = `为【${awardRegistry[selIdx].name}】添加类目`;
+        document.getElementById("inCatName").value = "";
+        
+        // 动态注入当前游戏内的所有曲风
+        let genreOpts = `<option value="ALL">🌍 不限曲风 (ALL)</option>`;
+        gs.forEach(g => genreOpts += `<option value="${g}">${g}</option>`);
+        document.getElementById("selCatGenre").innerHTML = genreOpts;
+        
+        document.getElementById("mCatAddUI").classList.add("open");
+    } 
+    else {
+        // 交回给发歌/打榜逻辑
+        if(typeof fallbackConfirmPick === 'function') fallbackConfirmPick();
+    }
+};
+
+// 5. 保存大奖资料
+window.saveAwardEdit = function() {
+    let n = document.getElementById("inAwdName").value.trim();
+    let d = document.getElementById("inAwdDesc").value.trim() || "玩家自创大奖";
+    if(!n) return alert("大奖名称不能为空！");
+    
+    if (curEditAwardIdx === -1) {
+        awardRegistry.push({
+            id: "awd_custom_" + Date.now(), name: n, desc: d,
+            rules: { weightSpub: 0.33, weightSales: 0.33, weightCatchy: 0.34 },
+            categories: []
+        });
+        alert("✅ 全新颁奖典礼创立成功！\n请记得再点击【添加分支类目】给它分配奖项！");
+    } else {
+        awardRegistry[curEditAwardIdx].name = n;
+        awardRegistry[curEditAwardIdx].desc = d;
+        alert("✅ 大奖资料修改成功！");
+    }
+    closeM('mAwardEditUI');
+    renderAwardRegistry();
+    saveGame();
+};
+
+// 6. 保存新的分支类目
+window.saveCategoryAdd = function() {
+    if(curEditAwardIdx === -1 || !awardRegistry[curEditAwardIdx]) return;
+    let n = document.getElementById("inCatName").value.trim();
+    let type = document.getElementById("selCatType").value;
+    let genre = document.getElementById("selCatGenre").value;
+    let form = document.getElementById("selCatForm").value;
+    let focus = document.getElementById("selCatFocus").value;
+    
+    if(!n) return alert("类目名称不能为空！");
+    
+    awardRegistry[curEditAwardIdx].categories.push({
+        id: "c_custom_" + Date.now(),
+        name: n, 
+        targetType: type, 
+        targetGenre: genre, 
+        targetForm: form, 
+        focus: focus
+    });
+    
+    let focusTxt = focus === 'songwriting' ? '词曲创作' : (focus === 'vocal' ? '唱功' : '综合');
+    alert(`✅ 成功为【${awardRegistry[curEditAwardIdx].name}】增设了新奖项：\n${n}！\n(考核侧重: ${focusTxt})`);
+    
+    closeM('mCatAddUI');
+    renderAwardRegistry();
+    saveGame();
+};
+// ==================== 数据清理与防爆档系统 ====================
+
+// 1. 清理超过一年的 NPC 歌曲
+window.cleanNPCOldSongs = function() {
+    if(!confirm("⚠️ 确定要删除所有发行超过一年的 NPC 歌曲吗？\n(删除后它们将不再占用内存，并彻底停止大盘占用和回春计算)")) return;
+    
+    let beforeCount = trackPool.length;
+    
+    // 过滤规则：保留玩家的歌，或者未满一年（52周）的，或者不是单曲（专辑暂时保留防报错）
+    trackPool = trackPool.filter(t => t.isMe || t.weeks <= 52 || t.type !== 'track');
+    
+    let removedCount = beforeCount - trackPool.length;
+    alert(`✅ 大盘清理完成！共成功删除了 ${removedCount} 首 NPC 历史老歌。`);
+    
+    // 刷新大盘榜单排行并保存
+    updatePeakRanks();
+    saveGame();
+};
+
+// 2. 清理自己的历史歌曲（区分主打和非主打）
+window.cleanMyOldSongs = function(isTitleTrack) {
+    let typeName = isTitleTrack ? "【主打歌曲】(拍过真人MV)" : "【非主打歌曲】(未拍真人MV)";
+    let msg = `⚠️ 确定要彻底删除你发行超过一年的 ${typeName} 吗？\n\n注意：删除后，专辑面板的歌曲列表对应项将显示为(无数据)，且该单曲彻底停止产生后续长尾流媒与收益！`;
+    
+    if(!confirm(msg)) return;
+    
+    let beforeCount = trackPool.length;
+    
+    trackPool = trackPool.filter(t => {
+        // 如果不是我的歌，或者不是单曲，或者发行不满一年，通通安全保留
+        if(!t.isMe || t.type !== 'track' || (t.weeks && t.weeks <= 52)) return true;
+        
+        // 判断当前这首歌是不是主打（拍过真人版MV就算主打）
+        let isCurrentSongTitle = !!t.hasRealMV;
+        
+        // 匹配玩家要删的类型
+        if(isTitleTrack && isCurrentSongTitle) return false; // 要删主打，恰好是主打，丢弃（false）
+        if(!isTitleTrack && !isCurrentSongTitle) return false; // 要删非主打，恰好是非主打，丢弃（false）
+        
+        return true; // 其它情况安全保留
+    });
+    
+    let removedCount = beforeCount - trackPool.length;
+    alert(`✅ 作品库瘦身完成！共成功删除了 ${removedCount} 首你的历史老歌。`);
+    
+    // 刷新界面并保存
+    updAttr();
+    updatePeakRanks();
+    saveGame();
 };
 
 // ==================== 代码结束 ====================

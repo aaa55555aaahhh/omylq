@@ -1552,20 +1552,28 @@ window.confirmDeluxe = function(){
   });
   ad.st.f += totalBonusFan; closeM('mDeluxe'); updAttr(); renderAlb(); renderStdMap(); saveGame(); alert(`🎉 豪华版追加成功！总销量爆增 ${extraSl.toLocaleString()} 张！`);
 }
-// ==================== 榜单排名系统 (修复丢失的底层代码) ====================
+// ==================== 榜单排名系统 (已修复最高排名只看总量的BUG) ====================
 window.updatePeakRanks = function() {
     let allItems = trackPool.filter(function(x){ return x.type === "track" || x.type === "album"; });
     
-    // 全球榜最高排名更新
-    allItems.sort(function(a,b){ return (b.stmGlobal||0) - (a.stmGlobal||0); });
+    // 全球榜最高排名更新 (修复：改用当周流媒进行排名对比)
+    allItems.sort(function(a,b){ 
+        let aVal = a.stmGlobal_Week || Math.floor(a.stmGlobal/7) || 0;
+        let bVal = b.stmGlobal_Week || Math.floor(b.stmGlobal/7) || 0;
+        return bVal - aVal; 
+    });
     allItems.forEach(function(t, i){ 
         if (!t.peakS || i + 1 < t.peakS) { t.peakS = i + 1; t.peakW = 0; }
         if (i + 1 == t.peakS) t.peakW++; 
         t.lastW = i + 1; 
     });
 
-    // 美国榜最高排名更新
-    allItems.sort(function(a,b){ return (b.stmUS||0) - (a.stmUS||0); });
+    // 美国榜最高排名更新 (修复：改用当周美国流媒对比)
+    allItems.sort(function(a,b){ 
+        let aVal = a.stmUS_Week || Math.floor(a.stmUS/7) || 0;
+        let bVal = b.stmUS_Week || Math.floor(b.stmUS/7) || 0;
+        return bVal - aVal; 
+    });
     allItems.forEach(function(t, i){ 
         t.peakB = Math.min(t.peakB || 999, i + 1); 
     });
@@ -1671,7 +1679,7 @@ window.advTime = function(weeks, showMsg){
       t.stmGlobal_Day = Math.floor(t.stmGlobal_Week / 7);
       t.stmUS_Day = Math.floor(t.stmUS_Week / 7);
 
-      if(t.type==="track" || t.type==="album") {
+           if(t.type==="track" || t.type==="album") {
           t.stmGlobal += t.stmGlobal_Week; 
           t.stmUS += t.stmUS_Week;
           t.slTotal += Math.floor(t.stmGlobal_Week/150);
@@ -1679,6 +1687,10 @@ window.advTime = function(weeks, showMsg){
               totalFanGain += Math.floor(t.stmGlobal_Week / 8000); 
               let income = Math.floor(t.stmGlobal_Week * 0.0035); 
               weekRev += income; 
+              
+              // 修复：把算出来的单曲收入，同步更新到档案的单曲账本中
+              let myW = myWorks.find(function(w){ return w.id === t.id });
+              if(myW) myW.revenue = (myW.revenue || 0) + income;
           }
       } 
       t.weeks++; t.days += 7;

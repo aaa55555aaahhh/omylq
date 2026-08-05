@@ -2459,6 +2459,235 @@ window.renderReviewApp = function(appId) {
     document.getElementById("mInfoTitle").innerText = title;
     document.getElementById("mInfo").classList.add("open");
 };
+// ==================== 修复发行先行曲瘫痪与大奖系统丢失问题 ====================
+
+// 1. 修复被覆盖的 confirmPick 函数，恢复发歌、加歌、发先行曲功能
+window.confirmPick = async function(){
+  let price = parseInt(document.getElementById("sgPrice").value) || 1;
+  
+  if(pickAction === "relSingleDirect"){
+    let i = std.findIndex(function(x){return x.id===tempIdx}); 
+    if(i===-1) return; 
+    let s = std[i]; s.released = true;
+    
+    let bonusFans = 0;
+    if(s.ff && s.ff !== "") {
+        let featArtist = worldArtists.find(a => a.n === s.ff);
+        if(featArtist) bonusFans = Math.floor(featArtist.fans * 0.3);
+    }
+    
+    let baseF = ad.st.f + bonusFans; 
+    let t = createEntity(s.n, ad.s, true, "track", s.g?s.g.join():"", baseF, ad.sk.w, ad.sk.v, time.y, time.m, time.w, false, s.ff); 
+    t.price = price; t.revenue = 0;
+    
+    let aiAdj = 0; let aiCmt = "";
+    let searchCore = s.core || s.c;
+    if(document.getElementById("apiToken") && document.getElementById("apiToken").value && searchCore){ 
+        let r = await api(`我写了首【${s.g}】歌，内核是【${searchCore}】。给修正分(-15到+15整数)和15字短评。只返JSON: {"score_adj":5, "comment":"..."}`); 
+        if(r){ try{ let j=JSON.parse(r.match(/\{[\s\S]*\}/)[0]); aiAdj=parseInt(j.score_adj)||0; aiCmt=escapeHTML(j.comment)||""; }catch(e){} } 
+    } else if (searchCore) {
+        aiAdj = Math.floor(Math.random() * 20) - 5; 
+        aiCmt = (aiAdj > 5) ? "系统判定：这首歌的内核表达很有深度！" : "系统判定：内核表达中规中矩。";
+    }
+    
+    t.Spub = Math.max(0, Math.min(100, t.Spub + aiAdj)); 
+    t.stmGlobal = Math.floor(t.stmGlobal * ad.H * ad.D * ad.Geffect); 
+    t.stmUS = Math.floor(t.stmGlobal * ((Math.random() * 0.20) + 0.35));
+    
+    t.stmGlobal_Day = Math.floor(t.stmGlobal/7); t.stmUS_Day = Math.floor(t.stmUS/7);
+    t.stmGlobal_Week = t.stmGlobal; t.stmUS_Week = t.stmUS;
+    t.slTotal = Math.floor(t.stmGlobal/150); 
+    ad.st.f += Math.floor(t.stmGlobal / 120); 
+    
+    trackPool.push(t); 
+    myWorks.push({id:t.id, n:`《${s.n}》[单曲]`, slTotal:t.slTotal, revenue:0}); 
+    std.splice(i,1); 
+    
+    updAttr(); renderStdMap(); closeM('mPick'); saveGame(); 
+    alert(`🎵 发行成功！定价: $${price}\n感知分: ${t.Spub.toFixed(1)} ${aiCmt?'\n评价: '+aiCmt:''}\n首发流媒(全球): ${t.stmGlobal.toLocaleString()}`);
+  } 
+  
+  else if(pickAction === "addWip"){
+    let avail=std.filter(function(x){return !x.released}); 
+    avail.forEach(function(x){
+        if(document.getElementById(`pk_m_${x.id}`).checked){ 
+            curAlbPj.s.push(x); 
+            std.splice(std.findIndex(function(s){return s.id===x.id}),1); 
+        }
+    }); 
+    updateAlbProjUI(); closeM('mPick'); renderStdMap(); saveGame();
+  } 
+  
+  else if (pickAction === "relPre"){
+    let radios = document.getElementsByName("preR"); let selId = null; 
+    for(let i=0;i<radios.length;i++){ if(radios[i].checked) selId = radios[i].value; } 
+    if(!selId) return alert("选一首歌！");
+    
+    let song = curAlbPj.s.find(function(x){return x.id===selId}); 
+    song.released = true; 
+    let baseF = ad.st.f; 
+    let t = createEntity(song.n, ad.s, true, "track", curAlbPj.g.join(), baseF, ad.sk.w, ad.sk.v, time.y, time.m, time.w, false, song.ff); 
+    t.price = price; t.revenue = 0;
+    
+    let hypeMult = (1 + 0.5*(curAlbPj.hype-1));
+    t.stmGlobal = Math.floor(t.stmGlobal * ad.H * ad.D * ad.Geffect * hypeMult); 
+    t.stmUS = Math.floor(t.stmGlobal * ((Math.random() * 0.20) + 0.35));
+    
+    t.stmGlobal_Day = Math.floor(t.stmGlobal/7); t.stmUS_Day = Math.floor(t.stmUS/7);
+    t.slTotal = Math.floor(t.stmGlobal/150); 
+    
+    curAlbPj.hype += (t.stmGlobal / 20000000) * (t.Spub/100); 
+    curAlbPj.preCount++; 
+    ad.st.f += Math.floor(t.stmGlobal/120); 
+    
+    trackPool.push(t); 
+    myWorks.push({id:t.id, n:`《${song.n}》[先行]`, slTotal:t.slTotal, revenue:0}); 
+    
+    updAttr(); updateAlbProjUI(); closeM('mPick'); saveGame(); 
+    alert(`🎵 先行曲发行！全球流媒: ${t.stmGlobal.toLocaleString()}`);
+  }
+  
+  else if (pickAction === "tvPromoFree") {
+    let radios = document.getElementsByName("tvR"); let selId = null; 
+    for(let i=0; i<radios.length; i++){ if(radios[i].checked) selId = radios[i].value; } 
+    if(!selId) return alert("请选歌！");
+    if(!costEnergy(10)) { closeM('mPick'); return; }
+    let t = trackPool.find(x => x.id === selId); if(!t) return;
+    advHour(24); let safeStm = t.stmGlobal_Week * 7 || t.stmGlobal || 50000; 
+    let extraStm = Math.floor((safeStm * 0.15 * ad.Geffect + 100000) * Math.pow(0.9, t.promoCount || 0)); 
+    t.stmGlobal += extraStm; t.stmUS = (t.stmUS || 0) + Math.floor(extraStm * 0.4); 
+    if(!t.stmGlobal_Day) t.stmGlobal_Day=0; t.stmGlobal_Day += Math.floor(extraStm/7); 
+    t.slTotal += Math.floor(extraStm/150); 
+    t.longViral = (t.longViral||0) + Math.floor(Math.random() * 6) + 4; t.viralBoost = (t.viralBoost || 1.0) + 0.15; t.promoCount = (t.promoCount || 0) + 1; 
+    alert(`📺 打歌成功！\n《${t.n}》第 ${t.promoCount} 次跑通告，流媒激增 ${extraStm.toLocaleString()}，重新获得回春加成！`); 
+    updatePeakRanks(); saveGame(); closeM('mPick');
+  }
+};
+
+// 2. 补全大奖展厅渲染函数与相关按钮功能
+window.renderAwardRegistry = function() {
+    let box = document.getElementById("awardIntroBox");
+    if(!box) return;
+    
+    if(!awardRegistry || awardRegistry.length === 0) {
+        box.innerHTML = "<p style='color:#888;'>大奖库为空</p>";
+        return;
+    }
+    
+    box.innerHTML = awardRegistry.map((awd, i) => `
+        <div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #ccc;">
+            <b style="color:#c8a440;font-size:14px;">🏆 ${escapeHTML(awd.name)}</b>
+            <span style="font-size:11px;color:#888;margin-left:5px;">(评审权重: 乐评口碑 ${awd.rules.weightSpub} / 商业销量 ${awd.rules.weightSales} / 洗脑流行 ${awd.rules.weightCatchy})</span>
+            <p style="font-size:12px;margin:5px 0;">${escapeHTML(awd.desc)}</p>
+            <div style="font-size:11px;color:#555;">包含类目：${awd.categories.map(c => c.name).join('、')}</div>
+        </div>
+    `).join('');
+};
+
+// 激活创立新大奖的按钮
+window.createCustomAward = function() {
+    gamePrompt("创立新大奖", "请输入你想创立的奖项名称：", "", function(name){
+        if(!name || name.trim() === "") return;
+        awardRegistry.push({
+            id: "awd_custom_" + Date.now(),
+            name: name,
+            desc: "玩家自创的顶级颁奖典礼",
+            rules: { weightSpub: 0.33, weightSales: 0.33, weightCatchy: 0.34 },
+            categories: [
+                { id: "c_aoty", name: "年度最佳大奖", targetType: "artist", targetGenre: "ALL", targetForm: "ALL" },
+                { id: "c_soty", name: "年度最佳神曲", targetType: "track", targetGenre: "ALL", targetForm: "ALL" }
+            ]
+        });
+        renderAwardRegistry();
+        saveGame();
+        alert("✅ 成功创立全新大奖！");
+    });
+};
+
+// 给另外两个暂未深度的按钮做防卡死兜底
+window.addCustomCategory = function() {
+    alert("系统提示：当前版本仅支持【创立全新颁奖典礼】，分支类目自定义功能正在开发中！");
+};
+
+window.renameAward = function() {
+    alert("系统提示：默认大奖无法重命名，你可以通过【创立全新颁奖典礼】来建立专属奖项！");
+};
+// ==================== 解锁大奖完全自定义权限 ====================
+
+// 1. 激活重命名大奖按钮
+window.renameAward = function() {
+    if(!awardRegistry || awardRegistry.length === 0) return alert("大奖库为空！");
+    pickAction = "renameAwardSelect";
+    document.getElementById("mPickTitle").innerText = "✏️ 选择要重命名的大奖";
+    document.getElementById("mPickExt").style.display = "none";
+    document.getElementById("mPickList").innerHTML = awardRegistry.map((awd, i) => 
+        `<div style="padding:5px 0;border-bottom:1px solid #eee;"><input type="radio" name="awdSel" value="${i}"> <b>${escapeHTML(awd.name)}</b></div>`
+    ).join('');
+    document.getElementById("mPick").classList.add("open");
+};
+
+// 2. 激活添加分支类目按钮
+window.addCustomCategory = function() {
+    if(!awardRegistry || awardRegistry.length === 0) return alert("大奖库为空！");
+    pickAction = "addCategorySelect";
+    document.getElementById("mPickTitle").innerText = "➕ 选择要添加类目的大奖";
+    document.getElementById("mPickExt").style.display = "none";
+    document.getElementById("mPickList").innerHTML = awardRegistry.map((awd, i) => 
+        `<div style="padding:5px 0;border-bottom:1px solid #eee;"><input type="radio" name="awdSel" value="${i}"> <b>${escapeHTML(awd.name)}</b></div>`
+    ).join('');
+    document.getElementById("mPick").classList.add("open");
+};
+
+// 3. 拦截并升级 confirmPick 函数，加入修改奖项的处理逻辑
+let originalConfirmPickForAwards = window.confirmPick;
+window.confirmPick = async function() {
+    if (pickAction === "renameAwardSelect") {
+        let radios = document.getElementsByName("awdSel"); 
+        let selIdx = -1;
+        for(let i=0; i<radios.length; i++){ if(radios[i].checked) selIdx = parseInt(radios[i].value); }
+        if(selIdx === -1) return alert("请选择一个奖项！");
+        
+        let targetAward = awardRegistry[selIdx];
+        closeM('mPick');
+        
+        gamePrompt("重命名大奖", "请输入新的奖项名称：", targetAward.name, function(newName){
+            if(newName && newName.trim() !== "") {
+                targetAward.name = newName.trim();
+                renderAwardRegistry();
+                saveGame();
+                alert("✅ 奖项重命名成功！");
+            }
+        });
+    } 
+    else if (pickAction === "addCategorySelect") {
+        let radios = document.getElementsByName("awdSel"); 
+        let selIdx = -1;
+        for(let i=0; i<radios.length; i++){ if(radios[i].checked) selIdx = parseInt(radios[i].value); }
+        if(selIdx === -1) return alert("请选择一个奖项！");
+        
+        let targetAward = awardRegistry[selIdx];
+        closeM('mPick');
+        
+        gamePrompt("添加分支类目", `为【${targetAward.name}】添加新类目：`, "最佳突破艺人", function(catName){
+            if(catName && catName.trim() !== "") {
+                targetAward.categories.push({
+                    id: "c_custom_" + Date.now(),
+                    name: catName.trim(),
+                    targetType: "ALL", 
+                    targetGenre: "ALL",
+                    targetForm: "ALL"
+                });
+                renderAwardRegistry();
+                saveGame();
+                alert(`✅ 成功为【${targetAward.name}】添加了新类目：${catName.trim()}！`);
+            }
+        });
+    } 
+    else {
+        // 如果不是处理奖项的指令，就交回给原本的发歌/打单逻辑去执行
+        originalConfirmPickForAwards();
+    }
+};
 
 // ==================== 代码结束 ====================
 </script>

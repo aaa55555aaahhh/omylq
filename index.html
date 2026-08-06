@@ -6023,6 +6023,73 @@ if (window.advTime) window.advTime = interceptFanGain(window.advTime);          
 if (window.confirmPick) window.confirmPick = interceptFanGain(window.confirmPick); // 拦截发单曲首发涨粉
 if (window.releaseAlbum) window.releaseAlbum = interceptFanGain(window.releaseAlbum); // 拦截发专辑首发涨粉
 if (window.doTour) window.doTour = interceptFanGain(window.doTour);                // 拦截巡演涨粉
+// ==================== 补丁：修复榜单萎缩，重塑真实的大盘流媒生态 ====================
+
+// 1. 拦截大盘推演，强制注入“真实榜单保底机制”
+let oldAdvTimeForMarketFix = window.advTime;
+window.advTime = function(weeks, showMsg) {
+    oldAdvTimeForMarketFix(weeks, showMsg);
+
+    // 重新获取所有单曲
+    let trks = trackPool.filter(x => x.type === "track");
+    trks.sort((a,b) => (b.stmGlobal_Week || 0) - (a.stmGlobal_Week || 0));
+    
+    if (trks.length > 0) {
+        // 真实世界的全球榜单：冠军周播大概在 5000万~8000万（日均700万~1100万）
+        let targetTopWeekly = 50000000 + Math.floor(Math.random() * 30000000); 
+        
+        // 如果当前大盘冠军连这个及格线都没达到，说明大盘枯竭了，系统强制拉升整个大盘！
+        if ((trks[0].stmGlobal_Week || 0) < targetTopWeekly) {
+            let scale = targetTopWeekly / Math.max(1, trks[0].stmGlobal_Week || 1);
+            
+            // 重新按比例分配前 200 名的流媒，模拟真实的榜单长尾曲线
+            for (let i = 0; i < Math.min(200, trks.length); i++) {
+                // 排名越低，乘数递减（冠军吃满scale，第100名吃约十分之一，确保不畸形）
+                let curve = Math.pow(0.95, i); 
+                let multiplier = 1 + (scale - 1) * curve;
+                
+                // 限制最大翻倍倍率，防止糊歌突然变成神曲
+                if (multiplier > 50) multiplier = 50; 
+
+                trks[i].stmGlobal_Week = Math.floor((trks[i].stmGlobal_Week || 10000) * multiplier);
+                
+                // 最低入榜门槛强制保底（第200名至少也有周播300万，日播40万）
+                let minFloor = Math.floor(6000000 * Math.pow(0.98, i));
+                if (trks[i].stmGlobal_Week < minFloor) trks[i].stmGlobal_Week = minFloor;
+
+                // 同步日播与美国区数据
+                trks[i].stmGlobal_Day = Math.floor(trks[i].stmGlobal_Week / 7);
+                trks[i].stmUS_Week = Math.floor(trks[i].stmGlobal_Week * ((Math.random() * 0.15) + 0.35));
+                trks[i].stmUS_Day = Math.floor(trks[i].stmUS_Week / 7);
+            }
+        }
+    }
+    
+    // 刷新排位
+    updatePeakRanks();
+};
+
+// 2. 修复 NPC 初始发歌数值过低的问题
+let oldCreateEntityForNPC = window.createEntity;
+window.createEntity = function(name, artist, isMe, type, gnr, fans, C, V, t_y, t_m, t_w, isConcept=false, feat="", S_val=1.0, chain=1.0, trackOrderMod=1.0) {
+    let t = oldCreateEntityForNPC(name, artist, isMe, type, gnr, fans, C, V, t_y, t_m, t_w, isConcept, feat, S_val, chain, trackOrderMod);
+    
+    // 如果是 NPC 发单曲，强制拉高基础日增，防止一上来就只有 4 位数
+    if (!isMe && type === "track") {
+        let baseFans = fans || 100000;
+        // NPC 的初始日播按照粉丝量的 5%~15% 加上基础热度计算，最低不低于 100 万日增
+        let npcDaily = Math.floor(baseFans * (Math.random() * 0.10 + 0.05) * 5) + 1000000 + Math.floor(Math.random() * 2000000);
+        
+        t.stmGlobal_Day = npcDaily;
+        t.stmGlobal_Week = t.stmGlobal_Day * 7;
+        t.stmUS_Day = Math.floor(t.stmGlobal_Day * 0.4);
+        t.stmUS_Week = t.stmUS_Day * 7;
+        t.stmGlobal = t.stmGlobal_Week;
+        t.stmUS = t.stmUS_Week;
+        t.slTotal = Math.floor(t.stmGlobal / 150);
+    }
+    return t;
+};
 
 // ==================== 代码结束 ====================
 </script>

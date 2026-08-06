@@ -5885,6 +5885,144 @@ window.batchGenNpc = function() {
         updateFeatList();
     }
 };
+// ==================== 补丁：允许手动修改已有大盘艺人的性格 ====================
+
+document.addEventListener("DOMContentLoaded", function() {
+    // 在艺人编辑界面（性别输入框的下方）动态插入性格输入框
+    let editGenderInput = document.getElementById("eNpcGender");
+    if (editGenderInput && !document.getElementById("eNpcPersonality")) {
+        editGenderInput.insertAdjacentHTML('afterend', `<input id="eNpcPersonality" placeholder="性格特点 (如：高冷孤傲/阳光开朗)">`);
+    }
+});
+
+// 拦截原版的打开编辑界面函数，把已有性格填入输入框
+let oldOpenEditNpcForPersonality = window.openEditNpc;
+window.openEditNpc = function(id) {
+    oldOpenEditNpcForPersonality(id); // 先执行原版的打开逻辑
+    
+    let npc = worldArtists.find(x => x.id === id);
+    let pInput = document.getElementById("eNpcPersonality");
+    if(npc && pInput) {
+        // 如果NPC有性格就填进去，没有就留空
+        pInput.value = npc.personality || ""; 
+    }
+};
+
+// 拦截原版的保存编辑函数，把新性格保存到大盘数据中
+let oldSaveNpcEditForPersonality = window.saveNpcEdit;
+window.saveNpcEdit = function() {
+    let oldName = document.getElementById("eNpcOldName").value;
+    let npc = worldArtists.find(x => x.n === oldName);
+    
+    let pInput = document.getElementById("eNpcPersonality");
+    if(npc && pInput && pInput.value.trim() !== "") {
+        npc.personality = pInput.value.trim(); // 保存新修改的性格
+    }
+    
+    oldSaveNpcEditForPersonality(); // 执行原版的保存、刷新和提示逻辑
+};
+// ==================== 补丁：修复流媒数值爆炸与销量割裂 Bug ====================
+
+// 1. 拦截并修复时间推演中的无限复利 BUG
+let oldAdvTimeForCap = window.advTime;
+window.advTime = function(weeks, showMsg) {
+    // 强制限制所有大盘歌曲的周流媒上限，防止因为打单和逆跌造成无限指数爆炸
+    trackPool.forEach(t => {
+        if (t.stmGlobal_Week > 300000000) { // 限制单周最高播放不得超过 3 亿
+            t.stmGlobal_Week = 300000000 + Math.floor(Math.random() * 50000000);
+            t.stmGlobal_Day = Math.floor(t.stmGlobal_Week / 7);
+        }
+        // 强制削减过长的逆跌状态，防止无限回春
+        if (t.longViral > 8) t.longViral = 8;
+        
+        // 修正异常的单日流媒
+        if (t.stmGlobal_Day > 50000000) t.stmGlobal_Day = 50000000 + Math.floor(Math.random() * 10000000);
+    });
+    
+    oldAdvTimeForCap(weeks, showMsg);
+    
+    // 2. 同步修复【已发专辑】和【发行作品】的数据统一问题
+    albs.forEach(a => {
+        let realAlbum = trackPool.find(x => x.isMe && x.n === a.n && x.type === "album");
+        if(realAlbum && a.trackRef) {
+            a.trackRef.slTotal = realAlbum.slTotal; // 强制同步两边的数据
+        }
+    });
+};
+
+// 3. 修复打单和短视频宣发的无限乘数 BUG
+let oldPromoAlbSongForCap = window.promoAlbSong;
+window.promoAlbSong = function(id) {
+    let t = trackPool.find(x => x.id === id);
+    if(t) {
+        // 在打单前，如果发现流媒已经高得离谱，强行压缩基础盘，防止乘数暴走
+        if(t.stmGlobal_Week > 50000000) {
+            t.stmGlobal_Week = 50000000;
+        }
+    }
+    oldPromoAlbSongForCap(id);
+};
+// ==================== 补丁：引入现实级“粉丝增长边际递减”机制 ====================
+
+// 定义阶梯式吸粉阻力算法
+function calculateRealisticFanGain(originalGain, currentFans) {
+    if (originalGain <= 0) return 0;
+    
+    let multiplier = 1.0;
+    
+    // 根据当前粉丝基数，决定吸粉的难易度
+    if (currentFans < 5000000) {
+        multiplier = 3.0; // 【新人期红利】：随便一首热歌都能让你粉丝翻倍，神曲直接涨千万！
+    } else if (currentFans < 20000000) {
+        multiplier = 1.5; // 【上升期】：势头迅猛，吸粉仍有加成
+    } else if (currentFans < 50000000) {
+        multiplier = 0.8; // 【当红期】：路人盘开始见顶，吸粉速度回归正常略偏下
+    } else if (currentFans < 100000000) {
+        multiplier = 0.3; // 【巨星期】：想跨越一亿大关非常艰难，需要极度爆款
+    } else if (currentFans < 300000000) {
+        multiplier = 0.05; // 【天王/天后期】：国民度已满，能听过你歌的人基本都听过了，极难吸新粉
+    } else {
+        multiplier = 0.01; // 【地球级偶像】：受众绝对饱和，基本只靠出生人口涨粉了
+    }
+
+    // 针对高质量神曲的额外破圈补偿（即使在后期，超级大爆款也能稍微冲破阻力）
+    if (originalGain > 100000) { 
+        multiplier *= 1.2; 
+    }
+
+    return Math.floor(originalGain * multiplier);
+}
+
+// 封装一个拦截函数，用于劫持各种会暴涨粉丝的行为
+function interceptFanGain(originalFunction) {
+    return function(...args) {
+        // 记录执行前的粉丝数
+        let beforeFans = ad.st.f; 
+        
+        // 执行原版逻辑
+        let result = originalFunction.apply(this, args); 
+        
+        // 计算原版代码本该给你加多少粉丝
+        let rawGain = ad.st.f - beforeFans; 
+        
+        if (rawGain > 0) {
+            // 撤销原版的粗暴加粉
+            ad.st.f = beforeFans; 
+            // 经过边际递减算法重新计算
+            let realGain = calculateRealisticFanGain(rawGain, beforeFans); 
+            // 加上真实合理的粉丝数
+            ad.st.f += realGain; 
+        }
+        
+        return result;
+    };
+}
+
+// 拦截四大主要的粉丝暴涨源头
+if (window.advTime) window.advTime = interceptFanGain(window.advTime);             // 拦截周结算自然涨粉
+if (window.confirmPick) window.confirmPick = interceptFanGain(window.confirmPick); // 拦截发单曲首发涨粉
+if (window.releaseAlbum) window.releaseAlbum = interceptFanGain(window.releaseAlbum); // 拦截发专辑首发涨粉
+if (window.doTour) window.doTour = interceptFanGain(window.doTour);                // 拦截巡演涨粉
 
 // ==================== 代码结束 ====================
 </script>

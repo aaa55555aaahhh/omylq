@@ -4892,7 +4892,999 @@ window.updateAlbProjUI = function() {
         }
     }
 };
+// ==================== 补丁：虚拟邮箱升级、关键词检测与舞台颁奖逻辑 ====================
 
+// 1. 重写邮箱信件生成逻辑（加入年度拒绝判定，不永久封杀）
+window.openMailbox = function() {
+    currentMails = [];
+    let f = ad.st.f;
+    ad.showsRejected = ad.showsRejected || {}; // 记录拒绝的年份
+    
+    // 舞台邀请（如果今年没拒绝过，且没演过，就发邀请）
+    if (f >= 10000000 && !ad.shows.includes('c1') && ad.showsRejected['c1'] !== time.y) {
+        currentMails.push({ id: "c1", title: "🌴 Coachella 科切拉音乐节 演出邀请", sender: "Coachella 组委会", content: "恭喜！您的粉丝量已达到千万级别，诚挚邀请您登台！请回复是否同意，及期望的舞美规格（顶级/普通/极简）。" });
+    }
+    if (f >= 30000000 && !ad.shows.includes('c2') && ad.showsRejected['c2'] !== time.y) {
+        currentMails.push({ id: "c2", title: "⚽ 世界杯开幕式 演出邀请", sender: "FIFA 组委会", content: "全球瞩目！正式邀请您在世界杯开幕式上表演。请回复是否接下此通告？" });
+    }
+    if (f >= 50000000 && !ad.shows.includes('c3') && ad.showsRejected['c3'] !== time.y) {
+        currentMails.push({ id: "c3", title: "🏈 超级碗中场秀 演出邀请", sender: "NFL 组委会", content: "流行乐坛最高荣耀！邀您作为超级碗主秀嘉宾。是否接受邀请？" });
+    }
+    
+    // 颁奖季邀请
+    if (time.m % 3 === 2) { 
+        currentMails.push({ id: "awd_invite", title: "🎫 颁奖典礼 出席邀请", sender: "音乐大奖评委会", content: "今晚将揭晓各大奖项最终得主。请回复您是否能拨冗【出席现场】？" }); 
+    }
+
+    renderMailboxUI();
+};
+
+// 2. 核心：重写回信逻辑，加入本地关键词正则解析
+window.sendMailReply = async function(idx) {
+    let m = currentMails[idx];
+    let replyText = document.getElementById(`inMailReplyText_${idx}`).value.trim();
+    if(!replyText) return alert("请先写点内容再发送！");
+
+    let textLower = replyText;
+    let isAgree = textLower.includes("同意") || textLower.includes("接受") || textLower.includes("去") || textLower.includes("可以");
+    let isReject = textLower.includes("拒绝") || textLower.includes("不去") || textLower.includes("推掉") || textLower.includes("没空");
+    
+    // 【判定 A：大型舞台演出】
+    if (m.id === 'c1' || m.id === 'c2' || m.id === 'c3') {
+        if (isReject) {
+            ad.showsRejected[m.id] = time.y; // 只拒绝今年，明年还能再触发
+            alert(`❌ 你推掉了今年的【${m.title.split(' ')[1]}】演出！\n明年如果条件达标，他们还会再来邀请你。`);
+            document.getElementById(`inMailReplyText_${idx}`).value = "";
+            return;
+        } 
+        if (isAgree) {
+            // 关键词检测舞美
+            let stageLvl = 2; // 默认普通
+            if(textLower.includes("顶级") || textLower.includes("最高") || textLower.includes("最贵")) stageLvl = 1;
+            if(textLower.includes("极简") || textLower.includes("免费") || textLower.includes("不用")) stageLvl = 3;
+            
+            alert(`✅ 识别到您的意愿：接受演出！\n系统已为您自动分配舞美级别，请在接下来的面板中确认最终选曲！`);
+            document.getElementById(`inMailReplyText_${idx}`).value = "";
+            
+            // 直接拉起 Coachella 风格的选曲选舞美面板，并自动预填关键词结果
+            let myTrks = trackPool.filter(x => x.isMe && x.type === "track");
+            $("selCoaSong").innerHTML = myTrks.map(t => `<option value="${t.id}">${escapeHTML(t.n)}</option>`).join('') || '<option value="">无歌曲</option>';
+            $("selCoaStage").value = stageLvl; // 自动选中玩家说的舞美
+            
+            // 临时记录要演哪个舞台
+            ad.tempShowId = m.id; 
+            ad.tempShowName = m.title.split(' ')[1];
+            $("mCoachella").querySelector("h3").innerText = `🎤 登台 ${ad.tempShowName}`;
+            $("mCoachella").classList.add("open");
+            closeM('mInfo'); // 关掉邮箱
+            return;
+        }
+    }
+    
+    // 【判定 B：颁奖典礼邀请】
+    if (m.id === 'awd_invite') {
+        if (isReject) {
+            ad.awardAbsent = time.m; // 标记本月缺席
+            alert(`🚪 你委婉地表示【无法出席】本次颁奖典礼。\n(注：这不会影响你拿奖，但你将错失出席现场带来的红毯曝光与粉丝增长)`);
+        } else if (isAgree) {
+            ad.awardAbsent = 0;
+            alert(`✨ 你回复将【盛装出席】！团队已为你准备好红毯战袍。`);
+        } else {
+            alert("对方收到了你的回信，正在为你确认行程。");
+        }
+        document.getElementById(`inMailReplyText_${idx}`).value = "";
+        return;
+    }
+
+    // 其他信件如果接入了 API，走原版的 AI 判定
+    if(document.getElementById("apiToken") && document.getElementById("apiToken").value) {
+        let btn = event.target; btn.innerText = "发送中..."; btn.disabled = true;
+        let prompt = `邮件：${m.title}。内容：${m.content}。玩家回复：“${replyText}”。请返回一句话模拟收件人的反应，格式为纯文本。`;
+        let res = await api(prompt);
+        btn.innerText = "发送回信"; btn.disabled = false;
+        if(res) alert(`对方已收到回信！\n反应：\n${res}`);
+    } else {
+        alert("信件已寄出！(由于未连接API，对方默默收到了你的回复)");
+    }
+    document.getElementById(`inMailReplyText_${idx}`).value = "";
+};
+
+// 3. 升级通用舞台结算 (适配三个大型舞台的自选)
+window.confirmCoachella = function() {
+    let stageType = parseInt($("selCoaStage").value); 
+    let cost = stageType === 1 ? 500000 : (stageType === 2 ? 50000 : 0);
+    if(ad.m < cost) return alert("资金不足以支付该舞美！请降低规格或先去赚钱。"); 
+    ad.m -= cost; 
+    closeM("mCoachella");
+    
+    let sid = ad.tempShowId || 'c1';
+    let sName = ad.tempShowName || '音乐节';
+    
+    let f = ad.st.f; 
+    let gain = sid==='c1' ? 1500000 : (sid==='c2' ? 3000000 : 5000000);
+    
+    let songId = $("selCoaSong").value; 
+    let t = trackPool.find(x => x.id === songId);
+    
+    let finalScore = (ad.sk.s * 0.5 + ad.sk.v * 0.3 + ad.sk.d * 0.2) + (stageType === 1 ? 20 : (stageType === 2 ? 5 : -10)) + (Math.random() * 40 - 20); 
+    
+    let resultTitle, streamBoost = 0;
+    if (finalScore >= 85) { resultTitle = "🌟 神级现场"; streamBoost = t ? t.stmGlobal * 0.3 + 500000 : 0; } 
+    else if (finalScore < 40) { resultTitle = "💩 车祸灾难"; streamBoost = t ? t.stmGlobal * 0.05 + 50000 : 0; } 
+    else { resultTitle = "✅ 无功无过"; streamBoost = t ? t.stmGlobal * 0.15 + 150000 : 0; }
+    
+    if (t) { 
+        t.stmGlobal += streamBoost; 
+        t.slTotal += Math.floor(streamBoost/150); 
+    }
+    
+    ad.shows.push(sid); // 标记已演出，终身一次
+    ad.st.f += gain; 
+    ad.awd.unshift(`${time.y}年 - 登台【${sName}】！`); 
+    
+    updAttr(); renderShows(); saveGame();
+    alert(`【${sName}】\n${resultTitle}！\n🔥 揽 ${gain.toLocaleString()} 粉丝！\n🎵 演唱歌曲流媒激增 ${Math.floor(streamBoost).toLocaleString()}！`);
+};
+
+// 4. 颁奖结算：拦截缺席情况
+let oldCheckAutoAwardAbs = window.checkAutoAward;
+window.checkAutoAward = function() {
+    // 暂存出席状态
+    let isAbsent = (ad.awardAbsent === time.m);
+    
+    // 如果玩家出席，给一个红毯曝光奖励
+    if(!isAbsent && [2,5,8,11].includes(time.m) && !(historyAwards.length > 0 && historyAwards[0].includes(`${time.y}年${time.m}月`))) {
+        ad.st.f += 50000; // 红毯固粉
+    }
+
+    // 执行原版发奖逻辑（内部计算只看数据不看是否出席）
+    oldCheckAutoAwardAbs();
+    
+    // 如果有弹窗，且缺席了，修改弹窗文案
+    let banner = document.getElementById("mAwardBanner");
+    let txt = document.getElementById("txtAwardBannerMsg");
+    if(banner && banner.classList.contains("open") && isAbsent) {
+        let oriHtml = txt.innerHTML;
+        if(oriHtml.includes("你成功突围斩获了奖项")) {
+            txt.innerHTML = oriHtml.replace("🎉 恭喜！你成功突围斩获了奖项！奖杯已放入档案室。", "🎉 恭喜！虽然你【缺席】了典礼，但你的团队代你领回了属于你的大奖！");
+        } else {
+            txt.innerHTML = oriHtml.replace("遗憾的是，你本次陪跑了", "由于你的【缺席】，你并未在电视上看到别人领奖的身影。本届你陪跑了");
+        }
+    }
+    // 结算完毕，重置缺席状态
+    ad.awardAbsent = 0;
+};
+// ==================== 补丁：正向流媒算法与后验热度走势重构 ====================
+
+// 1. 彻底修复发歌时的倒置计算：先有首日，再算首周，严格计算有效天数
+let originalConfirmPickForFlow = window.confirmPick;
+window.confirmPick = async function() {
+    if(pickAction === "relSingleDirect" || pickAction === "relPreSingle" || pickAction === "relPrePromo") {
+        let price = parseInt($("sgPrice").value) || 1;
+        let selId = pickAction === "relSingleDirect" ? tempIdx : null;
+        if(!selId) {
+            let radios = document.getElementsByName("preR");
+            for(let i=0;i<radios.length;i++){ if(radios[i].checked) selId = radios[i].value; } 
+        }
+        if(!selId) return alert("请选歌！");
+
+        let isWip = pickAction.includes("relPre");
+        let sourceArr = isWip ? curAlbPj.s : std;
+        let songIdx = sourceArr.findIndex(x => x.id === selId);
+        if(songIdx === -1) return;
+        
+        let s = sourceArr[songIdx];
+        s.released = true;
+        
+        let bonusFans = 0;
+        if(s.ff && s.ff !== "") {
+            let featNames = s.ff.split(',').map(x => x.trim());
+            featNames.forEach(fn => {
+                let featArtist = worldArtists.find(a => a.n === fn || escapeHTML(a.n) === fn);
+                if(featArtist) bonusFans += Math.floor(featArtist.fans * 0.3);
+            });
+        }
+        
+        let baseF = ad.st.f + bonusFans; 
+        
+        // 处理先行曲定位
+        let S_val = 1.0;
+        if(isWip) {
+            if (pickAction === "relPreSingle") {
+                curAlbPj.singleCount = (curAlbPj.singleCount || 0) + 1;
+                s.singleLabel = window.getSingleLabelName(curAlbPj.singleCount);
+                S_val = curAlbPj.singleCount === 1 ? 1.0 : 0.9;
+            } else {
+                curAlbPj.preCount = (curAlbPj.preCount || 0) + 1;
+                s.singleLabel = "宣传曲";
+                S_val = 0.7;
+            }
+        }
+
+        let t = createEntity(s.n, ad.s, true, "track", s.g?s.g.join():"", baseF, ad.sk.w, ad.sk.v, time.y, time.m, time.w, false, s.ff, S_val, 1.0); 
+        t.price = price; t.revenue = 0;
+        if(isWip) t.singleLabel = s.singleLabel;
+        
+        let aiAdj = 0; let aiCmt = "";
+        let searchCore = s.core || s.c;
+        if($("apiToken") && $("apiToken").value && searchCore){ 
+            let r = await api(`我写了首【${s.g}】歌，内核是【${searchCore}】。给修正分(-15到+15整数)和15字短评。只返JSON: {"score_adj":5, "comment":"..."}`); 
+            if(r){ try{ let j=JSON.parse(r.match(/\{[\s\S]*\}/)[0]); aiAdj=parseInt(j.score_adj)||0; aiCmt=escapeHTML(j.comment)||""; }catch(e){} } 
+        } else if (searchCore) {
+            aiAdj = Math.floor(Math.random() * 20) - 5; 
+            aiCmt = (aiAdj > 5) ? "系统判定：这首歌的内核表达很有深度！" : "系统判定：内核表达中规中矩。";
+        }
+        t.Spub = Math.max(0, Math.min(100, t.Spub + aiAdj)); 
+        
+        // 核心修复：把底层的算法当做【纯首日日均流媒】计算！
+        let hypeMult = isWip ? (1.0 + (t.Spub > 60 ? (t.Spub-60)*0.005 : 0)) : (ad.H * ad.D);
+        let baseDaily = Math.floor(t.stmGlobal * hypeMult * ad.Geffect); 
+        
+        // 【追踪期天数计算】：周五为第1天，下周四为最后1天
+        // time.d: 1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六, 7=周日
+        let trackDays = 7;
+        if (time.d >= 5) trackDays = 12 - time.d; // 5->7, 6->6, 7->5
+        else trackDays = 5 - time.d;              // 1->4, 2->3, 3->2, 4->1
+        
+        // 赋值逻辑：基于首日，累加首周
+        t.stmGlobal_Day = baseDaily;
+        t.stmUS_Day = Math.floor(baseDaily * ((Math.random() * 0.20) + 0.35));
+        
+        t.stmGlobal_Week = t.stmGlobal_Day * trackDays; // 严格乘以首周能吃到的天数
+        t.stmUS_Week = t.stmUS_Day * trackDays;
+        
+        // 首周总量
+        t.stmGlobal = t.stmGlobal_Week;
+        t.stmUS = t.stmUS_Week;
+        t.stmGlobal_Month = t.stmGlobal; t.stmUS_Month = t.stmUS;
+        t.stmGlobal_Year = t.stmGlobal; t.stmUS_Year = t.stmUS;
+        
+        t.slTotal = Math.floor(t.stmGlobal / 150); 
+        ad.st.f += Math.floor(t.stmGlobal / 120); 
+        
+        if(isWip) {
+            curAlbPj.hype += (t.stmGlobal / 20000000) * (t.Spub/100); 
+            if(pickAction === "relPreSingle" && curAlbPj.singleCount === 1) curAlbPj.preStmDay = t.stmGlobal_Day;
+        }
+        
+        trackPool.push(t); 
+        let lblName = isWip ? (pickAction === "relPreSingle" ? `[${s.singleLabel}]` : `[宣传曲]`) : `[单曲]`;
+        myWorks.push({id:t.id, n:`《${s.n}》${lblName}`, slTotal:t.slTotal, revenue:0}); 
+        
+        sourceArr.splice(songIdx,1); 
+        
+        updAttr(); 
+        if(isWip) updateAlbProjUI(); else renderStdMap(); 
+        closeM('mPick'); saveGame(); 
+        
+        let daysStr = trackDays === 7 ? "满打满算7天" : `仅有${trackDays}天 (因你在周${time.d}发歌)`;
+        alert(`🎵 发行成功！\n首日流媒(全球): ${t.stmGlobal_Day.toLocaleString()}\n(本周追踪期${daysStr})\n首周预计落地: ${t.stmGlobal_Week.toLocaleString()}`);
+    } else {
+        originalConfirmPickForFlow();
+    }
+};
+
+// 2. 彻底重写时间推演：后验热度评级 + 纯粹的自然走势模型
+window.advTime = function(weeks, showMsg){
+    let totalFanGain = 0; let weekRev = 0;
+    let viralAlerts = []; 
+  
+    for(let step=0; step<weeks; step++){
+        time.w++;
+        if(time.w > 4){ 
+            time.w = 1; time.m++; 
+            trackPool.forEach(t => { t.stmGlobal_Month = 0; t.stmUS_Month = 0; });
+        } 
+        if(time.m > 12){ 
+            time.m = 1; time.y++; 
+            trackPool.forEach(t => { t.stmGlobal_Year = 0; t.stmUS_Year = 0; });
+        }
+
+        trackPool.forEach(function(t){
+            if(!t.stmGlobal_Week) t.stmGlobal_Week = Math.floor(t.stmGlobal / 7) || 0;
+            if(!t.stmUS_Week) t.stmUS_Week = Math.floor(t.stmUS / 7) || 0;
+            
+            // 记录真实达到的周播最高峰
+            if(!t.peakWeeklyStm || t.stmGlobal_Week > t.peakWeeklyStm) {
+                t.peakWeeklyStm = t.stmGlobal_Week;
+            }
+            
+            if(t.type === "track") {
+                // 【核心改动：不再由初始隐藏属性决定，而是根据这首歌“已经达到的高度(累计销量)”来决定它多抗跌！】
+                // 这才是真实的后劲逻辑：积累的人气越高，路人盘越大，跌得越慢。
+                let isGodTier = t.slTotal >= 10000000;  // 卖了千万的歌，就是钻石神曲
+                let isMegaHit = t.slTotal >= 5000000;   // 500万销量大爆曲
+                let isHit = t.slTotal >= 1000000;       // 百万销量金曲
+                let isMinorHit = t.slTotal >= 500000;   // 50万小火
+                let isAverage = t.slTotal >= 100000;    // 10万平平无奇
+
+                if(!t.viralBoost) t.viralBoost = 1.0;
+
+                // 病毒爆发概率：虽然不再内定，但基础数据越好的歌，被短视频带火的底子越硬
+                if(t.isMe) {
+                    let baseViral = (isMegaHit ? 0.015 : 0.003); 
+                    let decayFactor = Math.max(0.05, 1.0 - (t.weeks * 0.02)); 
+                    let triggerChance = (t.viralChance || baseViral) * decayFactor; 
+                    
+                    if(!t.longViral && Math.random() < triggerChance && t.weeks > 4) {
+                        t.longViral = Math.floor(Math.random() * (isGodTier ? 12 : 6)) + 4; 
+                        t.viralBoost += (Math.random() * 0.2 + 0.1); 
+                        viralAlerts.push(t.n);
+                        t.viralChance = triggerChance * 0.2; // 降频
+                    }
+                }
+
+                let decay;
+                if(t.longViral && t.longViral > 0) {
+                    // 处于病毒传播期，实现逆跌
+                    decay = (Math.random() * 0.10) + 1.02; // 1.02 ~ 1.12 的逆跌增幅
+                    t.longViral--;
+                    t.viralWk = t.longViral; 
+                } else {
+                    // 自然衰减计算 (完全基于这首歌当前的阶级)
+                    // 默认是一首糊歌，衰减率在 0.70 ~ 0.80 之间，掉得极快
+                    decay = (Math.random() * 0.10) + 0.70; 
+                    
+                    // 如果它靠着宣发和积累爬上了层级，衰减率越来越好看
+                    if(isGodTier) decay += 0.22;       // 0.92 ~ 1.02 (甚至偶尔微弱逆跌，神曲长尾)
+                    else if(isMegaHit) decay += 0.18;  // 0.88 ~ 0.98
+                    else if(isHit) decay += 0.14;      // 0.84 ~ 0.94
+                    else if(isMinorHit) decay += 0.08; // 0.78 ~ 0.88
+                    else if(isAverage) decay += 0.04;  // 0.74 ~ 0.84
+                    
+                    // 老歌疲劳期惩罚（在榜太久强行增加衰减，让位新歌）
+                    if(t.weeks > 15) decay -= 0.02;
+                    if(t.weeks > 30) decay -= 0.05;
+                    if(t.weeks > 52) decay -= 0.08;
+                    
+                    // 防止 BUG，常规衰减决不能超过 0.98
+                    if(decay > 0.98 && !isGodTier) decay = 0.98;
+                }
+
+                // 计算下一周流媒
+                t.stmGlobal_Week = Math.floor(t.stmGlobal_Week * decay);
+                
+                // 长尾合理化保底：基于它巅峰时期的体量，而不是硬编码的 700万
+                let safeFloor = 1000;
+                if(isGodTier) safeFloor = t.peakWeeklyStm * 0.12;
+                else if(isMegaHit) safeFloor = t.peakWeeklyStm * 0.08;
+                else if(isHit) safeFloor = t.peakWeeklyStm * 0.05;
+                else safeFloor = t.peakWeeklyStm * 0.01;
+                
+                // 限制老歌保底绝对值上限，防止霸占榜首
+                if(safeFloor > 2000000) safeFloor = 2000000;
+
+                // 跌破了其身价应有的下限，且不在病毒期，则进行兜底
+                if(t.stmGlobal_Week < safeFloor && t.longViral <= 0) {
+                    t.stmGlobal_Week = Math.floor(safeFloor + Math.random() * (safeFloor * 0.05));
+                }
+
+                let usRatio = (t.stmUS_Week / (t.stmGlobal_Week || 1));
+                if(usRatio < 0.2 || usRatio > 0.6) usRatio = 0.35;
+                t.stmUS_Week = Math.floor(t.stmGlobal_Week * usRatio);
+            }
+
+            // 更新日榜（平摊到日榜，供查阅）
+            t.stmGlobal_Day = Math.floor(t.stmGlobal_Week / 7);
+            t.stmUS_Day = Math.floor(t.stmUS_Week / 7);
+
+            if(t.type==="track" || t.type==="album") {
+                t.stmGlobal += t.stmGlobal_Week; 
+                t.stmUS += t.stmUS_Week;
+                t.stmGlobal_Month += t.stmGlobal_Week;
+                t.stmGlobal_Year += t.stmGlobal_Week;
+                t.stmUS_Month += t.stmUS_Week;
+                t.stmUS_Year += t.stmUS_Week;
+                
+                t.slTotal += Math.floor(t.stmGlobal_Week/150);
+                
+                if(t.isMe) { 
+                    totalFanGain += Math.floor(t.stmGlobal_Week / 8000); 
+                    let income = Math.floor(t.stmGlobal_Week * 0.0035); 
+                    weekRev += income; 
+                    
+                    let myW = myWorks.find(w => w.id === t.id);
+                    if(myW) myW.revenue = (myW.revenue || 0) + income;
+                }
+            } 
+            t.weeks++; t.days += 7;
+        });
+    }
+    
+    ad.st.f += totalFanGain; ad.m += weekRev; 
+    if(weeks>0){ updatePeakRanks(); updAttr(); saveGame(); }
+    
+    let alertMsg = `⏩ 过了 ${weeks} 周！\n🔥 吸粉: ${totalFanGain.toLocaleString()}\n💰 收益: $${weekRev.toLocaleString()}`;
+    if(viralAlerts.length > 0) {
+        alertMsg += `\n\n🚨 【短视频爆红】\n《${viralAlerts.join('》、《')}》迎来了后劲爆发！\n正处于流媒逆跌期！`;
+    }
+    if(showMsg){ window.gameAlert(alertMsg); }
+    updTimeUI();
+}
+
+// 3. 修复电视台打歌 (用日增加上追踪期计算，而不是除以7)
+window.doTVPromo = function(showName){ 
+    currentPromoShow = showName || "打歌节目";
+    let myTrks = trackPool.filter(function(x){ return x.isMe && x.type === "track"; }).sort((a,b) => (b.stmGlobal||0) - (a.stmGlobal||0)); 
+    if(!myTrks.length) { return alert("⚠️ 没有可打单歌曲！"); } 
+    pickAction = "tvPromoFree"; 
+    document.getElementById("mPickTitle").innerText = `🎤 登台 ${currentPromoShow}`; 
+    document.getElementById("mPickExt").style.display = "none"; 
+ 
+    document.getElementById("mPickList").innerHTML = myTrks.map(t => `
+        <div style="padding:8px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+            <div><input type="radio" name="tvR" value="${t.id}"> <b>${escapeHTML(t.n)}</b></div>
+            <button class="sec inline" style="padding:2px 6px;font-size:11px;" onclick="viewSongStats('${t.id}')">详情</button>
+        </div>`).join(''); 
+    document.getElementById("mPick").classList.add("open"); 
+};
+
+window.confirmPick = function() {
+    if(pickAction === "tvPromoFree") {
+        let radios = document.getElementsByName("tvR"); let selId = null; 
+        for(let i=0; i<radios.length; i++){ if(radios[i].checked) selId = radios[i].value; } 
+        if(!selId) return alert("请选歌！");
+        if(!costEnergy(10)) { closeM('mPick'); return; }
+        
+        let t = trackPool.find(x => x.id === selId); if(!t) return;
+        advHour(24); // 推演1天
+        
+        // 正向计算：打单带来的是【单日峰值】的提升
+        let safeDailyStm = t.stmGlobal_Day || 10000; 
+        let extraDaily = Math.floor((safeDailyStm * 0.4 * ad.Geffect + 20000) * Math.pow(0.85, t.promoCount || 0)); 
+        
+        let trackDays = 7;
+        if (time.d >= 5) trackDays = 12 - time.d; 
+        else trackDays = 5 - time.d;
+        
+        // 打单红利贯穿本周剩余天数
+        let extraWeek = extraDaily * trackDays;
+        
+        t.stmGlobal += extraWeek; 
+        t.stmUS = (t.stmUS || 0) + Math.floor(extraWeek * 0.4); 
+        t.stmGlobal_Day += extraDaily; 
+        t.stmGlobal_Week += extraWeek;
+        t.slTotal += Math.floor(extraWeek/150); 
+        
+        t.longViral = (t.longViral||0) + Math.floor(Math.random() * 3) + 2; 
+        t.viralBoost = (t.viralBoost || 1.0) + 0.10; 
+        t.promoCount = (t.promoCount || 0) + 1; 
+        
+        alert(`📺 演出成功！\n你在【${currentPromoShow}】上表演了《${t.n}》！\n单日流媒激增 ${extraDaily.toLocaleString()}，预计本周转化 ${extraWeek.toLocaleString()}！`); 
+ 
+        updatePeakRanks(); saveGame(); closeM('mPick');
+    } else {
+        originalConfirmPickForFlow(); // 调用上面刚刚重写的第一段发歌逻辑
+    }
+};
+// ==================== 补丁：立项后自动清空输入框与标签 ====================
+
+// 1. 重写单曲立项逻辑，加入清空功能
+window.startWrite = function(){ 
+    if(curPj) return alert("有正在进行的企划！"); 
+    if(!costEnergy(10)) return; 
+    
+    let n = escapeHTML($("inSName").value) || "Demo"; 
+    let featType = document.getElementById("inFeatType") ? document.getElementById("inFeatType").value : "Feat.";
+    let ff = escapeHTML($("inFeat")?$("inFeat").value:"") || ""; 
+    
+    if(featType === "Solo") { ff = ""; } // 独唱清空合唱歌手
+    else if(ff !== "") { n += ` (${featType} ${ff})`; }
+    
+    let core = escapeHTML(document.getElementById("inSCore") ? document.getElementById("inSCore").value : "");
+    let customGenre = $("inSCustom").value.trim();
+    if(customGenre) selG.push(customGenre);
+    if(selG.length === 0) selG.push("流行"); // 保底曲风
+
+    curPj = {type: "write", n: n, g: [...selG], c: escapeHTML($("inSCustom").value), core: core, ff: ff}; 
+    prog=0; 
+    $("txtProg").innerText="0%"; 
+    $("barProg").style.width="0%"; 
+    $("boxWriteProgress").style.display="block"; 
+    $("btnStartWriteProj").style.display="none"; 
+    
+    // 【核心修复】：立项成功后，自动清空所有相关输入框
+    $("inSName").value = "";
+    if($("inFeat")) $("inFeat").value = "";
+    if($("inSCustom")) $("inSCustom").value = "";
+    if($("inSCore")) $("inSCore").value = "";
+    if($("selFeatHelper")) $("selFeatHelper").value = ""; // 清空大盘选择器
+    
+    // 清空选中的曲风标签UI状态
+    selG = [];
+    let sTags = document.getElementById("boxSGenre").querySelectorAll('.g-tag');
+    sTags.forEach(tag => tag.classList.remove('selected'));
+
+    alert(`企划立项：${n}。已扣除10精力。`); 
+    saveGame(); 
+}
+
+// 2. 重写专辑立项逻辑，加入清空功能
+window.startAlbum = function(){ 
+    if(curAlbPj) return alert("已有筹备中专辑！"); 
+    
+    if(selAG.length === 0) selAG.push("流行"); // 保底曲风
+    
+    let aName = escapeHTML($("inAName").value) || "Album";
+    let aCore = escapeHTML($("inACore").value) || "无";
+    
+    curAlbPj = { n: aName, g: [...selAG], core: aCore, s: [], hype: 1.0, preCount: 0, singleCount: 0 }; 
+    
+    // 【核心修复】：专辑立项成功后，自动清空专辑名、内核和曲风标签
+    $("inAName").value = "";
+    if($("inACore")) $("inACore").value = "";
+    
+    // 清空选中的曲风标签UI状态
+    selAG = [];
+    let aTags = document.getElementById("boxAGenre").querySelectorAll('.g-tag');
+    aTags.forEach(tag => tag.classList.remove('selected'));
+
+    alert("新专立项成功！进入筹备阶段。"); 
+    updateAlbProjUI(); 
+    saveGame(); 
+}
+// ==================== 补丁：修复专辑流媒与销量低于单曲的倒挂问题 ====================
+
+let originalReleaseAlbum = window.releaseAlbum;
+
+window.releaseAlbum = async function() {
+    if(!curAlbPj || curAlbPj.s.length === 0) return alert("专辑里没有歌！");
+    let price = parseInt($("albPrice").value) || 10;
+    
+    // 计算专辑总分与核心属性
+    let totalScore = 0; let baseF = ad.st.f;
+    curAlbPj.s.forEach(s => { 
+        totalScore += (s.v + s.w); 
+        if(s.ff) {
+            let featNames = s.ff.split(',').map(x => x.trim());
+            featNames.forEach(fn => {
+                let featArtist = worldArtists.find(a => a.n === fn || escapeHTML(a.n) === fn);
+                if(featArtist) baseF += Math.floor(featArtist.fans * 0.2); // 合作歌手吸粉
+            });
+        }
+    });
+    let avgScore = Math.floor(totalScore / (curAlbPj.s.length * 2));
+    
+    // AI 点评专辑内核
+    let aiAdj = 0; let aiCmt = "";
+    if($("apiToken") && $("apiToken").value && curAlbPj.core){ 
+        let r = await api(`我做了一张【${curAlbPj.g.join()}】专辑，内核是【${curAlbPj.core}】。给修正分(-15到+15整数)和15字短评。只返JSON: {"score_adj":5, "comment":"..."}`); 
+        if(r){ try{ let j=JSON.parse(r.match(/\{[\s\S]*\}/)[0]); aiAdj=parseInt(j.score_adj)||0; aiCmt=escapeHTML(j.comment)||""; }catch(e){} } 
+    } else if (curAlbPj.core) {
+        aiAdj = Math.floor(Math.random() * 20) - 5; 
+        aiCmt = "系统判定：概念连贯，制作精良。";
+    }
+    
+    let finalQual = Math.max(0, Math.min(100, avgScore + aiAdj));
+    
+    // 创建专辑实体 (type = "album")
+    let t = createEntity(curAlbPj.n, ad.s, true, "album", curAlbPj.g.join(), baseF, avgScore, avgScore, time.y, time.m, time.w, false, "", 1.0, 1.0);
+    t.price = price; t.revenue = 0; t.Spub = finalQual;
+    
+    // 【核心修复：专辑体量乘区】
+    // 基础单曲级别的日均播放
+    let baseTrackDaily = Math.floor(t.stmGlobal * (ad.H * ad.D) * ad.Geffect); 
+    
+    // 专辑包含的曲目越多，总播放量越大（非主打歌会有折损，所以不是简单的 x 数量，而是用对数/系数模拟）
+    // 比如 10首歌的专辑，总流媒大概是一首爆款单曲的 3.5 ~ 5.5倍
+    let trackCount = curAlbPj.s.length;
+    let albumMultiplier = 1.0 + (trackCount * 0.45); 
+    
+    // 加上先行曲积累的专辑热度 (Hype) 爆发
+    let hypeBonus = (curAlbPj.hype || 1.0); 
+    
+    // 算出专辑真实的【首日总流媒】
+    let realAlbumDaily = Math.floor(baseTrackDaily * albumMultiplier * hypeBonus);
+    
+    // 追踪期天数计算：周五为第1天，下周四为最后1天
+    let trackDays = 7;
+    if (time.d >= 5) trackDays = 12 - time.d; 
+    else trackDays = 5 - time.d;
+    
+    t.stmGlobal_Day = realAlbumDaily;
+    t.stmUS_Day = Math.floor(realAlbumDaily * ((Math.random() * 0.20) + 0.35));
+    
+    // 专辑首周总流媒
+    t.stmGlobal_Week = t.stmGlobal_Day * trackDays; 
+    t.stmUS_Week = t.stmUS_Day * trackDays;
+    
+    t.stmGlobal = t.stmGlobal_Week;
+    t.stmUS = t.stmUS_Week;
+    t.stmGlobal_Month = t.stmGlobal; t.stmUS_Month = t.stmUS;
+    t.stmGlobal_Year = t.stmGlobal; t.stmUS_Year = t.stmUS;
+    
+    // 【核心修复：专辑等效销量算法】
+    // 现实中专辑 1销量 = 1500流媒。这里用 /1500 再加上纯实体的转化
+    t.slTotal = Math.floor(t.stmGlobal / 1500) + Math.floor(baseF * 0.05 * (finalQual/100)); 
+    ad.st.f += Math.floor(t.stmGlobal / 1000); // 专辑非常固粉
+    
+    trackPool.push(t); 
+    myWorks.push({id:t.id, n:`《${curAlbPj.n}》[专辑]`, slTotal:t.slTotal, revenue:0}); 
+    
+    let finalStr = `💿 专辑《${curAlbPj.n}》发行成功！\n`;
+    finalStr += `收录曲目: ${trackCount}首\n`;
+    finalStr += `首日总流媒(全球): ${t.stmGlobal_Day.toLocaleString()}\n`;
+    finalStr += `预计首周落地: ${t.stmGlobal_Week.toLocaleString()}\n`;
+    finalStr += `首周实销预估: ${t.slTotal.toLocaleString()} 张`;
+    
+    curAlbPj = null; 
+    updateAlbProjUI(); 
+    updAttr(); renderStdMap(); saveGame(); 
+    closeM('mAlbPick');
+    alert(finalStr);
+};
+// ==================== 补丁：修复评分溢出，引入高分衰减机制 ====================
+
+// 引入高分软上限算法
+// 超过80分的部分，提升难度呈指数级增加
+function calculateRealisticScore(rawScore, aiAdj) {
+    let base;
+    // 假设正常满属性 rawScore 大概在 200 左右
+    if (rawScore <= 100) {
+        base = rawScore * 0.7; // 基础平庸区间
+    } else if (rawScore <= 200) {
+        base = 70 + (rawScore - 100) * 0.15; // 70-85分段
+    } else {
+        base = 85 + (rawScore - 200) * 0.05; // 85分以上极难提升
+    }
+    
+    // 加入随机波动 (-3 到 +3)
+    let rng = Math.floor(Math.random() * 7) - 3;
+    
+    // AI 点评的加成在这里显得尤为重要，是突破90大关的关键
+    let finalScore = base + rng + (aiAdj || 0);
+    
+    return Math.max(0, Math.min(100, Math.floor(finalScore)));
+}
+
+// 拦截单曲完成的逻辑（修复单曲评分）
+let originalFinishWrite = window.finishWrite;
+if (originalFinishWrite) {
+    window.finishWrite = async function() {
+        if(!curPj || curPj.type!=="write") return;
+        
+        let rawQual = curPj.v + curPj.w; // 原始属性和
+        let aiAdj = 0;
+        
+        // 如果有内核且启用了AI，尝试获取AI评分
+        if($("apiToken") && $("apiToken").value && curPj.core){
+            try {
+                let r = await api(`我写了一首【${curPj.g.join()}】歌，内核【${curPj.core}】。给修正分(-15到+15整数)。只返JSON: {"score_adj":5}`);
+                if(r) { let j = JSON.parse(r.match(/\{[\s\S]*\}/)[0]); aiAdj = parseInt(j.score_adj)||0; }
+            } catch(e){}
+        } else if (curPj.core) {
+            aiAdj = Math.floor(Math.random() * 10) - 2; // 无AI时的基础波动
+        }
+
+        // 使用全新的真实评分算法
+        let finalQual = calculateRealisticScore(rawQual, aiAdj);
+        
+        // 继承原版生成实体的逻辑... (简化重构)
+        let n = curPj.n; 
+        let t = createEntity(n, ad.s, false, "track", curPj.g.join(), ad.st.f, curPj.v, curPj.w, time.y, time.m, time.w, false, curPj.ff, 1.0, 1.0);
+        t.Spub = finalQual; // 赋上压制后的分数
+        
+        trackPool.push(t);
+        myWorks.push({id:t.id, n:`${n} [单曲]`, slTotal:t.slTotal, revenue:0});
+        
+        alert(`创作完成：${n}！\n最终品质评分：${finalQual}/100\n（AI调整分：${aiAdj}）`);
+        
+        curPj = null;
+        $("boxWriteProgress").style.display="none"; 
+        $("btnStartWriteProj").style.display="block";
+        updAttr(); renderStdMap(); saveGame();
+    };
+}
+// ==================== 补丁：真实乐评概率分布与大佬翻车机制 ====================
+
+window.finishWrite = async function() {
+    if(!curPj || curPj.type!=="write") return;
+    
+    let rawQual = curPj.v + curPj.w; // 原始属性和
+    let roll = Math.random() * 100; // 0-100 的随机数，用于概率判定
+    
+    let scoreRange = [0, 0];
+    let criticComment = "";
+    
+    // 概率分布表 (根据属性不同，落入不同分段的概率不同)
+    if (rawQual >= 200) {
+        // 【大佬/满属性状态】：82.7%几率稳定7-8分，5%几率9分+，剩下的是不同程度的滑铁卢
+        if (roll < 0.5)      { scoreRange = [0, 10]; criticComment = "【乐评人怒喷】：0分！这是灾难！无法忍受的噪音，创作者到底在发什么疯？"; } // 0.5%
+        else if (roll < 1.3) { scoreRange = [20, 29]; criticComment = "【乐评人毒舌】：2分。不知所云的自我沉浸，完全是一场听觉折磨。"; } // 0.8%
+        else if (roll < 2.3) { scoreRange = [30, 39]; criticComment = "【乐评人摇头】：3分。严重的江郎才尽，概念破碎，令人大跌眼镜。"; } // 1.0%
+        else if (roll < 4.3) { scoreRange = [40, 49]; criticComment = "【乐评人差评】：4分。低于水准线太多，这绝对是该歌手生涯的一大污点。"; } // 2.0%
+        else if (roll < 7.3) { scoreRange = [50, 59]; criticComment = "【乐评人失望】：5分。强差人意，有想法但执行得很烂，不及格。"; } // 3.0%
+        else if (roll < 12.3){ scoreRange = [60, 69]; criticComment = "【乐评人平评】：6分。勉强及格的流水线产物，缺乏诚意和惊喜。"; } // 5.0%
+        else if (roll < 95.0){ scoreRange = [70, 89]; criticComment = "【乐评人好评】：发挥稳定，展现了极高的工业水准和个人特色，值得一听。"; } // 82.7%
+        else                 { scoreRange = [90, 100];criticComment = "【乐评人狂赞】：满分神作！绝对的传世经典，无可挑剔的艺术品！"; } // 5.0%
+    } else if (rawQual >= 100) {
+        // 【中坚力量状态】：更容易出平庸/差曲，极小概率出神曲
+        if (roll < 2.0)      { scoreRange = [0, 19]; criticComment = "【乐评人怒喷】：毫无价值的听觉垃圾。"; } 
+        else if (roll < 10.0){ scoreRange = [20, 39]; criticComment = "【乐评人毒舌】：粗制滥造，暴露了创作者能力的短板。"; } 
+        else if (roll < 25.0){ scoreRange = [40, 59]; criticComment = "【乐评人摇头】：不及格，还需要更多打磨。"; } 
+        else if (roll < 55.0){ scoreRange = [60, 69]; criticComment = "【乐评人平评】：中规中矩，听过就忘的平庸之作。"; } 
+        else if (roll < 98.0){ scoreRange = [70, 89]; criticComment = "【乐评人好评】：不错的佳作，有些抓耳的闪光点。"; } 
+        else                 { scoreRange = [90, 100];criticComment = "【乐评人狂赞】：意外的灵感大爆发！小众歌手的逆袭神曲！"; } // 2%的奇迹
+    } else {
+        // 【萌新/低属性状态】：大概率是烂歌，极微小概率出神曲
+        if (roll < 15.0)     { scoreRange = [0, 19]; criticComment = "【乐评人怒喷】：请不要用这种东西来侮辱听众的耳朵。"; } 
+        else if (roll < 45.0){ scoreRange = [20, 39]; criticComment = "【乐评人毒舌】：业余水准，完全没入门。"; } 
+        else if (roll < 75.0){ scoreRange = [40, 59]; criticComment = "【乐评人摇头】：虽然很努力，但依然是不及格的废案。"; } 
+        else if (roll < 94.0){ scoreRange = [60, 69]; criticComment = "【乐评人鼓励】：勉强能听，对于新人来说算是一个起步。"; } 
+        else if (roll < 99.5){ scoreRange = [70, 89]; criticComment = "【乐评人惊讶】：潜力之作！旋律竟然出奇的不错！"; } 
+        else                 { scoreRange = [90, 100];criticComment = "【乐评人狂赞】：天才般的狗屎运！瞎猫碰上死耗子写出的现象级神曲！"; } // 0.5%的奇迹
+    }
+
+    // 在选定的区间内随机生成基础分
+    let baseScore = Math.floor(Math.random() * (scoreRange[1] - scoreRange[0] + 1)) + scoreRange[0];
+    
+    // AI内核加成（有AI依然可以拉高分数，但如果底子是0分，AI也救不回神曲）
+    let aiAdj = 0;
+    if($("apiToken") && $("apiToken").value && curPj.core){
+        try {
+            let r = await api(`我写了一首【${curPj.g.join()}】歌，内核【${curPj.core}】。给修正分(-10到+10整数)。只返JSON: {"score_adj":5}`);
+            if(r) { let j = JSON.parse(r.match(/\{[\s\S]*\}/)[0]); aiAdj = parseInt(j.score_adj)||0; }
+        } catch(e){}
+    } else if (curPj.core) {
+        aiAdj = Math.floor(Math.random() * 6) - 2; 
+    }
+
+    let finalQual = Math.max(0, Math.min(100, baseScore + aiAdj));
+    
+    // 生成实体
+    let n = curPj.n; 
+    let t = createEntity(n, ad.s, false, "track", curPj.g.join(), ad.st.f, curPj.v, curPj.w, time.y, time.m, time.w, false, curPj.ff, 1.0, 1.0);
+    t.Spub = finalQual; 
+    
+    trackPool.push(t);
+    myWorks.push({id:t.id, n:`${n} [单曲]`, slTotal:t.slTotal, revenue:0});
+    
+    alert(`创作完成：${n}！\n最终品质评分：${(finalQual/10).toFixed(1)} / 10.0\n（换算百分制：${finalQual}/100）\n\n${criticComment}`);
+    
+    curPj = null;
+    $("boxWriteProgress").style.display="none"; 
+    $("btnStartWriteProj").style.display="block";
+    updAttr(); renderStdMap(); saveGame();
+};
+// ==================== 补丁：艺人榜单大修、属性补全与注入Bug修复 ====================
+
+const npcTraits = ["阳光开朗", "高冷孤傲", "音乐狂人", "佛系青年", "毒舌傲娇", "平易近人", "神秘莫测", "八面玲珑", "社恐内向", "野心勃勃"];
+
+// 1. 动态在注入界面插入“性格”输入框
+document.addEventListener("DOMContentLoaded", function() {
+    let stageNameInput = document.getElementById("aNpcStageName");
+    if(stageNameInput && !document.getElementById("aNpcPersonality")) {
+        stageNameInput.insertAdjacentHTML('afterend', `<input id="aNpcPersonality" placeholder="性格设定 (选填，AI会据此生成，留空则随机)" style="margin-top:8px;">`);
+    }
+});
+
+// 2. 补全旧存档 NPC 的公司和性格属性
+function checkAndFixNPCs() {
+    worldArtists.forEach(npc => {
+        if(!npc.co) npc.co = Math.random() > 0.35 && coList.length > 0 ? coList[Math.floor(Math.random() * coList.length)].n : "独立";
+        if(!npc.personality) npc.personality = npcTraits[Math.floor(Math.random() * npcTraits.length)];
+    });
+}
+
+// 3. 艺人榜单渲染 (包含玩家自己，按粉丝排行)
+window.renderNpcList = function() {
+    let box = document.getElementById("uiNpcList");
+    if(!box) return;
+    
+    checkAndFixNPCs(); // 确保都有属性
+
+    // 将玩家自己打包成假NPC格式混入大盘
+    let allArtists = [...worldArtists];
+    allArtists.push({
+        id: "player_self",
+        n: ad.s,
+        realName: ad.r,
+        fans: ad.st.f,
+        age: "保密",
+        gender: ad.g,
+        avatar: ad.avatar,
+        isMe: true,
+        co: ad.co,
+        personality: "玩家本人"
+    });
+
+    // 按粉丝总数倒序排名
+    allArtists.sort((a,b) => b.fans - a.fans);
+    
+    box.innerHTML = allArtists.map((npc, idx) => {
+        let fanStr = npc.fans >= 10000 ? (npc.fans/10000).toFixed(1) + "万" : npc.fans;
+        let avatarHtml = npc.avatar ? `<img src="${npc.avatar}" style="width:45px;height:45px;border-radius:50%;object-fit:cover;flex-shrink:0;">` : `<div style="width:45px;height:45px;border-radius:50%;background:${npc.isMe?'#c8a440':'#ddd'};display:flex;align-items:center;justify-content:center;font-size:10px;color:${npc.isMe?'#fff':'#888'};flex-shrink:0;">无图</div>`;
+        let isMeStyle = npc.isMe ? 'border:1px solid #c8a440; background:#fff8e8;' : 'border:1px solid #eee;';
+        let rankColor = idx < 3 ? '#e6683c' : '#888';
+
+        return `
+        <div class="card" style="padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px; ${isMeStyle}">
+            ${avatarHtml}
+            <div style="flex:1;">
+                <b style="font-size:14px;"><span style="color:${rankColor};font-weight:bold;">${idx+1}.</span> ${escapeHTML(npc.n)} ${npc.isMe ? '<span style="font-size:10px;background:#c8a440;color:#fff;padding:2px 4px;border-radius:4px;margin-left:4px;">我</span>' : ''}</b>
+                <span style="font-size:11px;color:#888;margin-left:5px;">${escapeHTML(npc.gender)} | 粉丝: <b style="color:#c8a440;">${fanStr}</b></span>
+                <br><span style="font-size:11px;color:#666;">厂牌: ${escapeHTML(npc.co || '独立音乐人')} | 性格: ${escapeHTML(npc.personality)}</span>
+            </div>
+            ${!npc.isMe ? `<button class="sec inline" style="font-size:12px;padding:6px 10px;background:#111;color:#c8a440;" onclick="openNpcDetail('${npc.id}')">📄 详细</button>` : ''}
+        </div>`;
+    }).join('');
+};
+
+// 4. 艺人详情 UI 追加新属性显示
+let originalOpenNpcDetail = window.openNpcDetail;
+window.openNpcDetail = function(id) {
+    checkAndFixNPCs();
+    originalOpenNpcDetail(id); // 调原版
+    
+    // 用极简方式在生成的 HTML 里强行塞入公司和性格信息
+    let npc = worldArtists.find(x => x.id === id);
+    if(npc) {
+        let contentDiv = document.getElementById("mInfoContent");
+        let extraInfo = `<span style="font-size:11px;color:#888;margin-left:5px;">厂牌: <b>${escapeHTML(npc.co)}</b> | 性格: <b>${escapeHTML(npc.personality)}</b></span><br>`;
+        contentDiv.innerHTML = contentDiv.innerHTML.replace(/(粉丝: <b.*?<\/b>)/, `$1 ${extraInfo}`);
+    }
+};
+
+// 5. 彻底修复注入卡死 Bug，并引入性格 AI 判定
+window.submitCustomNPC = async function() {
+    let btn = document.getElementById("btnCustomNPC");
+    let name = document.getElementById("aNpcName").value.trim();
+    let stageName = document.getElementById("aNpcStageName").value.trim() || name;
+    let gender = document.getElementById("aNpcGender").value.trim() || "未知";
+    let fanName = document.getElementById("aNpcFanName").value.trim() || "";
+    let fans = parseInt(document.getElementById("aNpcFans").value) || 50000;
+    let personality = document.getElementById("aNpcPersonality") ? document.getElementById("aNpcPersonality").value.trim() : "";
+    
+    if(!name) return alert("艺人真实姓名不能为空！");
+    
+    btn.innerText = "正在注入中...";
+    btn.disabled = true;
+
+    let base = Math.min(85, 30 + Math.floor(fans / 2000000) * 10);
+    let newNpc = {
+        id: "npc_custom_" + Date.now(),
+        n: stageName, 
+        realName: name,
+        fanName: fanName,
+        fans: fans,
+        age: 20 + Math.floor(Math.random() * 10),
+        gender: gender,
+        alb: "Debut Album",
+        bnaSubmissions: 0,
+        bio: "",
+        co: Math.random() > 0.35 && coList.length > 0 ? coList[Math.floor(Math.random() * coList.length)].n : "独立",
+        personality: personality || npcTraits[Math.floor(Math.random() * npcTraits.length)],
+        sk: {
+            v: Math.max(1, Math.min(100, Math.floor(Math.random()*30) + base - 10)),
+            d: Math.max(1, Math.min(100, Math.floor(Math.random()*40) + base - 15)),
+            r: Math.max(1, Math.min(100, Math.floor(Math.random()*40) + base - 20)),
+            w: Math.max(1, Math.min(100, Math.floor(Math.random()*50) + base - 20)),
+            f: Math.max(1, Math.min(100, Math.floor(Math.random()*30) + base)),
+            s: Math.max(1, Math.min(100, Math.floor(Math.random()*30) + base - 5)),
+            fa: Math.max(1, Math.min(100, Math.floor(Math.random()*30) + base - 10)),
+            va: Math.max(1, Math.min(100, Math.floor(Math.random()*40) + base - 10))
+        }
+    };
+    
+    let tk = document.getElementById("apiToken") ? document.getElementById("apiToken").value : "";
+    
+    if (tk) {
+        let prompt = `请为一位新出道的歌手生成简短的背景故事。
+        姓名：${name}，艺名：${stageName}，性别：${gender}，粉丝名：${fanName||"无"}。
+        ${personality ? `指定性格特点：${personality}。` : ''}
+        请提供一段50字左右的生平简介，TA的最终性格词，并为TA创作一首出道单曲的名字。
+        返回严格的JSON格式：{"bio": "简介内容...", "personality": "最终性格词", "debut_song": "歌曲名", "genre": "流行"}`;
+        
+        try {
+            let r = await api(prompt);
+            if (r) {
+                let match = r.match(/\{[\s\S]*\}/);
+                if (match) {
+                    let j = JSON.parse(match[0]);
+                    newNpc.bio = escapeHTML(j.bio);
+                    if(j.personality) newNpc.personality = escapeHTML(j.personality);
+                    let songName = escapeHTML(j.debut_song || "Debut Single");
+                    let songGenre = j.genre || "流行";
+                    
+                    let newTrack = createEntity(songName, stageName, false, "track", songGenre, fans, 60, 60, time.y, time.m, time.w);
+                    trackPool.push(newTrack);
+                    
+                    alert(`🎉 成功注入艺人【${stageName}】！\n性格: ${newNpc.personality}\n📝 AI生成背景：${newNpc.bio}\n🎵 并且发行了出道作《${songName}》！`);
+                } else throw new Error("Format");
+            }
+        } catch(e) {
+            alert(`🎉 成功注入空壳艺人【${stageName}】！(AI生成失败，未产生出道作品)`);
+        }
+    } else {
+        alert(`🎉 成功注入空壳艺人【${stageName}】！(未连接API，作为白纸艺人等待后续发展)`);
+    }
+
+    worldArtists.push(newNpc);
+    
+    // 恢复按钮状态并清空输入框 (修复卡死的核心)
+    btn.innerText = "单体注入大盘";
+    btn.disabled = false;
+    
+    document.getElementById("aNpcName").value = "";
+    document.getElementById("aNpcStageName").value = "";
+    document.getElementById("aNpcGender").value = "";
+    document.getElementById("aNpcFanName").value = "";
+    document.getElementById("aNpcFans").value = "";
+    if(document.getElementById("aNpcPersonality")) document.getElementById("aNpcPersonality").value = "";
+
+    renderNpcList();
+    saveGame();
+};
+// ==================== 补丁：修复注入合作刷新、头像重传与 AI 取名报错 ====================
+
+// 1. 修复 AI 取名报错 (补全丢失的 aiGenName 函数)
+window.aiGenName = async function(type, targetId) {
+    let tk = document.getElementById("apiToken") ? document.getElementById("apiToken").value : "";
+    let btn = event.target;
+    let oldText = btn.innerText;
+    btn.innerText = "生成中...";
+    btn.disabled = true;
+
+    if (tk) {
+        let prompt = type === 'song' 
+            ? "请为一首新歌曲起一个极具流行潜质、抓耳的英文歌名，直接返回纯文本歌名，不需要带引号和中文翻译，不要废话。" 
+            : "请为一张新专辑起一个高级、有概念感的英文专辑名，直接返回纯文本专辑名，不需要带引号和中文翻译，不要废话。";
+        
+        let res = await api(prompt);
+        btn.innerText = oldText;
+        btn.disabled = false;
+        
+        if (res) {
+            // 清理多余的引号或书名号
+            document.getElementById(targetId).value = res.replace(/["'《》【】]/g, "").trim();
+            return;
+        }
+    } 
+    
+    // 如果没有配置 API 或请求失败的本地备选库
+    btn.innerText = oldText;
+    btn.disabled = false;
+    let randomNames = type === 'song' 
+        ? ["Midnight Dream", "Neon Shadows", "Echoes", "Toxic Lover", "Golden Hour", "Cruel Summer"]
+        : ["The Dark Side", "Velvet Sky", "Rebel Heart", "Folklore", "Future Nostalgia", "1989"];
+    let rName = randomNames[Math.floor(Math.random() * randomNames.length)];
+    document.getElementById(targetId).value = rName;
+    if(!tk) alert("⚠️ 未配置 AI 密钥，已为您随机分配备用名！");
+};
+
+// 2. 修复头像无法再次更换的 Bug
+window.uploadMyAvatar = function(input) {
+    if (input.files && input.files[0]) {
+        processAvatarUpload(input.files[0], function(base64) {
+            ad.avatar = base64;
+            updAttr();
+            saveGame();
+            alert("✅ 头像上传/更换成功！");
+        });
+    }
+    // 核心修复：清空 file input 的 value，这样下次点同样的图片也能触发 onchange
+    input.value = ""; 
+};
+
+// 3. 修复注入艺人后，下拉列表不更新的 Bug
+// 拦截原版的单体注入函数，在成功后强行刷新一下 feat 列表
+let oldSubmitCustomNPC = window.submitCustomNPC;
+window.submitCustomNPC = async function() {
+    await oldSubmitCustomNPC(); 
+    // 刷新大盘下拉列表
+    if(typeof updateFeatList === 'function') {
+        updateFeatList();
+    }
+};
+
+// 拦截批量生成函数，在成功后也强行刷新 feat 列表
+let oldBatchGenNpc = window.batchGenNpc;
+window.batchGenNpc = function() {
+    oldBatchGenNpc();
+    if(typeof updateFeatList === 'function') {
+        updateFeatList();
+    }
+};
 
 // ==================== 代码结束 ====================
 </script>

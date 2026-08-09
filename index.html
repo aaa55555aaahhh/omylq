@@ -736,8 +736,7 @@ window.checkLoginPwd = function() {
     alert("登录成功！进入大厅。");
     
     // 强制关闭所有弹窗并切换页面
-    document.querySelectorAll('.modal').forEach(m => m.classList.remove('open'));
-    document.getElementById("loginPage").classList.remove("active");
+      document.getElementById("loginPage").classList.remove("active");
     document.getElementById("loginPage").style.display = "none";
     
     let createPage = document.getElementById("createPage");
@@ -4675,47 +4674,6 @@ window.doTVPromo = function(showName){
     document.getElementById("mPick").classList.add("open"); 
 };
 
-// ==================== 补丁：立项后自动清空输入框与标签 ====================
-
-// 1. 重写单曲立项逻辑，加入清空功能
-window.startWrite = function(){ 
-    if(curPj) return alert("有正在进行的企划！"); 
-    if(!costEnergy(10)) return; 
-    
-    let n = escapeHTML($("inSName").value) || "Demo"; 
-    let featType = document.getElementById("inFeatType") ? document.getElementById("inFeatType").value : "Feat.";
-    let ff = escapeHTML($("inFeat")?$("inFeat").value:"") || ""; 
-    
-    if(featType === "Solo") { ff = ""; } // 独唱清空合唱歌手
-    else if(ff !== "") { n += ` (${featType} ${ff})`; }
-    
-    let core = escapeHTML(document.getElementById("inSCore") ? document.getElementById("inSCore").value : "");
-    let customGenre = $("inSCustom").value.trim();
-    if(customGenre) selG.push(customGenre);
-    if(selG.length === 0) selG.push("流行"); // 保底曲风
-
-    curPj = {type: "write", n: n, g: [...selG], c: escapeHTML($("inSCustom").value), core: core, ff: ff}; 
-    prog=0; 
-    $("txtProg").innerText="0%"; 
-    $("barProg").style.width="0%"; 
-    $("boxWriteProgress").style.display="block"; 
-    $("btnStartWriteProj").style.display="none"; 
-    
-    // 【核心修复】：立项成功后，自动清空所有相关输入框
-    $("inSName").value = "";
-    if($("inFeat")) $("inFeat").value = "";
-    if($("inSCustom")) $("inSCustom").value = "";
-    if($("inSCore")) $("inSCore").value = "";
-    if($("selFeatHelper")) $("selFeatHelper").value = ""; // 清空大盘选择器
-    
-    // 清空选中的曲风标签UI状态
-    selG = [];
-    let sTags = document.getElementById("boxSGenre").querySelectorAll('.g-tag');
-    sTags.forEach(tag => tag.classList.remove('selected'));
-
-    alert(`企划立项：${n}。已扣除10精力。`); 
-    saveGame(); 
-}
 
 // 2. 重写专辑立项逻辑，加入清空功能
 window.startAlbum = function(){ 
@@ -5767,27 +5725,24 @@ window.renderMultiAlbumStudio = function() {
 // 新建文件夹
 window.createNewAlbumPj = function() {
     if(!costEnergy(10)) return;
-    gamePrompt("新专立项", "请输入新专辑的名称和概念（空格隔开，如：1989 流行变革）", "未命名专辑", function(val){
-        if(!val) return;
-        let parts = val.split(' ');
-        let aName = parts[0] || "Album";
-        let aCore = parts[1] || "无";
-        
-        ad.multiAlbPjs.push({
-            id: "alb_m_" + Date.now(),
-            n: aName,
-            g: ["流行"], // 默认主流行，可被单曲成分影响
-            core: aCore,
-            s: [], 
-            hype: 1.0, 
-            singleCount: 0
+    // 第一步：输入专辑名
+    gamePrompt("新专立项 (1/2)", "请输入新专辑的名称：", "未命名专辑", function(aName){
+        if(!aName) return;
+        // 第二步：输入概念内核
+        gamePrompt("新专立项 (2/2)", "请输入新专的概念内核（选填，留空则为无）：", "", function(aCore){
+            ad.multiAlbPjs.push({
+                id: "alb_m_" + Date.now(),
+                n: aName.trim(),
+                g: ["流行"], 
+                core: aCore.trim() || "无",
+                s: [], hype: 1.0, singleCount: 0
+            });
+            alert(`📁 成功建立专辑档案：${aName}！`);
+            renderMultiAlbumStudio();
+            saveGame();
         });
-        alert(`📁 成功建立专辑档案：${aName}！`);
-        renderMultiAlbumStudio();
-        saveGame();
     });
 };
-
 // 收录进指定专辑
 window.addTrkToMultiAlb = function(idx) {
     let sel = document.getElementById("sel_m_trk_" + idx);
@@ -7913,23 +7868,22 @@ window.confirmPerformance = function() {
 // ==================== 终极修补：美观密码页与正确的大厅控制 ====================
 
 document.addEventListener('DOMContentLoaded', function() {
-    // 隐藏主游戏界面
-    let gameMain = document.getElementById('gameMain');
-    if(gameMain) { gameMain.classList.remove('active'); gameMain.style.display = 'none'; }
-    
+    // 检查是否已经免密解锁过
     let isUnlocked = localStorage.getItem("starPro_is_unlocked");
     
     if (isUnlocked === "true") {
-        // 已经免密过，直接隐藏密码页，显示创建大厅
-        document.getElementById('loginPage').style.display = 'none';
-        document.getElementById('createPage').style.display = 'block';
+        // 已经免密过，直接显示创建/读档大厅，隐藏密码页
+        let lp = document.getElementById('loginPage');
+        if(lp) { lp.style.display = 'none'; lp.classList.remove('active'); }
+        
+        let cp = document.getElementById('createPage');
+        if(cp) { cp.style.display = 'block'; cp.classList.add('active'); }
     } else {
-        // 没免密，显示密码页，隐藏创建大厅
-        document.getElementById('loginPage').style.display = 'flex';
-        document.getElementById('createPage').style.display = 'none';
+        // 没免密，显示密码页，其他先不强制设为 none，因为 css 默认就是 none
+        let lp = document.getElementById('loginPage');
+        if(lp) { lp.style.display = 'flex'; lp.classList.add('active'); }
     }
 });
-
 
 // 手动读取存档逻辑
 window.mainMenuLoad = function() {
@@ -9273,7 +9227,7 @@ window.checkLoginPwd = function() {
     } catch (e) {}
     
     alert("登录成功！进入大厅。");
-    document.querySelectorAll('.modal').forEach(m => m.classList.remove('open'));
+
     document.getElementById("loginPage").classList.remove("active");
     document.getElementById("loginPage").style.display = "none";
     
@@ -9378,31 +9332,6 @@ document.addEventListener("DOMContentLoaded", function() {
             `<p style="font-size:10px;color:#888;margin-bottom:10px;">(例：0.15代表每发一张专辑有15%概率出豪华版)</p>`);
     }
 });
-var oldUpdateAlbProjUI = window.updateAlbProjUI;
-window.updateAlbProjUI = function() {
-    if(curAlbPj){ 
-        $("boxNewAlb").style.display="none"; 
-        $("boxWipAlb").style.display="block"; 
-        $("txtWipName").innerText = "💿 " + curAlbPj.n; 
-        $("txtWipCore").innerText = "内核: " + curAlbPj.core; 
-        $("txtWipHype").innerText = curAlbPj.hype.toFixed(2); 
-        $("txtWipPre").innerText = (curAlbPj.singleCount||0) + " 主打 / " + curAlbPj.preCount + " 宣传"; 
-        $("boxWipSongs").innerHTML = "<b>已选曲目:</b><br>" + curAlbPj.s.map(function(x){
-            let lbl = x.singleLabel ? ` <span style="color:#8e44ad;font-size:11px;">[${x.singleLabel}]</span>` : "";
-            return escapeHTML(x.n) + lbl + (x.released?" <span style='color:#c8a440'>(已发)</span>":"");
-        }).join('<br>'); 
-        
-        // 【新增】：在这个面板注入预热按钮（如果没有的话）
-        if(!document.getElementById("btnHypeWipAlbum")) {
-            $("txtWipName").insertAdjacentHTML('beforeend', 
-                `<button id="btnHypeWipAlbum" class="sec inline" style="float:right; font-size:11px; padding:4px 8px; margin-top:-4px;" onclick="hypeCurrentAlbum()">🔥 预热宣传</button>`
-            );
-        }
-    } else { 
-        $("boxNewAlb").style.display="block"; 
-        $("boxWipAlb").style.display="none"; 
-    } 
-};
 
 window.hypeCurrentAlbum = function() {
     if(!curAlbPj) return;
@@ -11055,6 +10984,12 @@ window.renderChart = function() {
                 let sea = Math.floor(baseStm / 1500);
                 t._chartPts = pureSales + sea;
                 t._chartStr = t._chartPts.toLocaleString() + " EAU";
+                
+                // 算出专辑的成分比例
+                let totalVal = t._chartPts < 1 ? 1 : t._chartPts;
+                t._pctSales = Math.round((pureSales / totalVal) * 100);
+                t._pctStm = Math.round((sea / totalVal) * 100);
+                t._pctRadio = 0; // 专辑没有电台点数
             } else {
                 // 单曲：严格控制 B榜 拟真点数
                 let stmUSWeek = t.stmUS_Week || 0;
@@ -11071,7 +11006,6 @@ window.renderChart = function() {
                 
                 let totalPts = ptsSales + ptsStm + ptsRadio;
                 
-                // 【核心修复】：删除原来那个 pts < 1 赋予随机数的代码，直接 Math.floor
                 t._bbPtsExact = Math.floor(totalPts);
                 // 强制修正异常数据
                 if(isNaN(t._bbPtsExact) || t._bbPtsExact < 0) t._bbPtsExact = 0;
@@ -11080,7 +11014,7 @@ window.renderChart = function() {
                 t._chartStr = t._chartPts.toLocaleString() + " Pts";
             }
         } 
-        else if (curChartPlatform === 'Sale') {
+         else if (curChartPlatform === 'Sale') {
             let totalSales = Math.floor((t.stmGlobal||0) / 150); 
             if (curChTime === 'Day') t._chartPts = Math.floor((t.stmGlobal_Day||0) / 150);
             else if (curChTime === 'Week') t._chartPts = Math.floor((t.stmGlobal_Week||0)/150);
@@ -11990,85 +11924,104 @@ window.renderAlb = function() {
     }
 };
 
-// 3. 修复：恢复 Billboard 单曲榜的三色构成比例条
+// 3. 修复：恢复 Billboard 榜单的三色构成比例条 (已兼容专辑榜与单曲榜)
 var oldRenderChartForBBMix = window.renderChart;
 window.renderChart = function() {
     // 调一次原版的渲染以获取走势箭头
     oldRenderChartForBBMix();
     
-    // 如果当前打开的是 Billboard，且是单曲榜或日增，追加覆盖处理比例条
-    if (curChartPlatform === 'BB' && (curChType === 'track' || curChType === 'daily')) {
+    // 如果当前打开的是 Billboard，追加覆盖处理比例条
+    if (curChartPlatform === 'BB' && ['track', 'daily', 'album', 'album_daily'].includes(curChType)) {
         let isUS = (curChReg === 'US');
-        let trks = trackPool.filter(x => x.type === "track");
+        let isAlbum = (curChType === 'album' || curChType === 'album_daily');
+        let trks = trackPool.filter(x => isAlbum ? x.type === "album" : x.type === "track");
         
         trks.forEach(t => {
+            let stmGlobal = t.stmGlobal_Week || Math.floor(t.stmGlobal/7) || 0;
             let stmUS = t.stmUS_Week || Math.floor(t.stmUS/7) || 0;
-            let pureSales = Math.floor((t.stmGlobal_Week || 0) / 150) * (t.price || 1); 
-            let radio = t.radioAud || 0;
-            
-            // 点数公式换算与分布
-            let ptsSales = pureSales / 150;
-            let ptsStm = stmUS / 15000;
-            let ptsRadio = radio * 3;
-            
-            let totalPts = ptsSales + ptsStm + ptsRadio;
-            if (totalPts < 1) totalPts = 1;
-            t._bbPtsExact = Math.floor(totalPts);
-            
-            t._pctSales = Math.round((ptsSales / totalPts) * 100);
-            t._pctStm = Math.round((ptsStm / totalPts) * 100);
-            t._pctRadio = Math.round((ptsRadio / totalPts) * 100);
-            
-            // Payola 检测
-            if (t.isMe && t._pctRadio > 50 && totalPts > 100 && !t.radioScandal) {
-                posts.mom.unshift({ 
-                    t: `🔥 【惊天丑闻】${ad.s} 电台Payola实锤！`, 
-                    c: `大家快看B榜构成！《${t.n}》电台占比居然高达 ${t._pctRadio}%！流媒和销量全在下水道，全靠资本塞钱给电台洗脑，太恶心了！` 
-                });
-                t.radioScandal = true;
-                ad.st.f -= Math.floor(ad.st.f * 0.05);
+            if(curChTime === 'Day') { stmGlobal = t.stmGlobal_Day || 0; stmUS = t.stmUS_Day || 0; }
+            else if(curChTime === 'Week') { stmGlobal = t.stmGlobal_Week || 0; stmUS = t.stmUS_Week || 0; }
+            else if(curChTime === 'Decade') { stmGlobal = t.stmGlobal || 0; stmUS = t.stmUS || 0; }
+
+            let baseStm = isUS ? stmUS : stmGlobal;
+
+            if (isAlbum) {
+                // 专辑成分计算：纯实销 + 流媒折算(SEA)
+                let pureSales = Math.floor(baseStm / 1500) * (t.price || 10); 
+                let sea = Math.floor(baseStm / 1500); // 假设1500流媒=1专辑销量
+                
+                let totalPts = pureSales + sea;
+                if (totalPts < 1) totalPts = 1;
+                t._bbPtsExact = Math.floor(totalPts);
+                
+                // 占比计算
+                t._pctSales = Math.round((pureSales / totalPts) * 100);
+                t._pctStm = Math.round((sea / totalPts) * 100);
+                t._pctRadio = 0; // 专辑榜不计电台
+            } else {
+                // 单曲成分计算：实销 + 流媒 + 电台
+                let pureSales = Math.floor((t.stmGlobal_Week || 0) / 150) * (t.price || 1); 
+                let radio = t.radioAud || 0;
+                
+                let ptsSales = pureSales / 150;
+                let ptsStm = stmUS / 15000;
+                let ptsRadio = radio * 3;
+                
+                let totalPts = ptsSales + ptsStm + ptsRadio;
+                if (totalPts < 1) totalPts = 1;
+                t._bbPtsExact = Math.floor(totalPts);
+                
+                t._pctSales = Math.round((ptsSales / totalPts) * 100);
+                t._pctStm = Math.round((ptsStm / totalPts) * 100);
+                t._pctRadio = Math.round((ptsRadio / totalPts) * 100);
+                
+                // Payola 检测 (单曲专属)
+                if (t.isMe && t._pctRadio > 50 && totalPts > 100 && !t.radioScandal) {
+                    posts.mom.unshift({ 
+                        t: `🔥 【惊天丑闻】${ad.s} 电台Payola实锤！`, 
+                        c: `大家快看B榜构成！《${t.n}》电台占比居然高达 ${t._pctRadio}%！流媒和销量全在下水道，全靠资本塞钱给电台洗脑，太恶心了！` 
+                    });
+                    t.radioScandal = true;
+                    ad.st.f -= Math.floor(ad.st.f * 0.05);
+                }
             }
         });
         
         trks.sort((a,b) => b._bbPtsExact - a._bbPtsExact);
         
         let box = document.getElementById("mChartContent");
-        box.innerHTML = trks.slice(0, 100).map((t, i) => {
+        let maxDisplay = isAlbum ? 200 : 100;
+        
+        box.innerHTML = trks.slice(0, maxDisplay).map((t, i) => {
             let currentRank = i + 1;
             let isMe = t.isMe ? 'background:#fff8e8;border-left:3px solid #c8a440;' : 'background:#fff;';
             let peakVal = (curChReg === 'US') ? t.peakB : t.peakS;
             let peakStr = peakVal ? `最高: #${peakVal} | 在榜: ${t.weeks||1}周` : `在榜: ${t.weeks||1}周`;
             
-                    let trendHtml = "";
-        if (t.weeks <= 1) {
-            // 新曲：绿色 NEW
-            trendHtml = `<span style="color:#25d366; font-weight:bold; font-size:10px;">NEW</span>`;
-        } else {
-            // 获取上周排名
-            let lastRank = t.trendChart && t.trendChart.length > 0 ? t.trendChart[t.trendChart.length - 1] : (t.lastW || currentRank);
-            let diff = lastRank - currentRank;
-            
-            if (diff > 0) {
-                // 上升：蓝色
-                trendHtml = `<span style="color:#0055ff; font-weight:bold; font-size:10px;">▲ ${diff}</span>`;
-            } else if (diff < 0) {
-                // 下降：红色
-                trendHtml = `<span style="color:#ff0000; font-weight:bold; font-size:10px;">▼ ${Math.abs(diff)}</span>`;
+            let trendHtml = "";
+            if (t.weeks <= 1) {
+                trendHtml = `<span style="color:#25d366; font-weight:bold; font-size:10px;">NEW</span>`;
             } else {
-                // 持平：灰色横杠
-                trendHtml = `<span style="color:#888888; font-weight:bold; font-size:10px;">-</span>`;
+                let lastRank = t.trendChart && t.trendChart.length > 0 ? t.trendChart[t.trendChart.length - 1] : (t.lastW || currentRank);
+                let diff = lastRank - currentRank;
+                if (diff > 0) trendHtml = `<span style="color:#0055ff; font-weight:bold; font-size:10px;">▲ ${diff}</span>`;
+                else if (diff < 0) trendHtml = `<span style="color:#ff0000; font-weight:bold; font-size:10px;">▼ ${Math.abs(diff)}</span>`;
+                else trendHtml = `<span style="color:#888888; font-weight:bold; font-size:10px;">-</span>`;
             }
-        }
 
-            let detailBtn = (t.isMe && t.type === 'track') ? `<br><button class="sec inline" style="padding:2px 6px;font-size:10px;margin-top:4px;" onclick="viewSongStats('${t.id}')">查看歌曲详情</button>` : '';
+            let detailBtn = (t.isMe && t.type === 'track') ? `<br><button class="sec inline" style="padding:2px 6px;font-size:10px;margin-top:4px;" onclick="viewSongStats('${t.id}')">查看单曲详情</button>` : '';
 
-            // 三色比例进度条
+            // 三色比例进度条 (如果是专辑，_pctRadio为0，会自动隐藏紫色电台条)
             let barHtml = `
             <div style="display:flex; width:100%; height:4px; margin-top:4px; border-radius:2px; overflow:hidden;">
                 <div style="width:${t._pctStm}%; background:#25d366;" title="流媒 ${t._pctStm}%"></div>
                 <div style="width:${t._pctSales}%; background:#0055ff;" title="实销 ${t._pctSales}%"></div>
-                <div style="width:${t._pctRadio}%; background:#8b5cf6;" title="电台 ${t._pctRadio}%"></div>
+                ${t._pctRadio > 0 ? `<div style="width:${t._pctRadio}%; background:#8b5cf6;" title="电台 ${t._pctRadio}%"></div>` : ''}
             </div>`;
+
+            let statsStr = isAlbum 
+                ? `<span style="font-size:10px;color:#888;">🎧流媒${t._pctStm}% 🛒实销${t._pctSales}%</span>`
+                : `<span style="font-size:10px;color:#888;">🎧${t._pctStm}% 🛒${t._pctSales}% 📻${t._pctRadio}%</span>`;
 
             return `
             <div style="display:flex;align-items:center;padding:10px;border-bottom:1px solid #eee;${isMe}">
@@ -12083,8 +12036,8 @@ window.renderChart = function() {
                     ${barHtml}
                 </div>
                 <div style="text-align:right;font-size:12px;width:75px;">
-                    <b style="color:#c8a440;">${t._bbPtsExact.toLocaleString()} Pts</b><br>
-                    <span style="font-size:10px;color:#888;">🎧${t._pctStm}% 🛒${t._pctSales}% 📻${t._pctRadio}%</span>
+                    <b style="color:#c8a440;">${t._bbPtsExact.toLocaleString()} ${isAlbum ? 'EAU' : 'Pts'}</b><br>
+                    ${statsStr}
                 </div>
             </div>`;
         }).join('') || "<p style='text-align:center;color:#888;'>暂无数据</p>";
@@ -12848,6 +12801,112 @@ window.updAttr = function() {
 };
 // 立即执行一次刷新恢复界面
 setTimeout(() => { if(typeof updAttr === 'function') updAttr(); }, 800);
+// ==================== 终极修补：解决 Null Style 报错与两步走输入 ====================
+
+// 1. 彻底覆盖报错的 updateAlbProjUI 函数，加入极为严苛的安全判定
+window.updateAlbProjUI = function() {
+    if(curAlbPj) {
+        if(document.getElementById("boxNewAlb")) document.getElementById("boxNewAlb").style.display = "none";
+        if(document.getElementById("boxWipAlb")) document.getElementById("boxWipAlb").style.display = "block";
+        if(document.getElementById("txtWipName")) document.getElementById("txtWipName").innerText = "💿 " + curAlbPj.n;
+        if(document.getElementById("txtWipCore")) document.getElementById("txtWipCore").innerText = "内核: " + curAlbPj.core;
+        if(document.getElementById("txtWipHype")) document.getElementById("txtWipHype").innerText = curAlbPj.hype.toFixed(2);
+        if(document.getElementById("txtWipPre")) document.getElementById("txtWipPre").innerText = (curAlbPj.singleCount || 0) + " 主打 / " + curAlbPj.preCount + " 宣传";
+        
+        let wipBox = document.getElementById("boxWipSongs");
+        if(wipBox) {
+            wipBox.innerHTML = "<b>已选曲目:</b><br>" + curAlbPj.s.map(function(x){
+                let lbl = x.singleLabel ? ` <span style="color:#8e44ad;font-size:11px;">[${x.singleLabel}]</span>` : "";
+                return escapeHTML(x.n) + lbl + (x.released ? " <span style='color:#c8a440'>(已发)</span>" : "");
+            }).join('<br>');
+        }
+        
+        // 确保预热按钮存在
+        let txtWipName = document.getElementById("txtWipName");
+        if(txtWipName && !document.getElementById("btnHypeWipAlbum")) {
+            txtWipName.insertAdjacentHTML('beforeend', 
+                `<button id="btnHypeWipAlbum" class="sec inline" style="float:right; font-size:11px; padding:4px 8px; margin-top:-4px;" onclick="hypeCurrentAlbum()">🔥 预热宣传</button>`
+            );
+        }
+    } else {
+        if(document.getElementById("boxNewAlb")) document.getElementById("boxNewAlb").style.display = "block";
+        if(document.getElementById("boxWipAlb")) document.getElementById("boxWipAlb").style.display = "none";
+    }
+};
+
+// 2. 多专辑中心彻底改为弹窗式的“两步走输入”
+window.createNewAlbumPj = function() {
+    if(!costEnergy(10)) return;
+    
+    // 第一步：填专辑名字
+    gamePrompt("新专立项 (1/2)", "请输入新专辑的名称：", "未命名专辑", function(aName){
+        if(!aName || aName.trim() === "") return;
+        
+        // 必须设置短暂延迟，防止两个 gamePrompt 弹窗动画抢夺焦点导致输入框消失
+        setTimeout(() => {
+            // 第二步：填内核
+            gamePrompt("新专立项 (2/2)", "请输入新专的概念内核（选填，留空则为无）：", "", function(aCore){
+                if(!ad.multiAlbPjs) ad.multiAlbPjs = [];
+                ad.multiAlbPjs.push({
+                    id: "alb_m_" + Date.now(),
+                    n: aName.trim(),
+                    g: ["流行"], 
+                    core: aCore.trim() || "无",
+                    s: [], 
+                    hype: 1.0, 
+                    singleCount: 0
+                });
+                alert(`📁 成功建立专辑档案：${aName}！`);
+                if(typeof renderMultiAlbumStudio === 'function') renderMultiAlbumStudio();
+                saveGame();
+            });
+        }, 400);
+    });
+};
+
+// 3. 单曲创作中心彻底改为弹窗式的“两步走输入”
+window.startWrite = function() { 
+    if(curPj) return alert("⚠️ 有正在进行的企划，请先完成！"); 
+    if(!costEnergy(10)) return; 
+    
+    // 第一步：歌名
+    gamePrompt("单曲创作 (1/2)", "请输入你要创作的单曲名称：", "Demo", function(sName){
+        if(!sName || sName.trim() === "") return;
+        
+        setTimeout(() => {
+            // 第二步：内核
+            gamePrompt("单曲创作 (2/2)", "请输入歌曲概念内核（选填）：", "", function(sCore){
+                
+                let featType = document.getElementById("inFeatType") ? document.getElementById("inFeatType").value : "Feat.";
+                let ff = document.getElementById("inFeat") ? document.getElementById("inFeat").value : ""; 
+                
+                if(featType === "Solo") ff = ""; 
+                else if(ff !== "") sName += ` (${featType} ${ff})`; 
+                
+                if(selG.length === 0) selG.push("流行");
+
+                curPj = {type: "write", n: sName, g: [...selG], c: "", core: sCore || "无", ff: ff}; 
+                prog = 0; 
+                
+                if(document.getElementById("txtProg")) document.getElementById("txtProg").innerText = "0%"; 
+                if(document.getElementById("barProg")) document.getElementById("barProg").style.width = "0%"; 
+                if(document.getElementById("boxWriteProgress")) document.getElementById("boxWriteProgress").style.display = "block"; 
+                if(document.getElementById("btnStartWriteProj")) document.getElementById("btnStartWriteProj").style.display = "none"; 
+                
+                // 清理表单
+                if(document.getElementById("inSName")) document.getElementById("inSName").value = "";
+                if(document.getElementById("inFeat")) document.getElementById("inFeat").value = "";
+                
+                selG = [];
+                let sTags = document.querySelectorAll("#boxSGenre .g-tag");
+                sTags.forEach(tag => tag.classList.remove('selected'));
+
+                alert(`企划立项：${sName}。已扣除10精力。`); 
+                saveGame(); 
+            });
+        }, 400);
+    });
+};
 
 // ==================== 代码结束 ====================
 </script>

@@ -1147,12 +1147,32 @@ setTimeout(function installFinalUserRequestedFixes(){
         $("mGameInput").classList.add("open");
     };
 
+    function awardSubmitLead(awd){return Math.max(1,Math.min(11,Number(awd&&awd.submitLeadMonths)||2));}
+    function awardSubmitYear(awd,y,m){
+        var submitMonth=getOffsetMonthFinal(awd.month||12,awardSubmitLead(awd));
+        return submitMonth>(awd.month||12)?y+1:y;
+    }
+    function awardDeadlineState(awd){
+        var submitMonth=getOffsetMonthFinal(awd.month||12,awardSubmitLead(awd)),week=Math.max(1,Math.min(4,Number(awd.deadlineWeek)||4)),day=Math.max(1,Math.min(7,Number(awd.deadlineDay)||7));
+        var closed=time.m!==submitMonth||Number(time.w||1)>week||(Number(time.w||1)===week&&Number(time.d||1)>day);
+        return {month:submitMonth,week:week,day:day,closed:closed,label:submitMonth+"月第"+week+"周第"+day+"天"};
+    }
+    function awardSubmissionFor(awd,year){
+        ensureAwardDataFinal();var key=year+"_"+awd.id,sub=ad.awardData.submissions[key]||(ad.awardData.submissions[key]={});
+        if(!sub.categories)sub.categories={};
+        A(awd.categories).forEach(function(cat){
+            if(sub.categories[cat.id])return;
+            var legacy=cat.targetType==="track"?sub.track:cat.targetType==="album"?sub.album:cat.targetType==="mv"?sub.mv:cat.targetType==="cover"?sub.cover:cat.targetType==="artist"?(sub.artist?"player_self":""):"";
+            sub.categories[cat.id]=legacy?[legacy]:[];
+        });
+        return sub;
+    }
     window.getCurrentAwardStageInfo = function(){
         var curM = time.m, curY = time.y;
         var regs = A(awardRegistry);
         return {
             y: curY, m: curM,
-            submit: regs.filter(function(a){return getOffsetMonthFinal(a.month||12,2) === curM;}),
+            submit: regs.filter(function(a){return getOffsetMonthFinal(a.month||12,awardSubmitLead(a)) === curM;}),
             nomination: regs.filter(function(a){return getOffsetMonthFinal(a.month||12,1) === curM;}),
             ceremony: regs.filter(function(a){return (a.month||12) === curM;})
         };
@@ -1164,31 +1184,23 @@ setTimeout(function installFinalUserRequestedFixes(){
         if(awardId) awds = A(awardRegistry).filter(function(a){return a.id===awardId;});
         var tracks = A(trackPool).filter(function(t){return t && t.isMe && t.type==="track";}).slice().sort(function(a,b){return (b._entityCreatedAt||0)-(a._entityCreatedAt||0);});
         var albums = A(trackPool).filter(function(t){return t && t.isMe && t.type==="album";}).slice().sort(function(a,b){return (b._entityCreatedAt||0)-(a._entityCreatedAt||0);});
-        var html = `<p style="font-size:12px;color:#666;">每个奖项最多报名 1 首歌、1 张专辑、1 支 MV；艺人奖默认报名你本人。</p>`;
+        var html = `<div class="card" style="font-size:12px;line-height:1.7;background:#f0f9ff;border-color:#7dd3fc;"><b>报名规则</b><br>每个分支奖项独立申报，不限制同一作品参与其他分支。歌曲类允许同一类别申报多首，但同一艺人在同类别申报越多，分票越明显；主流厂牌通常只投最优的 2–3 首。</div>`;
         html += awds.map(function(awd,i){
-            var key = (time.y)+"_"+awd.id, sub = ad.awardData.submissions[key] || {};
+            var year=awardSubmitYear(awd,time.y,time.m),sub=awardSubmissionFor(awd,year),deadline=awardDeadlineState(awd),cats=A(awd.categories);if(!cats.length)cats=[{id:"main",name:"综合大奖",targetType:"track"}];
             var covers = albums.map(function(t){return {id:"album:"+t.id,n:t.n+"（专辑封面）"};}).concat(tracks.filter(function(t){return t.isTitleSingle||t.hasRealMV||(ad.covers&&ad.covers.tracks&&ad.covers.tracks[t.id]);}).map(function(t){return {id:"track:"+t.id,n:t.n+"（单曲封面）"};}));
-            return `<div class="card"><b>${E(awd.name)}</b><br>
-                <label style="font-size:12px;">歌曲</label><select id="finalSubTrack_${i}"><option value="">不报名歌曲</option>${tracks.map(function(t){return `<option value="${t.id}" ${sub.track===t.id?"selected":""}>${E(t.n)}</option>`;}).join("")}</select>
-                <label style="font-size:12px;">专辑</label><select id="finalSubAlbum_${i}"><option value="">不报名专辑</option>${albums.map(function(t){return `<option value="${t.id}" ${sub.album===t.id?"selected":""}>${E(t.n)}</option>`;}).join("")}</select>
-                <label style="font-size:12px;">MV</label><select id="finalSubMV_${i}"><option value="">不报名MV</option>${tracks.filter(function(t){return t.mvN>0||t.hasRealMV||t.hasLyricMV;}).map(function(t){return `<option value="${t.id}" ${sub.mv===t.id?"selected":""}>${E(t.n)}</option>`;}).join("")}</select>
-                <label style="font-size:12px;">封面</label><select id="finalSubCover_${i}"><option value="">不报名封面</option>${covers.map(function(c){return `<option value="${c.id}" ${sub.cover===c.id?"selected":""}>${E(c.n)}</option>`;}).join("")}</select>
-                <button onclick="saveFinalAwardSubmission('${awd.id}',${i})">保存报名</button></div>`;
+            function choices(cat){var list=cat.targetType==="album"?albums:cat.targetType==="cover"?covers:cat.targetType==="mv"?tracks.filter(function(t){return t.mvN>0||t.hasRealMV||t.hasLyricMV;}):tracks,selected=A(sub.categories[cat.id]);if(cat.targetType==="artist")return `<label style="display:flex;align-items:center;gap:7px;font-size:12px;"><input class="awardCategoryEntry" data-cat="${cat.id}" type="checkbox" value="player_self" ${selected.indexOf("player_self")>=0?"checked":""} style="width:auto;margin:0;">报名艺人本人：${E(ad.s)}</label>`;return `<div style="max-height:150px;overflow-y:auto;border:1px solid var(--baby-yellow-border);padding:7px;border-radius:7px;">${list.map(function(item){var id=item.id;return `<label style="display:flex;align-items:center;gap:7px;font-size:12px;padding:4px 0;"><input class="awardCategoryEntry" data-cat="${cat.id}" type="checkbox" value="${id}" ${selected.indexOf(id)>=0?"checked":""} style="width:auto;margin:0;">${E(item.n)}</label>`;}).join("")||"暂无可报名作品"}</div>`;}
+            return `<div class="card awardSubmissionCard" data-award="${awd.id}" data-year="${year}"><b>${E(awd.name)}</b> <span style="font-size:11px;color:${deadline.closed?"#b91c1c":"#15803d"};">${deadline.closed?"已截止":"报名中"} · 截止 ${deadline.label}</span>${cats.map(function(cat){return `<details open style="margin-top:9px;"><summary style="font-weight:bold;cursor:pointer;">${E(cat.name)} · ${E(cat.targetType||"track")}</summary>${choices(cat)}</details>`;}).join("")}<button ${deadline.closed?"disabled":""} onclick="saveFinalAwardSubmission('${awd.id}',${year},this)">保存该奖项报名</button></div>`;
         }).join("");
         $("mInfoTitle").innerText = "📢 报名奖项";
         $("mInfoContent").innerHTML = html;
         $("mInfo").classList.add("open");
     };
-    window.saveFinalAwardSubmission = function(awdId, i){
-        ensureAwardDataFinal();
-        ad.awardData.submissions[time.y+"_"+awdId] = {
-            track: ($("finalSubTrack_"+i)||{}).value || "",
-            album: ($("finalSubAlbum_"+i)||{}).value || "",
-            mv: ($("finalSubMV_"+i)||{}).value || "",
-            cover: ($("finalSubCover_"+i)||{}).value || "",
-            artist: "player_self"
-        };
-        saveGame(); alert("报名已保存。");
+    window.saveFinalAwardSubmission = function(awdId,year,button){
+        ensureAwardDataFinal();var awd=A(awardRegistry).find(function(x){return x.id===awdId;});if(!awd)return;
+        if(awardDeadlineState(awd).closed)return alert("该奖项本届报名已经截止。");
+        var card=button&&button.closest(".awardSubmissionCard"),sub=awardSubmissionFor(awd,year);sub.categories={};
+        A(awd.categories).forEach(function(cat){sub.categories[cat.id]=Array.from(card.querySelectorAll('.awardCategoryEntry[data-cat="'+cat.id+'"]:checked')).map(function(x){return x.value;});});
+        saveGame(); alert("报名已按分支奖项保存。歌曲类多投会触发分票，请优先保留 2–3 首最强作品。");
     };
     window.viewNominationsUI = function(awardId){
         ensureAwardDataFinal();
@@ -1258,6 +1270,7 @@ setTimeout(function installFinalUserRequestedFixes(){
             <label>奖项名称</label><input id="awardHallName" value="${E(awd.name||"")}">
             <label>奖项说明</label><textarea id="awardHallDesc" style="height:65px;">${E(awd.desc||"")}</textarea>
             <label>举办月份</label><input id="awardHallMonth" type="number" min="1" max="12" value="${Number(awd.month||12)}">
+            <div class="card" style="font-size:12px;"><b>报名时间</b><br><label>提前几个月开放报名</label><input id="awardHallSubmitLead" type="number" min="1" max="11" value="${awardSubmitLead(awd)}"><label>报名截止周</label><select id="awardHallDeadlineWeek">${[1,2,3,4].map(function(x){return `<option value="${x}" ${Number(awd.deadlineWeek||4)===x?"selected":""}>第 ${x} 周</option>`;}).join("")}</select><label>截止日（该周第几天）</label><select id="awardHallDeadlineDay">${[1,2,3,4,5,6,7].map(function(x){return `<option value="${x}" ${Number(awd.deadlineDay||7)===x?"selected":""}>第 ${x} 天</option>`;}).join("")}</select></div>
             <div class="card" style="font-size:12px;"><b>评选权重</b><br><label>乐评口碑</label><input id="awardHallWSpub" type="number" min="0" step="0.01" value="${Number(rules.weightSpub||0)}"><label>商业成绩</label><input id="awardHallWSales" type="number" min="0" step="0.01" value="${Number(rules.weightSales||0)}"><label>流行度</label><input id="awardHallWCatchy" type="number" min="0" step="0.01" value="${Number(rules.weightCatchy||0)}"></div>
             <h4 class="tg">奖项类目</h4><div id="awardHallCategoryRows">${A(awd.categories).map(awardCategoryEditorRow).join("")}</div>
             <button class="sec" onclick="addAwardHallCategoryRow()">增加类目</button>
@@ -1283,7 +1296,7 @@ setTimeout(function installFinalUserRequestedFixes(){
         var total = weights[0]+weights[1]+weights[2];
         if(total <= 0) return alert("评选权重总和必须大于 0。");
         weights = weights.map(function(x){return x/total;});
-        var cats = A(document.querySelectorAll("#awardHallCategoryRows .awardHallCatRow")).map(function(row,i){
+        var cats = Array.from(document.querySelectorAll("#awardHallCategoryRows .awardHallCatRow")).map(function(row,i){
             var scope = row.querySelector(".awardCatScope").value;
             return {id:row.getAttribute("data-cat-id")||("cat_"+Date.now()+"_"+i),name:row.querySelector(".awardCatName").value.trim()||("奖项"+(i+1)),scope:scope,targetType:row.querySelector(".awardCatTarget").value,targetGenre:scope==="general"?"ALL":(row.querySelector(".awardCatGenre").value.trim()||"ALL"),targetForm:"ALL"};
         });
@@ -1291,7 +1304,7 @@ setTimeout(function installFinalUserRequestedFixes(){
         var idx = Number(window.currentAwardHallEditIndex);
         var old = idx >= 0 ? A(awardRegistry)[idx] : null;
         var awd = old || {id:"awd_custom_"+Date.now()};
-        awd.name=name.trim(); awd.desc=($("awardHallDesc")||{}).value||""; delete awd.scope; awd.month=Math.max(1,Math.min(12,Number(($("awardHallMonth")||{}).value||12))); awd.rules={weightSpub:weights[0],weightSales:weights[1],weightCatchy:weights[2]}; awd.categories=cats;
+        awd.name=name.trim(); awd.desc=($("awardHallDesc")||{}).value||""; delete awd.scope; awd.month=Math.max(1,Math.min(12,Number(($("awardHallMonth")||{}).value||12))); awd.submitLeadMonths=Math.max(1,Math.min(11,Number(($("awardHallSubmitLead")||{}).value||2))); awd.deadlineWeek=Math.max(1,Math.min(4,Number(($("awardHallDeadlineWeek")||{}).value||4))); awd.deadlineDay=Math.max(1,Math.min(7,Number(($("awardHallDeadlineDay")||{}).value||7))); awd.rules={weightSpub:weights[0],weightSales:weights[1],weightCatchy:weights[2]}; awd.categories=cats;
         if(!old) awardRegistry.push(awd);
         saveGame(); closeM("mAwardHallEditor"); renderAwardRegistry(); renderAwardsMap(); alert("奖项设置已保存。");
     };
@@ -1331,37 +1344,25 @@ setTimeout(function installFinalUserRequestedFixes(){
     window.renderFashionHouse = function(){
         if(typeof baseRenderFashionFinalUser === "function") baseRenderFashionFinalUser();
         var map = $("mapFashion"); if(!map) return;
+        ensureFashionEraData();
         var oldGuide=$("fashionGuideBox");if(oldGuide)oldGuide.remove();
-        if(!$("fashionGuideEntry")){
-            var title=map.querySelector("h3");
-            if(title)title.insertAdjacentHTML("afterend", `<button id="fashionGuideEntry" class="sec" style="margin-bottom:10px;" onclick="openFashionGuidePage()">📖 查看时尚屋攻略</button>`);
+        var oldEntry=$("fashionGuideEntry");if(oldEntry)oldEntry.remove();
+        var tabs=map.querySelector(".sub-tab-bar"),content=$("fashionTabs");
+        if(tabs&&content){
+            if(!$("fashionGuideTab"))tabs.insertAdjacentHTML("beforeend", `<div id="fashionGuideTab" class="sub-tab" onclick="switchSubTab(this,'fashionGuidePage','fashionTabs')">攻略</div>`);
+            var coutureTab=$("fashionCoutureTab");if(coutureTab)coutureTab.remove();
+            var actionRow=tabs.nextElementSibling;if(actionRow){actionRow.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><button id="openCoutureHouseBtn" class="sec" onclick="openCoutureHouse()">进入高定</button><button id="openSpecialCustomBtn" class="sec" onclick="openSpecialCustomization()">进入特殊定制</button></div>`;}
+            var magBox=$("fashionMag");if(magBox)magBox.innerHTML=`<button class="sec" onclick="addFashionMag()">新增杂志</button>`+A(fashionMags).map(function(m,i){var issue=magazineIssueLevel(m),age=Math.max(0,time.y-m.foundedYear);return `<div class="card" style="padding:10px;"><b>${E(m.n)}</b> <span style="font-size:10px;background:var(--baby-yellow-muted);border:1px solid var(--baby-yellow-border);padding:2px 6px;border-radius:4px;">${E(m.tier||"T1")} ${E(m.type||"杂志")}</span><br><span style="font-size:11px;color:#666;">创刊 ${m.foundedYear} · ${age} 年刊龄<br>本月刊号：<b>${issue.tier} ${E(issue.name)}</b><br>晚宴月份：${typeof monthListText==="function"?monthListText(m.galaMonths):A(m.galaMonths).join("、")}</span><br><button class="sec inline" onclick="editFashionMag(${i})">编辑</button><button class="sec inline" onclick="strollFashion('mag',${i})">随便逛逛</button><button class="sec inline" onclick="viewMagHistory(${i})">杂志人物</button><button class="sec inline" onclick="joinFashionGalaByType('mag',${i})">杂志晚宴</button></div>`;}).join("");
+            var brandBox=$("fashionBrand");if(brandBox)brandBox.innerHTML=`<button class="sec" onclick="addLuxuryBrand()">新增品牌</button>`+A(luxuryBrands).map(function(b,i){var couture=b.coutureRole==="core"?"高定核心主线":b.coutureRole==="secondary"?"设有高定支线":"无高定";return `<div class="card" style="padding:10px;"><b>${E(b.n)}</b> <span style="font-size:10px;background:var(--baby-yellow);border:1px solid var(--baby-yellow-border);padding:2px 6px;border-radius:4px;">${E(b.tier||"高奢")}</span><br><span style="font-size:11px;color:#666;">创立 ${b.foundedYear} · ${couture}${b.antiqueCouture?" · 古董高定档案":""}<br>支线：${A(b.lines).join(" / ")}<br>主支线：${A(b.mainLines).join(" / ")||"未指定"}<br>代言人梯度：${A(b.titles).join(" / ")}</span><br><button class="sec inline" onclick="editLuxuryBrand(${i})">编辑</button><button class="sec inline" onclick="strollFashion('brand',${i})">随便逛逛</button><button class="sec inline" onclick="joinFashionGalaByType('brand',${i})">品牌晚宴</button></div>`;}).join("");
+            var oldCouturePage=$("fashionCouture");if(oldCouturePage)oldCouturePage.remove();
+            if(!$("fashionGuidePage"))content.insertAdjacentHTML("beforeend", `<div id="fashionGuidePage" class="sub-page"></div>`);
+            $("fashionGuidePage").innerHTML=fashionGuideHtml();
         }
     };
+    function fashionGuideHtml(){return `<div style="font-size:12px;line-height:1.8;"><div class="card"><b>T0 史诗级（独一档，十年难遇）</b><br>金九与 10/15/20/25 等整五大周年叠加。广告资源、杂志企划和宣传投放全部拉满，单人封面名额极其稀缺。</div><div class="card"><b>T1 顶级重磅</b><br>独立金九刊；或非 9 月的整五、整十周年刊。两者大致同级，商业侧金九认可度略高。</div><div class="card"><b>T2 一线重磅</b><br>三月开季刊，承接春夏时装周启动。</div><div class="card"><b>T3 高规格重磅</b><br>银十，即 10 月刊。</div><div class="card"><b>T4 常规重磅</b><br>开年刊；或非整五、整十的小年周年刊。</div><div class="card"><b>T5 普通档位</b><br>季度刊，以及常规月份正刊。</div><div class="card"><b>跨类型比较</b><br>T0 男刊 &gt; T1 女刊。</div><div class="card"><b>高定品牌</b><br>艺术高定：以高定主线为核心，仅有少量限定珠宝配饰。<br>商业高定：除高定外，还有香水、鞋包、配饰、晚宴包和鞋履等商业支线。<br>轻量独立高定工作室：提供定制服务，无固定成衣系列，偶尔推出少量限定礼服，没有完整商业支线。<br>普通奢侈品牌也可推出高定，但如果主要收入来自成衣或包袋，高定并非其立命之本。</div></div>`;}
     window.openFashionGuidePage=function(){
         $("mInfoTitle").innerText="时尚屋攻略";
-        $("mInfoContent").innerHTML=`<div style="font-size:12px;line-height:1.85;">
-            <h4 class="tg" style="font-size:14px;margin-bottom:6px;">杂志梯度</h4>
-            <div class="card" style="padding:10px;margin-bottom:12px;">
-                <b>T0</b>：顶级刊物与最高规格封面<br>
-                <b>T1</b>：一线核心刊物<br>
-                <b>T2</b>：区域强刊与重要专业刊<br>
-                <b>T3</b>：成熟的小众独立刊<br>
-                <b>T4</b>：新兴刊物与区域普通刊<br>
-                <b>T5</b>：入门刊物与小型数字刊<br>
-                <b style="color:var(--baby-yellow-text);">跨类型比较：T0 男刊 &gt; T1 女刊。</b><br>
-                同梯度内可根据刊物类型、封面规格和艺人表现继续区分含金量。
-            </div>
-            <h4 class="tg" style="font-size:14px;margin-bottom:6px;">品牌与代言</h4>
-            <div class="card" style="padding:10px;margin-bottom:12px;">
-                <b>代言人梯度示例：</b>全球代言人 / 全球品牌大使 / 品牌大使 / 品牌挚友 / 形象大使。<br>
-                品牌不一定设置全球代言人，也可以将全球品牌大使设为最高等级。
-            </div>
-            <h4 class="tg" style="font-size:14px;margin-bottom:6px;">品牌支线</h4>
-            <div class="card" style="padding:10px;margin-bottom:0;">
-                <b>支线示例：</b>高级定制、成衣、珠宝、腕表、包袋、皮具、香水美妆、鞋履、家居。<br>
-                主支线代表品牌最强的领域，可以选择多个；全部支线均设为主支线，代表品牌在所有领域都很强。
-            </div>
-        </div>`;
+        $("mInfoContent").innerHTML=fashionGuideHtml();
         $("mInfo").classList.add("open");
     };
     var baseEditFashionMagTierFinal=window.editFashionMag;
@@ -1373,6 +1374,63 @@ setTimeout(function installFinalUserRequestedFixes(){
         ["T0","T1","T2","T3","T4","T5"].forEach(function(tier){var option=document.createElement("option");option.value=tier;option.textContent=tier;if(tier===selected)option.selected=true;select.appendChild(option);});
         field.replaceWith(select);
     };
+    function ensureFashionEraData(){
+        if(!ad.coutureBrands)ad.coutureBrands=[];
+        if(!ad.specialCustomLooks)ad.specialCustomLooks=[];
+        A(fashionMags).forEach(function(m){if(!m.foundedYear)m.foundedYear=Math.max(1900,Number(time.y||2026)-20);if(!m.anniversaryMonth)m.anniversaryMonth=9;if(!m.issueTypes)m.issueTypes={anniversary:true,september:true,october:true,newYear:true,quarterly:true};});
+        A(luxuryBrands).forEach(function(b){if(!b.foundedYear)b.foundedYear=Math.max(1800,Number(time.y||2026)-50);if(typeof b.antiqueCouture!=="boolean")b.antiqueCouture=false;if(!b.coutureRole)b.coutureRole="none";});
+        return ad.coutureBrands;
+    }
+    function magazineIssueLevel(m){
+        var flags=m.issueTypes||{},age=Math.max(0,Number(time.y||2026)-Number(m.foundedYear||time.y)),milestone=age>=10&&age%5===0;
+        var isAnniversary=flags.anniversary&&time.m===Number(m.anniversaryMonth||9);
+        if(flags.september&&isAnniversary&&time.m===9&&milestone)return {tier:"T0",name:"金九 + "+age+" 周年叠加刊"};
+        if(flags.september&&time.m===9)return {tier:"T1",name:"独立金九刊"};
+        if(isAnniversary&&time.m!==9&&milestone)return {tier:"T1",name:age+" 周年重磅刊"};
+        if(time.m===3)return {tier:"T2",name:"三月开季刊"};
+        if(flags.october&&time.m===10)return {tier:"T3",name:"银十刊"};
+        if(flags.newYear&&time.m===1)return {tier:"T4",name:"开年刊"};
+        if(isAnniversary&&age>0)return {tier:"T4",name:age+" 周年刊"};
+        if(flags.quarterly&&[3,6,9,12].indexOf(time.m)>=0)return {tier:"T5",name:"季度刊"};
+        return {tier:"T5",name:"常规正刊"};
+    }
+    function fashionCheck(id,label,checked){return `<label style="display:flex;align-items:center;gap:7px;font-size:12px;padding:5px 0;"><input id="${id}" type="checkbox" ${checked?"checked":""} style="width:auto;margin:0;">${label}</label>`;}
+    window.editFashionMag=function(i){
+        ensureFashionEraData();var m=A(fashionMags)[i];if(!m)return;window.editingFashionMagIdx=i;var flags=m.issueTypes||{};
+        $("mInfoTitle").innerText="编辑杂志";$("mInfoContent").innerHTML=`<label>杂志名称</label><input id="editMagName" value="${E(m.n||"")}"><label>杂志基础梯度</label><select id="editMagTier">${["T0","T1","T2","T3","T4","T5"].map(function(x){return `<option ${m.tier===x?"selected":""}>${x}</option>`;}).join("")}</select><label>类型 / 定位</label><input id="editMagType" value="${E(m.type||"杂志")}"><label>创刊年份</label><input id="editMagFoundedYear" type="number" min="1800" max="${time.y}" value="${m.foundedYear}"><div class="card" style="padding:10px;"><b>刊期设置</b>${fashionCheck("editMagAnniversary","周年刊",flags.anniversary!==false)}<label>周年刊发行月份</label><input id="editMagAnniversaryMonth" type="number" min="1" max="12" value="${m.anniversaryMonth||9}">${fashionCheck("editMagSeptember","金九刊",flags.september!==false)}${fashionCheck("editMagOctober","银十刊",flags.october!==false)}${fashionCheck("editMagNewYear","开年刊",flags.newYear!==false)}${fashionCheck("editMagQuarterly","季度刊",flags.quarterly!==false)}</div><label>晚宴举办月份（逗号分隔）</label><input id="editMagGalaMonths" value="${A(m.galaMonths||[3,9]).join(",")}"><button onclick="saveFashionMagEraEditor()">保存杂志设置</button>`;$("mInfo").classList.add("open");
+    };
+    window.saveFashionMagEraEditor=function(){
+        var m=A(fashionMags)[window.editingFashionMagIdx];if(!m)return;m.n=($("editMagName")||{}).value.trim()||m.n;m.tier=($("editMagTier")||{}).value||m.tier;m.type=($("editMagType")||{}).value.trim()||m.type;m.foundedYear=Math.max(1800,Math.min(Number(time.y||2026),Number(($("editMagFoundedYear")||{}).value)||time.y));m.anniversaryMonth=Math.max(1,Math.min(12,Number(($("editMagAnniversaryMonth")||{}).value)||9));m.issueTypes={anniversary:$("editMagAnniversary").checked,september:$("editMagSeptember").checked,october:$("editMagOctober").checked,newYear:$("editMagNewYear").checked,quarterly:$("editMagQuarterly").checked};m.galaMonths=($("editMagGalaMonths")||{}).value.split(",").map(Number).filter(function(x){return x>=1&&x<=12;});ad.fashionMags=fashionMags;saveGame();closeM("mInfo");renderFashionHouse();
+    };
+    window.editLuxuryBrand=function(i){
+        ensureFashionEraData();var b=A(luxuryBrands)[i];if(!b)return;window.editingLuxuryBrandIdx=i;
+        $("mInfoTitle").innerText="编辑奢侈品品牌";$("mInfoContent").innerHTML=`<label>品牌名称</label><input id="editBrandName" value="${E(b.n||"")}"><label>品牌梯度</label><input id="editBrandTier" value="${E(b.tier||"高奢")}"><label>创立年份</label><input id="editBrandFoundedYear" type="number" min="1700" max="${time.y}" value="${b.foundedYear}"><label>全部支线（逗号分隔）</label><input id="editBrandLines" value="${A(b.lines).join(",")}"><label>主支线（逗号分隔）</label><input id="editBrandMainLines" value="${A(b.mainLines).join(",")}"><label>代言人梯度（逗号分隔）</label><input id="editBrandTitles" value="${A(b.titles).join(",")}"><label>高定定位</label><select id="editBrandCoutureRole"><option value="none" ${b.coutureRole==="none"?"selected":""}>无高定</option><option value="secondary" ${b.coutureRole==="secondary"?"selected":""}>推出高定，但不是立命主线</option><option value="core" ${b.coutureRole==="core"?"selected":""}>高定为核心主线</option></select>${fashionCheck("editBrandAntiqueCouture","拥有古董高定档案",!!b.antiqueCouture)}<label>晚宴举办月份（逗号分隔）</label><input id="editBrandGalaMonths" value="${A(b.galaMonths||[5,11]).join(",")}"><button onclick="saveLuxuryBrandEraEditor()">保存品牌设置</button>`;$("mInfo").classList.add("open");
+    };
+    window.saveLuxuryBrandEraEditor=function(){
+        var b=A(luxuryBrands)[window.editingLuxuryBrandIdx];if(!b)return;b.n=$("editBrandName").value.trim()||b.n;b.tier=$("editBrandTier").value.trim()||b.tier;b.foundedYear=Math.max(1700,Math.min(Number(time.y||2026),Number($("editBrandFoundedYear").value)||time.y));b.lines=$("editBrandLines").value.split(",").map(function(x){return x.trim();}).filter(Boolean);b.mainLines=$("editBrandMainLines").value.split(",").map(function(x){return x.trim();}).filter(Boolean);b.titles=$("editBrandTitles").value.split(",").map(function(x){return x.trim();}).filter(Boolean);b.coutureRole=$("editBrandCoutureRole").value;b.antiqueCouture=$("editBrandAntiqueCouture").checked;b.galaMonths=$("editBrandGalaMonths").value.split(",").map(Number).filter(function(x){return x>=1&&x<=12;});ad.luxuryBrands=luxuryBrands;saveGame();closeM("mInfo");renderFashionHouse();
+    };
+    function ensureCoutureBrand(b){if(!b.id)b.id="couture_"+Date.now()+"_"+Math.random().toString(36).slice(2,6);if(!b.creativeDirector)b.creativeDirector="未设置";if(!b.archive)b.archive=[];if(!b.wearHistory)b.wearHistory=[];return b;}
+    window.addCoutureBrand=function(){ensureFashionEraData();ad.coutureBrands.push(ensureCoutureBrand({n:"新高定品牌",tier:"T3",model:"artistic",foundedYear:time.y,antiqueCouture:false,lines:["高级定制"],galaMonths:[7]}));saveGame();openCoutureHouse();};
+    window.deleteCoutureBrand=function(i){ensureFashionEraData();ad.coutureBrands.splice(i,1);saveGame();openCoutureHouse();};
+    window.editCoutureBrand=function(i){var b=ensureCoutureBrand(ensureFashionEraData()[i]);if(!b)return;window.editingCoutureBrandIdx=i;$("mInfoTitle").innerText="编辑高定品牌";$("mInfoContent").innerHTML=`<label>高定品牌名称</label><input id="editCoutureName" value="${E(b.n)}"><label>高定档次</label><select id="editCoutureTier">${["T0","T1","T2","T3","T4","T5"].map(function(x){return `<option ${b.tier===x?"selected":""}>${x}</option>`;}).join("")}</select><label>经营类型</label><select id="editCoutureModel"><option value="artistic" ${b.model==="artistic"?"selected":""}>艺术高定</option><option value="commercial" ${b.model==="commercial"?"selected":""}>商业高定</option><option value="independent" ${b.model==="independent"?"selected":""}>轻量独立高定工作室</option></select><label>创意总监</label><input id="editCoutureDirector" value="${E(b.creativeDirector)}"><label>创立年份</label><input id="editCoutureFounded" type="number" min="1700" max="${time.y}" value="${b.foundedYear}">${fashionCheck("editCoutureAntique","拥有古董高定",!!b.antiqueCouture)}<label>支线（逗号分隔）</label><input id="editCoutureLines" value="${A(b.lines).join(",")}"><button onclick="saveCoutureBrandEditor()">保存高定品牌</button><button class="red" onclick="deleteCoutureBrand(${i});closeM('mInfo')">删除高定品牌</button>`;$("mInfo").classList.add("open");};
+    window.saveCoutureBrandEditor=function(){var b=ensureCoutureBrand(ensureFashionEraData()[window.editingCoutureBrandIdx]);if(!b)return;b.n=$("editCoutureName").value.trim()||b.n;b.tier=$("editCoutureTier").value;b.model=$("editCoutureModel").value;b.creativeDirector=$("editCoutureDirector").value.trim()||"未设置";b.foundedYear=Math.max(1700,Math.min(time.y,Number($("editCoutureFounded").value)||time.y));b.antiqueCouture=$("editCoutureAntique").checked;b.lines=$("editCoutureLines").value.split(",").map(function(x){return x.trim();}).filter(Boolean);saveGame();closeM("mInfo");openCoutureHouse();};
+    function coutureTierGuide(){return `<div class="card" style="font-size:12px;line-height:1.7;"><b>高定梯度</b><br><b>T0</b> 殿堂级古董高定与时代代表作<br><b>T1</b> 顶级高定屋核心系列<br><b>T2</b> 一线高定与重要定制系列<br><b>T3</b> 成熟高定品牌<br><b>T4</b> 新兴高定与独立工作室<br><b>T5</b> 轻量定制及限定礼服系列</div>`;}
+    window.openCoutureHouse=function(){var brands=ensureFashionEraData().map(ensureCoutureBrand);$("mInfoTitle").innerText="高定屋";$("mInfoContent").innerHTML=`${coutureTierGuide()}<button onclick="addCoutureBrand()">增加高定品牌</button>${brands.map(function(b,i){var model=b.model==="commercial"?"商业高定":b.model==="independent"?"轻量独立工作室":"艺术高定";return `<div class="card" style="padding:10px;"><b>${E(b.n)}</b> <span style="font-size:10px;background:var(--baby-yellow-muted);border:1px solid var(--baby-yellow-border);padding:2px 6px;border-radius:4px;">${b.tier} ${model}</span><br><span style="font-size:11px;color:#666;">创意总监：${E(b.creativeDirector)}<br>创立 ${b.foundedYear}${b.antiqueCouture?" · 古董高定":""}<br>历届高定：${A(b.archive).length} 套</span><br><button class="sec inline" onclick="editCoutureBrand(${i})">编辑品牌</button><button class="sec inline" onclick="strollCoutureBrand(${i})">随便逛逛</button><button class="sec inline" onclick="viewCoutureArchive(${i})">查看历届高定</button></div>`;}).join("")||"<p style='font-size:12px;color:#888;'>暂无高定品牌。</p>"}`;$("mInfo").classList.add("open");};
+    window.strollCoutureBrand=function(i){var b=ensureCoutureBrand(ensureFashionEraData()[i]);if(!b||!costEnergy(10))return;advHour(4);if(Math.random()<.55){var id="look_"+Date.now(),releaseSeason=["春季","夏季","秋季","冬季"][Math.floor(Math.random()*4)],look={id:id,n:time.y+" "+releaseSeason+"高定礼服",releaseYear:time.y,releaseSeason:releaseSeason,wearers:[]};b.archive.unshift(look);alert("你在高定屋见到了创意总监 "+b.creativeDirector+"，并获准查看一套未公开高定。");}else alert("你参观了 "+b.n+" 的高定工坊，本次没有获得借衣机会。");saveGame();openCoutureHouse();};
+    window.viewCoutureArchive=function(i){var b=ensureCoutureBrand(ensureFashionEraData()[i]);if(!b)return;$("mInfoTitle").innerText=b.n+" · 历届高定";$("mInfoContent").innerHTML=A(b.archive).map(function(look){var worn=A(look.wearers);return `<div class="card"><b>${E(look.n)}</b><br><span style="font-size:11px;color:#666;">${worn.length?"穿戴记录："+worn.map(function(x){return E(x.name+"（"+x.date+"）");}).join("、"):"全新未穿"}</span><br><button class="sec" onclick="wearCoutureLook('${b.id}','${look.id}')">选择穿戴</button></div>`;}).join("")||"暂无高定档案。";$("mInfo").classList.add("open");};
+    window.wearCoutureLook=function(brandId,lookId){var b=ensureFashionEraData().map(ensureCoutureBrand).find(function(x){return x.id===brandId;}),look=b&&A(b.archive).find(function(x){return x.id===lookId;});if(!look)return;var previous=A(look.wearers),secondHand=previous.length>0;look.wearers.push({name:ad.s,date:time.y+"年"+time.m+"月"});if(secondHand&&Math.random()<.55){posts.mom.unshift({t:"[时尚争议] "+ad.s+" 穿二手高定",c:"网友发现这套 "+b.n+" 高定此前已被 "+previous[0].name+" 穿过，造型团队被质疑资源降级。"});ad.sk.fa=Math.max(0,(ad.sk.fa||0)-3);alert("这套高定已有穿戴记录，你的二手造型被网友发现并引发嘲讽。");}else{ad.sk.fa=(ad.sk.fa||0)+2;alert(secondHand?"虽然是有穿戴记录的高定，但造型完成度不错，没有形成大规模争议。":"你完成了这套高定的首次公开穿戴。");}saveGame();viewCoutureArchive(ensureFashionEraData().indexOf(b));};
+    var SPECIAL_CUSTOM_LEVELS=[
+        "高定专属特别定制（One-of-One 高定特订）","秀前预览款高定","超季正统秀款高定","当季正统秀款高定","过季正统秀款高定",
+        "成衣品牌独家孤品原创定制","成衣品牌 MTO 大幅度改版定制","成衣超季秀款","成衣当季秀款","成衣超季 MTM 改版定制","成衣当季 MTM 单纯量体微调","成衣基础款微小个性化定制","成衣过季款式"
+    ];
+    function ensureSpecialLook(look){if(!look.id)look.id="special_"+Date.now()+"_"+Math.random().toString(36).slice(2,6);look.level=Math.max(1,Math.min(13,Number(look.level)||6));look.officialCouture=look.level<=5;if(!look.wearers)look.wearers=[];if(!look.releaseSeason)look.releaseSeason=look.season==="春夏"?"春季":look.season==="秋冬"?"秋季":(["春季","夏季","秋季","冬季"].indexOf(look.season)>=0?look.season:"春季");if(!look.releaseYear)look.releaseYear=look.seriesYear||time.y;delete look.season;delete look.seriesYear;return look;}
+    function specialLevelGuide(){return `<div class="card" style="font-size:12px;line-height:1.75;"><b>正统高定体系（1–5）</b><br>${SPECIAL_CUSTOM_LEVELS.slice(0,5).map(function(x,i){return (i+1)+". "+x;}).join("<br>")}<br><br><b>成衣品牌定制与秀款（6–13，不属于高定）</b><br>${SPECIAL_CUSTOM_LEVELS.slice(5).map(function(x,i){return (i+6)+". "+x;}).join("<br>")}<p style="margin-top:7px;color:#666;">正统高定来自官方春夏、秋冬系列或高定屋专属特订。成衣设计师为单人制作的礼服即使非常华丽，没有高定资源与体系认证，也只属于普通特殊定制。</p></div>`;}
+    window.openSpecialCustomization=function(){ensureFashionEraData();var looks=A(ad.specialCustomLooks).map(ensureSpecialLook);$("mInfoTitle").innerText="特殊定制与服装资源";$("mInfoContent").innerHTML=`${specialLevelGuide()}<button onclick="addSpecialCustomLook()">增加服装资源</button>${looks.map(function(look,i){return `<div class="card" style="padding:10px;"><b>${E(look.n||SPECIAL_CUSTOM_LEVELS[look.level-1])}</b><br><span style="font-size:11px;color:#666;"><b>${look.level}. ${E(SPECIAL_CUSTOM_LEVELS[look.level-1])}</b><br>${look.officialCouture?"正统高定":"非高定特殊定制 / 成衣资源"} · ${E(look.brand||"未设置品牌")} · 发行于 ${look.releaseYear} 年 ${E(look.releaseSeason)}<br>穿戴记录：${A(look.wearers).length?A(look.wearers).map(function(x){return E(x.name+"（"+x.date+"）");}).join("、"):"全新未穿"}</span><br><button class="sec inline" onclick="editSpecialCustomLook(${i})">编辑</button><button class="sec inline" onclick="wearSpecialCustomLook(${i})">选择穿戴</button></div>`;}).join("")||"<p style='font-size:12px;color:#888;'>暂无特殊定制或服装资源。</p>"}`;$("mInfo").classList.add("open");};
+    window.addSpecialCustomLook=function(){ensureFashionEraData();ad.specialCustomLooks.unshift(ensureSpecialLook({n:"新服装资源",level:6,brand:"未设置品牌",releaseYear:time.y,releaseSeason:"春季",wearers:[]}));saveGame();editSpecialCustomLook(0);};
+    window.editSpecialCustomLook=function(i){var look=ensureSpecialLook(A(ad.specialCustomLooks)[i]);if(!look)return;window.editingSpecialLookIdx=i;var brands=A(ad.coutureBrands).map(function(x){return x.n;}).concat(A(luxuryBrands).map(function(x){return x.n;}));$("mInfoTitle").innerText="编辑服装资源";$("mInfoContent").innerHTML=`<label>服装名称</label><input id="specialLookName" value="${E(look.n||"")}"><label>资源等级</label><select id="specialLookLevel">${SPECIAL_CUSTOM_LEVELS.map(function(x,idx){return `<option value="${idx+1}" ${look.level===idx+1?"selected":""}>${idx+1}. ${E(x)}</option>`;}).join("")}</select><label>品牌 / 高定屋</label><input id="specialLookBrand" list="specialBrandList" value="${E(look.brand||"")}"><datalist id="specialBrandList">${brands.map(function(x){return `<option value="${E(x)}">`;}).join("")}</datalist><label>发行年份</label><input id="specialLookYear" type="number" min="1900" max="${time.y+2}" value="${look.releaseYear}"><label>发行季节</label><select id="specialLookSeason">${["春季","夏季","秋季","冬季"].map(function(x){return `<option ${look.releaseSeason===x?"selected":""}>${x}</option>`;}).join("")}</select><p style="font-size:11px;color:#666;">年份和发行季节表示该款实际发布的时间。超季、当季、过季由资源等级决定。1–5 级属于正统高定，6–13 级不属于高定。</p><button onclick="saveSpecialCustomLook()">保存服装资源</button><button class="red" onclick="deleteSpecialCustomLook(${i})">删除</button>`;$("mInfo").classList.add("open");};
+    window.saveSpecialCustomLook=function(){var look=ensureSpecialLook(A(ad.specialCustomLooks)[window.editingSpecialLookIdx]);if(!look)return;look.n=$("specialLookName").value.trim()||SPECIAL_CUSTOM_LEVELS[Number($("specialLookLevel").value)-1];look.level=Number($("specialLookLevel").value);look.officialCouture=look.level<=5;look.brand=$("specialLookBrand").value.trim()||"未设置品牌";look.releaseYear=Number($("specialLookYear").value)||time.y;look.releaseSeason=$("specialLookSeason").value;saveGame();openSpecialCustomization();};
+    window.deleteSpecialCustomLook=function(i){ad.specialCustomLooks.splice(i,1);saveGame();openSpecialCustomization();};
+    window.wearSpecialCustomLook=function(i){var look=ensureSpecialLook(A(ad.specialCustomLooks)[i]);if(!look)return;var old=A(look.wearers),secondHand=old.length>0;look.wearers.push({name:ad.s,date:time.y+"年"+time.m+"月"});var gain=Math.max(1,7-Math.floor((look.level-1)/2));ad.sk.fa=(ad.sk.fa||0)+gain;if(secondHand&&Math.random()<.45){posts.mom.unshift({t:"[造型争议] "+ad.s+" 重复使用已有穿戴记录的服装",c:"网友查出这套 "+look.brand+" 服装此前由 "+old[0].name+" 穿过，开始比较两次造型。"});alert("这件服装已有穿戴记录，本次上身引发了二手资源和撞衫讨论。");}else alert(look.officialCouture?"你穿上了正统高定资源："+SPECIAL_CUSTOM_LEVELS[look.level-1]+"。":"你完成了非高定特殊定制 / 成衣资源造型，系统不会将它误算为高定。");saveGame();openSpecialCustomization();};
     function tryFashionOffers(){
         if(!ad || !ad.st) return;
         var rankFans = A(worldArtists).filter(function(n){return n && n.fans > ad.st.f;}).length + 1;
@@ -1734,10 +1792,10 @@ setTimeout(function installFinalUserRequestedFixes(){
     };
 
     function customConfigPayload(){
-        return {kind:"star-producer-custom-config",version:1,exportedAt:new Date().toISOString(),tvPrograms:ensureTVPrograms(),peakStages:ensurePeakStages(),youtubeChannels:ensureYouTubeChannels(),awardRegistry:typeof awardRegistry!=="undefined"?awardRegistry:[],luxuryBrands:typeof luxuryBrands!=="undefined"?luxuryBrands:[],fashionMags:typeof fashionMags!=="undefined"?fashionMags:[],genres:typeof gs!=="undefined"?A(gs):[]};
+        return {kind:"star-producer-custom-config",version:3,exportedAt:new Date().toISOString(),tvPrograms:ensureTVPrograms(),peakStages:ensurePeakStages(),youtubeChannels:ensureYouTubeChannels(),awardRegistry:typeof awardRegistry!=="undefined"?awardRegistry:[],luxuryBrands:typeof luxuryBrands!=="undefined"?luxuryBrands:[],fashionMags:typeof fashionMags!=="undefined"?fashionMags:[],coutureBrands:ad.coutureBrands||[],specialCustomLooks:ad.specialCustomLooks||[],genres:typeof gs!=="undefined"?A(gs):[]};
     }
     window.exportCustomConfig=function(){var blob=new Blob([JSON.stringify(customConfigPayload(),null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="star-producer-custom-config.json";a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);};
-    window.importCustomConfig=function(input){if(!input.files||!input.files[0])return;var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(d.kind!=="star-producer-custom-config")throw new Error("不是自定义配置文件");if(Array.isArray(d.tvPrograms))ad.tvPrograms=d.tvPrograms;if(Array.isArray(d.peakStages))ad.peakStages=d.peakStages;if(Array.isArray(d.youtubeChannels))ad.youtubeChannels=d.youtubeChannels;if(Array.isArray(d.awardRegistry)&&typeof awardRegistry!=="undefined"){awardRegistry.length=0;d.awardRegistry.forEach(function(x){awardRegistry.push(x);});}if(Array.isArray(d.luxuryBrands)&&typeof luxuryBrands!=="undefined"){luxuryBrands.length=0;d.luxuryBrands.forEach(function(x){luxuryBrands.push(x);});}if(Array.isArray(d.fashionMags)&&typeof fashionMags!=="undefined"){fashionMags.length=0;d.fashionMags.forEach(function(x){fashionMags.push(x);});}if(Array.isArray(d.genres)&&typeof gs!=="undefined")d.genres.forEach(function(g){if(gs.indexOf(g)<0)gs.push(g);});saveGame();alert("自定义配置导入成功。节目、舞台、频道、奖项和时尚配置已更新。");}catch(e){alert("导入失败："+e.message);}input.value="";};r.readAsText(input.files[0]);};
+    window.importCustomConfig=function(input){if(!input.files||!input.files[0])return;var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(d.kind!=="star-producer-custom-config")throw new Error("不是自定义配置文件");if(Array.isArray(d.tvPrograms))ad.tvPrograms=d.tvPrograms;if(Array.isArray(d.peakStages))ad.peakStages=d.peakStages;if(Array.isArray(d.youtubeChannels))ad.youtubeChannels=d.youtubeChannels;if(Array.isArray(d.awardRegistry)&&typeof awardRegistry!=="undefined"){awardRegistry.length=0;d.awardRegistry.forEach(function(x){awardRegistry.push(x);});}if(Array.isArray(d.luxuryBrands)&&typeof luxuryBrands!=="undefined"){luxuryBrands.length=0;d.luxuryBrands.forEach(function(x){luxuryBrands.push(x);});}if(Array.isArray(d.fashionMags)&&typeof fashionMags!=="undefined"){fashionMags.length=0;d.fashionMags.forEach(function(x){fashionMags.push(x);});}if(Array.isArray(d.coutureBrands))ad.coutureBrands=d.coutureBrands;if(Array.isArray(d.specialCustomLooks))ad.specialCustomLooks=d.specialCustomLooks;if(Array.isArray(d.genres)&&typeof gs!=="undefined")d.genres.forEach(function(g){if(gs.indexOf(g)<0)gs.push(g);});saveGame();alert("自定义配置导入成功。节目、舞台、频道、奖项、品牌杂志、高定和特殊定制配置已更新。");}catch(e){alert("导入失败："+e.message);}input.value="";};r.readAsText(input.files[0]);};
     var apiPage=$("pApi");
     if(apiPage&&!$("customConfigTransferCard")){var card=document.createElement("div");card.id="customConfigTransferCard";card.className="card";card.innerHTML=`<h2 class="tg" style="font-size:16px;">自定义配置导入 / 导出</h2><p style="font-size:11px;color:#666;">仅迁移节目、舞台、频道作者、奖项、品牌杂志和曲风配置，不覆盖游戏进度。</p><button class="sec" style="color:#1d4ed8;border:1px solid #60a5fa;" onclick="exportCustomConfig()">导出自定义配置</button><input type="file" accept=".json,application/json" onchange="importCustomConfig(this)">`;apiPage.appendChild(card);}
 
@@ -1891,7 +1949,19 @@ setTimeout(function installFinalUserRequestedFixes(){
 
     var baseAwardCandidatesWithCover=window.getAwardTop5;
     window.getAwardTop5=function(awd,cat,year){
-        if(!cat||cat.targetType!=="cover") return typeof baseAwardCandidatesWithCover==="function"?baseAwardCandidatesWithCover(awd,cat,year):[];
+        if(!cat)return [];
+        if(cat.targetType!=="cover"){
+            var original=typeof baseAwardCandidatesWithCover==="function"?baseAwardCandidatesWithCover(awd,cat,year):[],sub=awardSubmissionFor(awd,year),selected=A(sub.categories&&sub.categories[cat.id]);
+            selected.forEach(function(id){
+                if(id==="player_self"||original.some(function(x){return x.id===id;}))return;
+                var entity=findTrack(id);if(!entity)return;
+                var rules=awd.rules||{},score=Number(entity.Spub||50)*10000*Number(rules.weightSpub||.33)+Number(entity.slTotal||0)*Number(rules.weightSales||.33)+Number(entity.catchiness||1)*200000*Number(rules.weightCatchy||.34);
+                original.push({id:entity.id,n:entity.n,artist:ad.s,isMe:true,score:score});
+            });
+            original=A(original).filter(function(item){return !item.isMe||selected.indexOf(item.id)>=0||(cat.targetType==="artist"&&selected.indexOf("player_self")>=0);});
+            if(selected.length>1){var splitFactor=Math.max(.42,1-(selected.length-1)*.14);original.forEach(function(item){if(item.isMe)item.score=Number(item.score||0)*splitFactor;});original.sort(function(a,b){return Number(b.score||0)-Number(a.score||0);});}
+            return original.slice(0,5);
+        }
         ensureAwardDataFinal();
         var candidates=[];
         A(trackPool).filter(function(t){return t&&(t.type==="album"||t.type==="track");}).forEach(function(t){
@@ -1901,17 +1971,16 @@ setTimeout(function installFinalUserRequestedFixes(){
             var visual=custom?95:(70+Math.abs(String(t.n||"").split("").reduce(function(s,c){return s+c.charCodeAt(0);},0))%21);
             candidates.push({id:kind+":"+t.id,n:t.n+"（"+(kind==="album"?"专辑":"单曲")+"封面）",artist:t.isMe?ad.s:(t.artist||"未知"),isMe:!!t.isMe,score:visual*10000+Number(t.Spub||50)*3000+Math.random()*150000});
         });
-        var sub=ad.awardData.submissions[year+"_"+awd.id]||{};
-        if(sub.cover&&!candidates.some(function(x){return x.id===sub.cover;})){
-            var parts=String(sub.cover).split(":"),entity=findTrack(parts.slice(1).join(":"));
-            if(entity)candidates.push({id:sub.cover,n:entity.n+"（封面）",artist:ad.s,isMe:true,score:Number(entity.Spub||50)*3000+900000});
-        }
+        var sub=awardSubmissionFor(awd,year),selected=A(sub.categories&&sub.categories[cat.id]);
+        candidates=candidates.filter(function(item){return !item.isMe||selected.indexOf(item.id)>=0;});
+        selected.forEach(function(coverId){if(candidates.some(function(x){return x.id===coverId;}))return;var parts=String(coverId).split(":"),entity=findTrack(parts.slice(1).join(":"));if(entity)candidates.push({id:coverId,n:entity.n+"（封面）",artist:ad.s,isMe:true,score:Number(entity.Spub||50)*3000+900000});});
+        if(selected.length>1){var splitFactor=Math.max(.42,1-(selected.length-1)*.14);candidates.forEach(function(item){if(item.isMe)item.score*=splitFactor;});}
         return candidates.sort(function(a,b){return b.score-a.score;}).slice(0,5);
     };
 
     window.uploadMyAvatar=function(input){
         var file=input&&input.files&&input.files[0];if(!file)return;
-        if(!/^image\//.test(file.type||"")){input.value="";return alert("请选择图片文件。");}
+        if(file.type&&!/^image\//.test(file.type)){input.value="";return alert("请选择图片文件。");}
         var reader=new FileReader();
         reader.onload=function(ev){
             var img=new Image();
@@ -1924,8 +1993,8 @@ setTimeout(function installFinalUserRequestedFixes(){
                 }catch(e){ad.avatar=String(ev.target.result||"");}
                 input.value="";
                 if(typeof updAttr==="function")updAttr();
-                A(document.querySelectorAll("#boxBasic img")).forEach(function(el){el.src=ad.avatar;});
-                saveGame();alert("头像上传/更换成功。");
+                Array.from(document.querySelectorAll("#boxBasic img, [data-player-avatar], img.player-avatar")).forEach(function(el){el.src=ad.avatar;});
+                if(typeof saveGameImmediate==="function")saveGameImmediate();else saveGame();alert("头像上传/更换成功。");
             };
             img.onerror=function(){input.value="";alert("图片无法读取，请换一张图片。");};
             img.src=ev.target.result;
@@ -1933,6 +2002,67 @@ setTimeout(function installFinalUserRequestedFixes(){
         reader.onerror=function(){input.value="";alert("图片读取失败。");};
         reader.readAsDataURL(file);
     };
+    if(!document.documentElement.dataset.avatarUploadDelegated){
+        document.documentElement.dataset.avatarUploadDelegated="1";
+        document.addEventListener("click",function(event){var input=event.target;if(input&&input.id==="myAvatarInput")input.value="";},true);
+        document.addEventListener("change",function(event){var input=event.target;if(!input||input.id!=="myAvatarInput")return;event.preventDefault();event.stopImmediatePropagation();window.uploadMyAvatar(input);},true);
+    }
+
+    function stableChartWeekKey(){return String(time.y)+"_"+String(time.m)+"_"+String(time.w);}
+    function stableRankValue(value){return Number.isFinite(Number(value))&&Number(value)>=1&&Number(value)<=100?Number(value):999;}
+    function stableChartHistory(t){
+        if(Array.isArray(t.chartHistory))return t.chartHistory;
+        var old=t.chartHistory&&Array.isArray(t.chartHistory.global)?t.chartHistory.global:[];
+        t.chartHistory=old.map(function(rank,i){return {key:"legacy_"+i,global:stableRankValue(rank),us:999,inGlobal:stableRankValue(rank)<=100,inUS:false};});
+        return t.chartHistory;
+    }
+    function isSeasonalChartReturn(t){
+        var genres=A(t.gnr||t.g||t.genres);if(typeof t.gnr==="string")genres=t.gnr.split(/[,/、]/);
+        return (t.isChristmas||genres.indexOf("圣诞")>=0)&&(time.m===12||time.m===1);
+    }
+    function hasRealChartReturnReason(t,score,region){
+        if(Number(t.weeks||1)<=4)return true;
+        if(Number(t.longViral||0)>0||Number(t.viralWk||0)>0||isSeasonalChartReturn(t))return true;
+        var previous=Number(t[region==="global"?"_stablePrevGlobalStreams":"_stablePrevUSStreams"]||0);
+        return previous>0&&score>=previous*1.12;
+    }
+    function stableSort(items,scoreKey,rankKey){
+        return items.slice().sort(function(a,b){
+            var diff=Number(b[scoreKey]||0)-Number(a[scoreKey]||0);if(diff)return diff;
+            var old=stableRankValue(a[rankKey])-stableRankValue(b[rankKey]);if(old)return old;
+            return String(a.id||a.n||"").localeCompare(String(b.id||b.n||""));
+        });
+    }
+    function assignStableTop100(items,scoreKey,rankKey,region){
+        var sorted=stableSort(items,scoreKey,rankKey),rawTop=sorted.slice(0,100),cutoff=rawTop.length?Number(rawTop[rawTop.length-1][scoreKey]||0):0;
+        var incumbents=sorted.filter(function(t){return stableRankValue(t[rankKey])<=100&&Number(t[scoreKey]||0)>=cutoff*.97;});
+        var chosen=[],seen={};
+        incumbents.concat(sorted).forEach(function(t,index){
+            var identity=t.id||((t.artist||"")+"::"+(t.n||"")+"::"+(t._entityCreatedAt||index));
+            if(chosen.length>=100||seen[identity])return;
+            var wasOut=stableRankValue(t[rankKey])>100&&stableChartHistory(t).some(function(h){return region==="global"?h.inGlobal:h.inUS;});
+            if(wasOut&&!hasRealChartReturnReason(t,Number(t[scoreKey]||0),region))return;
+            seen[identity]=true;chosen.push(t);
+        });
+        chosen=stableSort(chosen,scoreKey,rankKey);items.forEach(function(t){t[rankKey]=999;});
+        chosen.forEach(function(t,i){t[rankKey]=i+1;});
+        return chosen;
+    }
+    var baseUpdatePeakRanksStable=window.updatePeakRanks;
+    window.updatePeakRanks=function(){
+        if(typeof baseUpdatePeakRanksStable==="function")baseUpdatePeakRanksStable.apply(this,arguments);
+        var key=stableChartWeekKey(),songs=A(trackPool).filter(function(t){return t&&t.type==="track";}),albums=A(trackPool).filter(function(t){return t&&t.type==="album";});
+        [songs,albums].forEach(function(items){assignStableTop100(items,"stmGlobal_Week","lastW","global");assignStableTop100(items,"stmUS_Week","lastB","us");});
+        A(trackPool).filter(function(t){return t&&(t.type==="track"||t.type==="album");}).forEach(function(t){
+            var h=stableChartHistory(t),entry=h.length?h[h.length-1]:null,g=stableRankValue(t.lastW),u=stableRankValue(t.lastB);
+            if(!entry||entry.key!==key){entry={key:key,y:time.y,m:time.m,w:time.w};h.push(entry);if(h.length>520)h.shift();}
+            entry.global=g;entry.us=u;entry.inGlobal=g<=100;entry.inUS=u<=100;
+            t.peakS=Math.min(stableRankValue(t.peakS),g);t.peakB=Math.min(stableRankValue(t.peakB),u);
+            t.chartWeeks=h.filter(function(x){return x.inGlobal;}).length;t.usChartWeeks=h.filter(function(x){return x.inUS;}).length;
+            if(t._stableStreamWeekKey!==key){t._stablePrevGlobalStreams=Number(t.stmGlobal_Week||0);t._stablePrevUSStreams=Number(t.stmUS_Week||0);t._stableStreamWeekKey=key;}
+        });
+    };
+    if(typeof window.updatePeakRanks==="function")window.updatePeakRanks();
 
     var baseHardStatsFiveSongs=window.getHardCoreStatsTop5;
     window.getHardCoreStatsTop5=function(artistName,isMe){

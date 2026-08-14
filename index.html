@@ -2431,9 +2431,7 @@ input,select,textarea,.sub-tab,.g-tag,.log,.prog-wrap {
     <div style="background:#f9f9f9; padding:15px; border-radius:8px; border:1px solid #eee;">
         <h3 style="font-size:16px; margin-bottom:10px; color:#555;">💾 读取已有生涯</h3>
         <select id="mainMenuSlot" style="font-size:14px; padding:10px; margin-bottom:10px; width:100%;">
-            <option value="1">存档槽位 1</option>
-            <option value="2">存档槽位 2</option>
-            <option value="3">存档槽位 3</option>
+            <option value="1">存档槽位 1</option><option value="2">存档槽位 2</option><option value="3">存档槽位 3</option><option value="4">存档槽位 4</option><option value="5">存档槽位 5</option><option value="6">存档槽位 6</option><option value="7">存档槽位 7</option><option value="8">存档槽位 8</option><option value="9">存档槽位 9</option><option value="10">存档槽位 10</option><option value="11">存档槽位 11</option><option value="12">存档槽位 12</option>
         </select>
         <button class="sec" onclick="mainMenuLoad()" style="padding:12px; width:100%; border:1px solid #ccc;">读取存档进入游戏</button>
     </div>
@@ -2529,8 +2527,9 @@ input,select,textarea,.sub-tab,.g-tag,.log,.prog-wrap {
         <div class="card">
       <h2 class="tg" style="margin-bottom:10px;">💾 存档管理与修复</h2>
       <button class="sec" onclick="fixChartData()" style="background:#fff8e8;color:#a67c00;border:1px solid #d1c290;">🔧 强制修正/刷新榜单数据 (遇Bug时点击)</button>
-      <select id="selSaveSlot" style="margin-bottom:5px;"><option value="1">存档槽位 1</option><option value="2">存档槽位 2</option><option value="3">存档槽位 3</option></select>
+      <select id="selSaveSlot" style="margin-bottom:5px;"><option value="1">存档槽位 1</option><option value="2">存档槽位 2</option><option value="3">存档槽位 3</option><option value="4">存档槽位 4</option><option value="5">存档槽位 5</option><option value="6">存档槽位 6</option><option value="7">存档槽位 7</option><option value="8">存档槽位 8</option><option value="9">存档槽位 9</option><option value="10">存档槽位 10</option><option value="11">存档槽位 11</option><option value="12">存档槽位 12</option></select>
       <div style="display:flex;gap:5px;"><button onclick="saveGameImmediate()">保存当前进度</button><button class="sec" onclick="loadGame(0)">读取</button></div>
+      <div style="display:flex;gap:5px;margin-top:5px;"><button class="sec" onclick="exportLocalSave()">导出本地存档</button><button class="sec" onclick="document.getElementById('importLocalSaveInput').click()">导入本地存档</button><input id="importLocalSaveInput" type="file" accept="application/json,.json" style="display:none" onchange="importLocalSave(this)"></div>
       <button class="red" onclick="exitToMainMenu()">🚪 退出存档 (返回主菜单)</button>
       <div style="margin-top:15px;border-top:1px solid #eee;padding-top:15px;">
         <p style="font-size:12px;color:#888;margin-top:5px;">推演流速设定 (右上角按钮生效)：</p>
@@ -24034,8 +24033,6 @@ window.openScreenMarketLimits=function(){var l=ensureScreenMarketLimits();docume
 window.saveScreenMarketLimits=function(){var l=ensureScreenMarketLimits();l.film=Math.max(0,Number(document.getElementById('limitFilm').value)||0);l.tv=Math.max(0,Number(document.getElementById('limitTV').value)||0);l.short=Math.max(0,Number(document.getElementById('limitShort').value)||0);(ad.screenProjects||[]).forEach(function(p){if(p.kind==='film')p.boxOffice=Math.min(Number(p.boxOffice||0),l.film);else p.watchHours=Math.min(Number(p.watchHours||0),p.kind==='tv'?l.tv:l.short);});save();alert('影视大盘限制已保存。');};
 var _screenComplete=window.completeCurrentScreenProduction;window.completeCurrentScreenProduction=function(){var r=_screenComplete&&_screenComplete.apply(this,arguments),l=ensureScreenMarketLimits(),p=ad.screenProjects&&ad.screenProjects[0];if(p){if(p.kind==='film')p.boxOffice=Math.min(Number(p.boxOffice||0),l.film);else p.watchHours=Math.min(Number(p.watchHours||0),p.kind==='tv'?l.tv:l.short);}save();return r;};
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
-window.openUnifiedArtistDetail=function(id){var list=typeof unifiedArtists==='function'?unifiedArtists():[],a=list.find(function(x){return String(x.id)===String(id);});if(!a)return;var s=a.source||a,content='';if(a.careers.indexOf('团体')>=0){var members=s.members||[],sorted=members.slice().sort(function(x,y){return Number(y.fans||0)-Number(x.fans||0);});content='<div class="card"><b>'+esc(a.n)+'</b><br>团体粉丝 '+Number(s.fans||a.fans||0).toLocaleString()+' · 热度 '+Number(s.heat||0).toLocaleString()+' · 阶段 '+esc(s.phase||'未知')+'<br>概念 '+esc(s.concept||'未设置')+' · 凝聚力 '+Number(s.cohesion||0)+'</div><h4>成员人气排序</h4>'+sorted.map(function(m,i){return '<button class="card" style="display:block;width:100%;text-align:left;margin:5px 0;" onclick="openUnifiedArtistDetail(\''+esc(m.id.replace(/^npc_/,'screen_'))+'\')">'+(i+1)+'. '+esc(m.n)+' · 粉丝 '+Number(m.fans||0).toLocaleString()+' · '+esc((m.roles||[]).join('/'))+'</button>';}).join('');}else{var works=(ad.screenProjects||[]).filter(function(p){return p.isPlayer&&((p.cast||[]).indexOf(s.id)>=0||p.actorId===s.id||a.careers.indexOf('演员')>=0&&p.name);});content='<div class="card"><b>'+esc(a.n)+'</b><br>职业：'+esc(a.careers.join(' / '))+'<br>粉丝：'+Number(a.fans||0).toLocaleString()+'<br>性别：'+esc(a.gender||'未知')+'<br>演技：'+Number(s.sk&&s.sk.ac||s.ac||0)+' · 台词：'+Number(s.sk&&s.sk.ln||s.ln||0)+'</div><h4>代表作</h4>'+((works.length?works.map(function(p){return '<div class="card"><b>'+esc(p.name)+'</b> · '+esc(p.tier||'未评级')+'<br>热度 '+Number(p.heat||0).toLocaleString()+'</div>';}).join(''):'暂无影视代表作'));}document.getElementById('mInfoTitle').innerText=a.n+' · 详细资料';document.getElementById('mInfoContent').innerHTML=content;document.getElementById('mInfo').classList.add('open');};
-window.renderNpcList=function(){var box=document.getElementById('uiNpcList');if(!box)return;box.innerHTML=(typeof unifiedArtists==='function'?unifiedArtists():[]).map(function(n,i){return '<div class="card" style="padding:10px;margin-bottom:8px;display:flex;align-items:center;gap:10px;"><b>'+(i+1)+'.</b><div style="flex:1;"><b>'+esc(n.n)+'</b><br><span style="font-size:11px;color:#777;">'+esc(n.gender)+' · 粉丝 '+Number(n.fans||0).toLocaleString()+' · '+esc(n.careers.join(' / '))+'</span></div><button class="sec inline" onclick="openUnifiedArtistDetail(\''+esc(n.id)+'\')">详情</button></div>';}).join('');};
 (function installCloudDeviceLogin(){
     'use strict';
     var AUTH_API='https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth';
@@ -24157,6 +24154,10 @@ window.renderNpcList=function(){var box=document.getElementById('uiNpcList');if(
     var box=document.getElementById('mInfoContent');if(box){var note=document.createElement('div');note.className='card';note.style.cssText='margin-top:10px;line-height:1.8;';note.innerHTML='<b>现场回应</b><br>'+(typeof E==='function'?E(response):response);box.appendChild(note);}
   };
 })();
+</script>
+<script>
+window.exportLocalSave=function(){try{var key=getSaveKey(),raw=localStorage.getItem(key);if(!raw){alert('当前槽位没有存档。');return;}var blob=new Blob([raw],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='star-pro-save-'+(($('selSaveSlot')||{}).value||'1')+'.json';a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);}catch(e){alert('导出失败：'+e.message);}};
+window.importLocalSave=function(input){var file=input&&input.files&&input.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(){try{var data=JSON.parse(reader.result);if(!data||typeof data!=='object'||!data.ad)throw new Error('不是有效的星路存档');localStorage.setItem(getSaveKey(),JSON.stringify(data));alert('存档已导入当前槽位，正在重新加载。');location.reload();}catch(e){alert('导入失败：'+e.message);}finally{input.value='';}};reader.readAsText(file);};
 </script>
 </body>
 </html>

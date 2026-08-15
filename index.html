@@ -25170,6 +25170,26 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
 (function(){var generatedAssets=document.getElementById('generatedRasterThemeAssets');if(generatedAssets)document.body.appendChild(generatedAssets);})();
 </script>
 <script>
+// Ceremony stage selector and NPC/actor editing final patch.
+(function(){
+  var oldSetlist=window.openSetlistUI;
+  window.openSetlistUI=function(title){var r=oldSetlist&&oldSetlist.apply(this,arguments),s=document.getElementById('selPerformStage');if(window.performContext&&window.performContext.type==='award'&&s){s.innerHTML='<option value="minimal">简约纯享版 · $100万以下</option><option value="normal">常规舞美 · $100万~$1000万</option><option value="top">顶级舞美 · $1000万起</option>';s.value=window.performContext.stage||'normal';s.onchange=function(){window.performContext.stage=s.value;window.performContext.stageName=s.options[s.selectedIndex].text;};}return r;};
+  var oldNpc=window.openNpcDetail;
+  window.openNpcDetail=function(id){
+    var source=null;
+    (worldArtists||[]).some(function(x){if(String(x.id)===String(id)){source=x;return true;}return false;});
+    if(!source&&ad&&ad.screenActors)ad.screenActors.some(function(x){if(String(x.id)===String(id)||String('screen_'+x.id)===String(id)){source=x;return true;}return false;});
+    if(!source&&ad&&ad.entertainmentGroups)ad.entertainmentGroups.some(function(x){if(String(x.id)===String(id)||String('group_'+x.id)===String(id)){source=x;return true;}return false;});
+    if(!source)return oldNpc&&oldNpc.apply(this,arguments);
+    var box=document.getElementById('mInfoContent');document.getElementById('mInfoTitle').innerText='编辑艺人 / 演员 / 团体';
+    box.innerHTML='<label>名称</label><input id="npcEditName" value="'+String(source.n||source.name||'').replace(/"/g,'&quot;')+'"><label>简介</label><textarea id="npcEditBio" rows="3">'+String(source.bio||source.desc||'')+'</textarea><button onclick="saveNpcUnified(\''+source.id+'\')">保存修改</button>';
+    document.getElementById('mInfo').classList.add('open');
+  };
+  window.saveNpcUnified=function(id){var all=[].concat(worldArtists||[],ad&&ad.screenActors||[],ad&&ad.entertainmentGroups||[]),x=all.find(function(a){return String(a.id)===String(id);});if(!x)return;var n=(document.getElementById('npcEditName')||{}).value.trim();if(n)x.n=x.name=n;x.bio=(document.getElementById('npcEditBio')||{}).value||x.bio;save();if(typeof renderNpcList==='function')renderNpcList();alert('修改已保存。');closeM('mInfo');};
+  var oldChart=window.renderChart;window.renderChart=function(){var r=oldChart&&oldChart.apply(this,arguments),isAlbum=String(window.curChType||'')==='album'||String(window.curChType||'')==='album_daily',expected=(trackPool||[]).filter(function(t){return t&&t.type===(isAlbum?'album':'track');});var box=document.getElementById('mChartContent');if(box){var rows=Array.from(box.children);rows.forEach(function(row,i){row.dataset.chartType=isAlbum?'album':'track';if(i>=expected.length)row.style.display='none';});}return r;};
+  // Clear stale player-avatar nodes before applying the current artist image.
+  var oldAvatar=window.uploadMyAvatar;window.uploadMyAvatar=function(input){var r=oldAvatar&&oldAvatar.apply(this,arguments);setTimeout(function(){var current=ad&&ad.avatar||'';document.querySelectorAll('[data-player-avatar],img.player-avatar').forEach(function(img){if(current)img.src=current;else img.removeAttribute('src');});},30);return r;};
+})();
 // Final late bindings: these run after every legacy wrapper has been installed.
 (function(){
   if(typeof window.save!=='function')window.save=function(){return typeof saveGameImmediate==='function'?saveGameImmediate():typeof saveGame==='function'?saveGame():undefined;};

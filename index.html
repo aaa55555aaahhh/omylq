@@ -24679,8 +24679,7 @@ var _screenComplete=window.completeCurrentScreenProduction;window.completeCurren
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
 (function installCloudDeviceLogin(){
     'use strict';
-    // Use the deployed device-license authority whose D1 database receives admin password uploads.
-    var AUTH_API='https://star-pro-device-auth.3800069889.workers.dev';
+    var AUTH_API='https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth';
     var DEVICE_KEY='starPro_device_id';
     var VERIFIED_KEY='starPro_device_verified';
     var loginBusy=false;
@@ -24711,12 +24710,19 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
         if(create){create.style.display='block';create.classList.add('active');}
     }
     async function request(path,body){
-        var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},12000);
-        try{
-            var response=await fetch(AUTH_API+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),cache:'no-store',signal:controller.signal});
-            var data={};try{data=await response.json();}catch(error){}
-            return {ok:response.ok&&data.ok,data:data,status:response.status};
-        }finally{clearTimeout(timer);}
+        var lastError;
+        for(var attempt=0;attempt<2;attempt++){
+            var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},30000);
+            try{
+                var response=await fetch(AUTH_API+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),cache:'no-store',signal:controller.signal});
+                var data={};try{data=await response.json();}catch(error){}
+                return {ok:response.ok&&data.ok,data:data,status:response.status};
+            }catch(error){
+                lastError=error;
+                if(attempt===0)await new Promise(function(resolve){setTimeout(resolve,1200);});
+            }finally{clearTimeout(timer);}
+        }
+        throw lastError||new Error('LOGIN_NETWORK_FAILED');
     }
     window.checkLoginPwd=async function(){
         if(loginBusy)return;
@@ -24741,7 +24747,7 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
         }catch(error){
             try{localStorage.removeItem(VERIFIED_KEY);}catch(storageError){}
             showLogin();
-            nativeAlert('暂时无法连接登录服务器，请检查网络后重试。');
+            nativeAlert(error&&error.name==='AbortError'?'登录服务器响应较慢，已自动重试但仍然超时。请稍后再试。':'无法连接登录服务器，已自动重试。请检查当前网络是否能访问 supabase.co。');
         }finally{
             loginBusy=false;
             if(button){button.disabled=false;button.textContent='验证并进入大厅';}
@@ -24750,13 +24756,20 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
     window.autoLoginSkip=function(){showLogin();};
     try{localStorage.removeItem('starPro_login_pwd');localStorage.removeItem('starPro_is_unlocked');}catch(error){}
     function start(){
-        showLogin();
         var verified=false;try{verified=localStorage.getItem(VERIFIED_KEY)==='true';}catch(error){}
-        if(!verified)return;
+        if(!verified){showLogin();return;}
+        // Keep the password page hidden while the remembered device session is checked.
+        document.querySelectorAll('.page').forEach(function(page){page.classList.remove('active');page.style.display='none';});
+        enterLobby();
         request('/api/device-session',{deviceId:deviceId()}).then(function(result){
-            if(result.ok)enterLobby();
-            else{try{localStorage.removeItem(VERIFIED_KEY);}catch(error){}showLogin();}
-        }).catch(function(){showLogin();});
+            if(result.ok)return;
+            // Keep existing remembered players in the game when the server has a
+            // stale/migrated session; only an explicit login flow can replace it.
+            if(result.data&&['DEVICE_MISMATCH','DEVICE_ALREADY_BOUND'].indexOf(result.data.code)>=0){
+                try{localStorage.removeItem(VERIFIED_KEY);}catch(error){}
+                showLogin();
+            }else enterLobby();
+        }).catch(function(){enterLobby();});
     }
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(start,20);});
     else setTimeout(start,20);

@@ -24679,7 +24679,8 @@ var _screenComplete=window.completeCurrentScreenProduction;window.completeCurren
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
 (function installCloudDeviceLogin(){
     'use strict';
-    var AUTH_API='https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth';
+    // Use the deployed device-license authority whose D1 database receives admin password uploads.
+    var AUTH_API='https://star-pro-device-auth.3800069889.workers.dev';
     var DEVICE_KEY='starPro_device_id';
     var VERIFIED_KEY='starPro_device_verified';
     var loginBusy=false;

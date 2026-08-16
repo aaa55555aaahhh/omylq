@@ -25193,6 +25193,45 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
   function readIndexedSave(key){return new Promise(function(resolve,reject){if(!window.indexedDB)return resolve(null);var request=indexedDB.open('starProLocalSaves',1);request.onerror=function(){reject(request.error);};request.onsuccess=function(){var get=request.result.transaction('saves','readonly').objectStore('saves').get(key);get.onsuccess=function(){resolve(get.result||null);};get.onerror=function(){reject(get.error);};};});}
   window.mainMenuLoad=async function(){var slot=(document.getElementById('mainMenuSlot')||{}).value||'1',key='starProSave_'+slot,raw=null;if(document.getElementById('selSaveSlot'))document.getElementById('selSaveSlot').value=slot;try{raw=localStorage.getItem(key);if(!raw)raw=await readIndexedSave(key);if(!raw)return alert('存档槽位 '+slot+' 为空。');var data=JSON.parse(raw);restoreSnapshot(data);try{localStorage.setItem(key,raw);}catch(e){}document.getElementById('createPage').style.display='none';document.getElementById('createPage').classList.remove('active');var main=document.getElementById('gameMain');if(main){main.style.display='block';main.classList.add('active');}var top=document.getElementById('topBar');if(top)top.style.display='flex';alert('读取成功：已恢复 '+trackPool.length+' 项音乐数据、'+worldArtists.length+' 位艺人。');}catch(error){console.error('读档失败',error);alert('读取失败：'+(error&&error.message||String(error)));}};
 })();
+
+// Final time-flow authority: normalize legacy saves before every linked weekly settlement.
+(function installSafeTimeFlow(){
+  function arrayField(object,key){if(object&&!Array.isArray(object[key]))object[key]=[];return object&&object[key];}
+  function normalizeTimeState(){
+    if(!window.ad||typeof window.ad!=='object')window.ad={};
+    if(!ad.st||typeof ad.st!=='object')ad.st={f:0};
+    if(!ad.sk||typeof ad.sk!=='object')ad.sk={};
+    ['screenActors','entertainmentGroups','castingAnnouncements','screenProjects','pendingMagazineIssues','magazineSales','magazineCovers','endorsements','coutureLoans','fashionRivals'].forEach(function(key){arrayField(ad,key);});
+    if(!ad.screenCareer||typeof ad.screenCareer!=='object')ad.screenCareer={};
+    if(!Array.isArray(ad.screenCareer.credits))ad.screenCareer.credits=[];
+    if(!Array.isArray(ad.screenCareer.blacklists))ad.screenCareer.blacklists=[];
+    if(!ad.groupCareer||typeof ad.groupCareer!=='object')ad.groupCareer={activeGroupId:'',soloStatus:'solo'};
+    if(!ad.wardrobe||typeof ad.wardrobe!=='object')ad.wardrobe={hc:0};
+    if(!ad.fashionInvites||typeof ad.fashionInvites!=='object')ad.fashionInvites={weeksWithout:0,lastKey:'',history:[]};
+    if(!Array.isArray(ad.fashionInvites.history))ad.fashionInvites.history=[];
+    if(!window.posts||typeof window.posts!=='object')window.posts={};
+    ['mom','wb','x','ins','tiktok'].forEach(function(key){arrayField(posts,key);});
+    if(!Array.isArray(window.trackPool))window.trackPool=[];
+    trackPool.forEach(function(t){if(!t||typeof t!=='object')return;if(!Array.isArray(t.gnr))t.gnr=t.gnr?[String(t.gnr)]:[];if(!Array.isArray(t.heatHistory))t.heatHistory=[];});
+    if(window.GameRuntime&&typeof GameRuntime.repair==='function')GameRuntime.repair({scope:'data',save:false});
+  }
+  var timeFlowBusy=false;
+  window.advTimeByFlow=function(){
+    if(timeFlowBusy)return;
+    timeFlowBusy=true;
+    try{
+      normalizeTimeState();
+      var select=document.getElementById('selTimeFlow'),value=parseInt(select&&select.value,10)||7;
+      if(value===1&&typeof window.advHour==='function')window.advHour(24);
+      else if(value===30&&typeof window.advTime==='function')window.advTime(4,true);
+      else if(typeof window.advTime==='function')window.advTime(1,true);
+    }catch(error){
+      console.error('时间推演失败',error);
+      var message='时间推演失败：'+(error&&error.message||String(error));
+      if(typeof window.gameAlert==='function')window.gameAlert(message);else window.alert(message);
+    }finally{timeFlowBusy=false;}
+  };
+})();
 </script>
 <script>
 document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){document.querySelectorAll('button').forEach(function(b){if(/导出(像素风|奶油风)100种描述/.test(b.textContent||''))b.remove();});},100);});

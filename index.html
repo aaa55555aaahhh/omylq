@@ -25212,7 +25212,17 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
     if(!window.posts||typeof window.posts!=='object')window.posts={};
     ['mom','wb','x','ins','tiktok'].forEach(function(key){arrayField(posts,key);});
     if(!Array.isArray(window.trackPool))window.trackPool=[];
-    trackPool.forEach(function(t){if(!t||typeof t!=='object')return;if(!Array.isArray(t.gnr))t.gnr=t.gnr?[String(t.gnr)]:[];if(!Array.isArray(t.heatHistory))t.heatHistory=[];});
+    trackPool.forEach(function(t){
+      if(!t||typeof t!=='object')return;
+      if(!Array.isArray(t.gnr))t.gnr=t.gnr?[String(t.gnr)]:[];
+      ['heatHistory','trendChart','trueTrend','_unlimitedTrend','radioHistory','chartHistory','spotifyUSHistory'].forEach(function(key){if(!Array.isArray(t[key]))t[key]=[];});
+    });
+    ad.screenProjects.forEach(function(p){if(!p||typeof p!=='object')return;['screenEvents','heatHistory','ostTrackIds','broadcastRuns','recommended'].forEach(function(key){if(!Array.isArray(p[key]))p[key]=[];});});
+    ad.entertainmentGroups.forEach(function(g){if(!g||typeof g!=='object')return;if(!Array.isArray(g.members))g.members=[];if(!g.relations||typeof g.relations!=='object')g.relations={};});
+    var pets=ad.petSystem&&Array.isArray(ad.petSystem.pets)?ad.petSystem.pets:ad.pets&&Array.isArray(ad.pets)?ad.pets:[];
+    pets.forEach(function(p){if(!p||typeof p!=='object')return;['children','events','buffs','feedHistory','awardFeedIds','demoFeedIds','shinyTraits','laterShinyTraits'].forEach(function(key){if(!Array.isArray(p[key]))p[key]=[];});});
+    (Array.isArray(window.fashionMags)?window.fashionMags:[]).forEach(function(m){if(!Array.isArray(m.history))m.history=[];});
+    (Array.isArray(window.luxuryBrands)?window.luxuryBrands:[]).forEach(function(b){if(!Array.isArray(b.ambassadors))b.ambassadors=[];if(!Array.isArray(b.blacklist))b.blacklist=[];});
     if(window.GameRuntime&&typeof GameRuntime.repair==='function')GameRuntime.repair({scope:'data',save:false});
   }
   var timeFlowBusy=false;

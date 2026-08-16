@@ -23422,32 +23422,49 @@ document.addEventListener("DOMContentLoaded", function(){
                 var groupStreams=Number(t.stmGlobal_Week||t.stmGlobal||0),groupRelease=Number(t.groupReleaseWeeks||t.weeks||0);
                 if(groupStreams<5000||groupRelease<1)return 0;
             }
-            var stmUS=Number(t.stmUS_Week||0),sales=finalSalesUnits(t)*Number(t.price||1),radio=Math.max(0,Number(t.radioAud||0));
+            var stmUS=Number(t.stmUS_Week||0),sales=finalSalesUnits(t),radio=Math.max(0,Number(t.radioAud||0));
             return Math.max(0,(sales/150)+(stmUS*.7/15000)+(stmUS*.3/45000)+(radio*3));
         }
-        function finalNormalizeMarketStreams(){
-            var cfg=finalMarketSettings(),tracks=Array.from(trackPool||[]).filter(function(t){return t&&t.type==="track";}),top=tracks.reduce(function(m,t){return Math.max(m,Number(t.stmGlobal_Day||0));},0);
-            if(top<=cfg.dailyBase||top<=0)return;
-            var scale=cfg.dailyBase/top;
-            tracks.forEach(function(t){
-                t.stmGlobal_Day=Math.max(0,Math.floor(Number(t.stmGlobal_Day||0)*scale));
-                t.stmGlobal_Week=Math.max(0,Math.floor(Number(t.stmGlobal_Week||0)*scale));
-                if(!t.stmGlobal_Week)t.stmGlobal_Week=t.stmGlobal_Day*7;
-                t.stmUS_Day=Math.min(t.stmGlobal_Day,Math.max(0,Math.floor(Number(t.stmUS_Day||0)*scale)));
-                t.stmUS_Week=Math.min(t.stmGlobal_Week,Math.max(0,Math.floor(Number(t.stmUS_Week||0)*scale)));
+        function rankStableMarketCompression(values,cap){
+            var limit=Math.max(1,Number(cap)||1),clean=Array.from(values||[]).map(function(value){return Math.max(0,Number(value)||0);}),top=clean.reduce(function(high,value){return Math.max(high,value);},0);
+            if(top<=limit)return clean.map(function(value){return Math.round(value);});
+            var previous=Infinity;
+            return clean.map(function(value,rank){
+                var c=value/limit,rankBuffer=value>limit?Math.sqrt(rank):Math.max(0,Math.sqrt(rank)-1),compressed=Math.max(0,Math.round(value/(c+rankBuffer)));
+                if(rank>0)compressed=Math.min(compressed,Math.max(0,previous-1));
+                previous=compressed;return compressed;
             });
         }
+        window.rankStableMarketCompression=rankStableMarketCompression;
+        function marketJitterValues(values,key){
+            var base=Array.from(values||[]).map(function(value){return Math.max(0,Number(value)||0);}),out=base.map(function(value,index){
+                var text=String(key||'market')+':'+index+':'+value,hash=0;for(var i=0;i<text.length;i++)hash=(hash*31+text.charCodeAt(i))>>>0;
+                return Math.max(0,Math.round(value*(.95+(hash%1001)/10000)));
+            });
+            for(var i=out.length-2;i>=0;i--)if(base[i]>base[i+1])out[i]=Math.max(out[i],out[i+1]+1);
+            return out;
+        }
+        window.marketJitterValues=marketJitterValues;
+        function finalNormalizeMarketStreams(){
+            var cfg=finalMarketSettings(),tracks=Array.from(trackPool||[]).filter(function(t){return t&&t.type==="track";}),stamp=String(time&&time.y||0)+'_'+String(time&&time.m||0)+'_'+String(time&&time.w||0),ordered=tracks.slice();
+            ordered.forEach(function(t){if(t._marketFloatStamp!==stamp)t._marketBaseDay=Math.max(0,Number(t.stmGlobal_Day||0));});
+            ordered.sort(function(a,b){return Number(b._marketBaseDay!=null?b._marketBaseDay:b.stmGlobal_Day||0)-Number(a._marketBaseDay!=null?a._marketBaseDay:a.stmGlobal_Day||0);});
+            var rawDays=ordered.map(function(t){if(t._marketFloatStamp!==stamp){t._marketBaseDay=Math.max(0,Number(t.stmGlobal_Day||0));t._marketBaseWeek=Math.max(0,Number(t.stmGlobal_Week||0));t._marketBaseUSDay=Math.max(0,Number(t.stmUS_Day||0));t._marketBaseUSWeek=Math.max(0,Number(t.stmUS_Week||0));}return t._marketBaseDay;}),compressed=rankStableMarketCompression(rawDays,cfg.dailyBase),floated=marketJitterValues(compressed,'stream:'+stamp);
+            ordered.forEach(function(t,rank){var rawDay=rawDays[rank],baseDay=compressed[rank],day=floated[rank],factor=baseDay>0?day/baseDay:1;t.stmGlobal_Day=day;t.stmGlobal_Week=Math.max(0,Math.round(t._marketBaseWeek*factor));if(!t.stmGlobal_Week)t.stmGlobal_Week=t.stmGlobal_Day*7;t.stmUS_Day=Math.min(t.stmGlobal_Day,Math.max(0,Math.round(t._marketBaseUSDay*factor)));t.stmUS_Week=Math.min(t.stmGlobal_Week,Math.max(0,Math.round(t._marketBaseUSWeek*factor)));t._marketFloatStamp=stamp;});
+        }
         function finalSetBillboardParts(t){
-            var stmUS=Number(t.stmUS_Week||0),salesUnits=finalSalesUnits(t)*Number(t.price||1),radio=Math.max(0,Number(t.radioAud||0));
+            var stmUS=Number(t.stmUS_Week||0),salesUnits=finalSalesUnits(t),radio=Math.max(0,Number(t.radioAud||0));
             var parts={stream:(stmUS*.7/15000)+(stmUS*.3/45000),sales:salesUnits/150,radio:radio*3},total=parts.stream+parts.sales+parts.radio;
             if(!isFinite(total)||total<=0){t._pctStm=0;t._pctSales=0;t._pctRadio=0;return;}
-            t._pctStm=Math.round(parts.stream/total*100);t._pctSales=Math.round(parts.sales/total*100);t._pctRadio=Math.max(0,100-t._pctStm-t._pctSales);
+            t._pctStm=Math.round(parts.stream/total*1000)/10;t._pctSales=Math.round(parts.sales/total*1000)/10;t._pctRadio=Math.max(0,Math.round((100-t._pctStm-t._pctSales)*10)/10);
         }
         function normalizeBillboardPointValues(values,cap){
             var requested=Number(cap),limit=isFinite(requested)&&requested>0?Math.max(1,requested):500;
             var clean=Array.from(values||[]).map(function(value){value=Number(value);return isFinite(value)&&value>0?value:0;});
-            var max=clean.reduce(function(high,value){return Math.max(high,value);},0),scale=max>limit?limit/max:1;
-            return clean.map(function(value){return Math.max(0,Math.round(value*scale));});
+            var order=clean.map(function(value,index){return {value:value,index:index};}).sort(function(a,b){return b.value-a.value;});
+            var compressed=marketJitterValues(rankStableMarketCompression(order.map(function(item){return item.value;}),limit),'billboard:'+String(typeof finalDateKey==='function'?finalDateKey():'current')),result=new Array(clean.length);
+            order.forEach(function(item,rank){result[item.index]=compressed[rank];});
+            return result;
         }
         window.normalizeBillboardPointValues=normalizeBillboardPointValues;
         function finalNormalizeBillboardPoints(){
@@ -23493,8 +23510,7 @@ document.addEventListener("DOMContentLoaded", function(){
         var finalOriginalAdvTimeForMarket=window.advTime;
         window.advTime=function(weeks,showMsg){
             var result=typeof finalOriginalAdvTimeForMarket==="function"?finalOriginalAdvTimeForMarket.apply(this,arguments):undefined,cfg=finalSaveMarketSettings();
-            var tracks=Array.from(trackPool||[]).filter(function(t){return t&&t.type==="track";}),top=tracks.reduce(function(m,t){return Math.max(m,Number(t.stmGlobal_Day||0));},0);
-            if(top>0){var scale=cfg.dailyBase/top;tracks.forEach(function(t){t.stmGlobal_Day=Math.max(0,Math.floor(Number(t.stmGlobal_Day||0)*scale));t.stmGlobal_Week=t.stmGlobal_Day*7;t.stmUS_Day=Math.floor(t.stmGlobal_Day*.35);t.stmUS_Week=t.stmUS_Day*7;});}
+            var tracks=Array.from(trackPool||[]).filter(function(t){return t&&t.type==="track";});
             finalNormalizeMarketStreams();tracks.forEach(finalEnsureDecadeStats);finalNormalizeBillboardPoints();return result;
         };
         var finalOriginalSwitchChartRegion=window.switchChartRegion;
@@ -23618,7 +23634,7 @@ document.addEventListener("DOMContentLoaded", function(){
             var x=hot100Consumption(t),stream=x.paid+x.free,total=x.total;
             t.hot100PaidEquivalent=x.paid;t.hot100FreeEquivalent=x.free;t.hot100ITunesUSUnits=x.itunesUS;t.hot100OtherPureSalesUnits=x.otherPureSales;t.hot100SalesEquivalent=x.sales;t.hot100RadioEquivalent=x.radio;t.hot100ConsumptionTotal=total;
             if(total<=0){t._pctStm=0;t._pctSales=0;t._pctRadio=0;return;}
-            t._pctStm=Math.round(stream/total*100);t._pctSales=Math.round(x.sales/total*100);t._pctRadio=Math.max(0,100-t._pctStm-t._pctSales);
+            t._pctStm=Math.round(stream/total*1000)/10;t._pctSales=Math.round(x.sales/total*1000)/10;t._pctRadio=Math.max(0,Math.round((100-t._pctStm-t._pctSales)*10)/10);
         };
 
         // Award ceremonies settle once per calendar year and always publish every winner.
@@ -24663,9 +24679,17 @@ normalizeEntertainmentCredits();
 setTimeout(normalizeEntertainmentCredits,1800);
 function advanceScreenHeatByTrend(){if(!ad||!Array.isArray(ad.screenProjects))return;ad.screenProjects.forEach(function(p){if(!p||p.exhibitionStatus==='已下映')return;var base=Math.max(0,Number(p.heat)||0),watch=p.kind==='film'?Number(p.boxOffice||0)/1000000:Number(p.watchHours||0),quality=(Number(p.directorLevel||3)+Number(p.writerLevel||3)+Number(p.cameraLevel||3)+Number(p.locationLevel||2))*1.8,delta=watch*.012+Number(p.reputation||50)*.08+quality-18;if(String(p.scriptGrade||'').indexOf('A')===0&&Math.random()<.18){p.screenEvents.push({type:'精美场景与紧密剧本',at:[time.y,time.m,time.d].join('-')});delta+=quality*.65;}if(Math.random()<.035+Math.min(.08,Number(p.scriptQuality||0)/1800)){p.screenEvents.push({type:'神级演技爆发',at:[time.y,time.m,time.d].join('-')});delta+=35+Math.random()*55;}var next=Math.max(0,Math.round(base+delta));p.heatDelta=Math.round(next-base);p.heat=next;p.heatHistory.push({key:[time.y,time.m,time.w].join('_'),heat:next,delta:p.heatDelta});if(p.heatHistory.length>104)p.heatHistory.shift();});}
 function ensureScreenMarketLimits(){if(!ad.screenMarketLimits)ad.screenMarketLimits={film:50000000000,tv:180000,short:30000};return ad.screenMarketLimits;}
+function applyScreenMarketCompression(){
+  var limits=ensureScreenMarketLimits(),projects=Array.isArray(ad.screenProjects)?ad.screenProjects:[];
+  [['film','boxOffice'],['tv','watchHours'],['short','watchHours']].forEach(function(pair){
+    var kind=pair[0],field=pair[1],list=projects.filter(function(p){return p&&((kind==='film'&&p.kind==='film')||(kind==='tv'&&p.kind==='tv')||(kind==='short'&&p.kind!=='film'&&p.kind!=='tv'));});
+    var raw=list.map(function(p){var key='_rawMarket_'+field;if(!isFinite(Number(p[key])))p[key]=Math.max(0,Number(p[field]||0));return Math.max(0,Number(p[key]||0));});
+    var normalized=marketJitterValues(rankStableMarketCompression(raw,Number(limits[kind]||0)),'screen:'+kind+':'+String(time&&time.y||0)+'_'+String(time&&time.m||0)+'_'+String(time&&time.w||0));list.forEach(function(p,i){p[field]=normalized[i];});
+  });
+}
 window.openScreenMarketLimits=function(){var l=ensureScreenMarketLimits();document.getElementById('mInfoTitle').innerText='影视大盘限制';document.getElementById('mInfoContent').innerHTML='<p style="font-size:11px;color:#777;">限制影视作品可计入的大盘数据上限，电影按美元票房，电视剧和短剧按万小时观看量。</p><label>电影全球票房上限（美元）</label><input id="limitFilm" type="number" value="'+l.film+'"><label>电视剧观看量上限（万小时）</label><input id="limitTV" type="number" value="'+l.tv+'"><label>短剧观看量上限（万小时）</label><input id="limitShort" type="number" value="'+l.short+'"><button onclick="saveScreenMarketLimits()">保存限制</button>';document.getElementById('mInfo').classList.add('open');};
-window.saveScreenMarketLimits=function(){var l=ensureScreenMarketLimits();l.film=Math.max(0,Number(document.getElementById('limitFilm').value)||0);l.tv=Math.max(0,Number(document.getElementById('limitTV').value)||0);l.short=Math.max(0,Number(document.getElementById('limitShort').value)||0);(ad.screenProjects||[]).forEach(function(p){if(p.kind==='film')p.boxOffice=Math.min(Number(p.boxOffice||0),l.film);else p.watchHours=Math.min(Number(p.watchHours||0),p.kind==='tv'?l.tv:l.short);});if(typeof saveGameImmediate==='function')saveGameImmediate();else if(typeof saveGame==='function')saveGame();alert('影视大盘限制已保存。');};
-var _screenComplete=window.completeCurrentScreenProduction;window.completeCurrentScreenProduction=function(){var r=_screenComplete&&_screenComplete.apply(this,arguments),l=ensureScreenMarketLimits(),p=ad.screenProjects&&ad.screenProjects[0];if(p){if(p.kind==='film')p.boxOffice=Math.min(Number(p.boxOffice||0),l.film);else p.watchHours=Math.min(Number(p.watchHours||0),p.kind==='tv'?l.tv:l.short);}if(typeof saveGameImmediate==='function')saveGameImmediate();else if(typeof saveGame==='function')saveGame();return r;};
+window.saveScreenMarketLimits=function(){var l=ensureScreenMarketLimits();l.film=Math.max(0,Number(document.getElementById('limitFilm').value)||0);l.tv=Math.max(0,Number(document.getElementById('limitTV').value)||0);l.short=Math.max(0,Number(document.getElementById('limitShort').value)||0);applyScreenMarketCompression();if(typeof saveGameImmediate==='function')saveGameImmediate();else if(typeof saveGame==='function')saveGame();alert('影视大盘限制已保存。');};
+var _screenComplete=window.completeCurrentScreenProduction;window.completeCurrentScreenProduction=function(){var r=_screenComplete&&_screenComplete.apply(this,arguments);applyScreenMarketCompression();if(typeof saveGameImmediate==='function')saveGameImmediate();else if(typeof saveGame==='function')saveGame();return r;};
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
 (function installCloudDeviceLogin(){
     'use strict';
@@ -24725,7 +24749,9 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
             var result=await request('/api/verify',{password:password,deviceId:deviceId()});
             if(!result.ok){
                 try{localStorage.removeItem(VERIFIED_KEY);}catch(error){}
-                if(result.data.code==='DEVICE_MISMATCH')nativeAlert('该密码已经绑定其他设备。请点击“使用一次性恢复码换绑”，输入恢复码即可迁移到当前设备。');
+                if(result.data.code==='DEVICE_MISMATCH'){
+                    nativeAlert('该账号已经绑定其他设备。请点击“使用一次性恢复码换绑”，输入恢复码即可迁移到当前设备。');
+                }
                 else if(result.data.code==='DEVICE_ALREADY_BOUND')nativeAlert('当前设备已经绑定过另一个密码，不能再使用新的密码。');
                 else nativeAlert(result.data.message||'密码错误或已停用。');
                 return;
@@ -25182,7 +25208,7 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
     function unit(){if(isAlbum)return ' EAU';if(platform==='BB')return ' Pts';if(platform==='Sale')return ' 份';return ' Streams';}
     expected.sort(function(a,b){return metric(b)-metric(a);});
     var rows=Array.from(box.children),first=expected[0],wrong=first&&rows[0]&&rows[0].textContent.indexOf(String(first.n||''))<0,wrongUnit=platform!=='BB'&&rows.some(function(row){return /\bPts\b/.test(row.textContent||'');}),limit=Math.min(expected.length,isAlbum&&platform==='BB'?200:100);
-    if(wrong||wrongUnit||rows.length!==limit){box.innerHTML=expected.slice(0,limit).map(function(t,i){return '<div data-chart-type="'+type+'" class="card" style="display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:8px;align-items:center;"><b>'+(i+1)+'</b><div><b>'+String(t.n||'未命名')+'</b><br><span style="font-size:11px;color:#777;">'+String(t.artist||'未知艺人')+'</span></div><b style="font-size:11px;">'+metric(t).toLocaleString()+unit()+'</b></div>';}).join('')||'<p style="text-align:center;color:#888;">本榜暂无'+(isAlbum?'专辑':'单曲')+'数据</p>';}
+    if(false&& (wrong||wrongUnit||rows.length!==limit)){box.innerHTML=expected.slice(0,limit).map(function(t,i){return '<div data-chart-type="'+type+'" class="card" style="display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:8px;align-items:center;"><b>'+(i+1)+'</b><div><b>'+String(t.n||'未命名')+'</b><br><span style="font-size:11px;color:#777;">'+String(t.artist||'未知艺人')+'</span></div><b style="font-size:11px;">'+metric(t).toLocaleString()+unit()+'</b></div>';}).join('')||'<p style="text-align:center;color:#888;">本榜暂无'+(isAlbum?'专辑':'单曲')+'数据</p>';}
     else rows.forEach(function(row){row.dataset.chartType=type;});return r;
   };
   // Clear stale player-avatar nodes before applying the current artist image.
@@ -25198,7 +25224,15 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
   var settleCeremony=window.startCeremonyUI,confirmAwardPerformance=window.confirmPerformance;
   window.startCeremonyUI=function(){var state=ad&&ad.awardData&&ad.awardData.nominations||{},prefix=String(time&&time.y||'')+'_',nominated=Object.keys(state).some(function(k){if(k.indexOf(prefix)!==0)return false;return Object.keys(state[k]||{}).some(function(c){return (state[k][c]||[]).some(function(x){return x&&x.isMe;});});});if(!nominated)return settleCeremony&&settleCeremony.apply(this,arguments);window.performContext={type:'award',minSongs:1,maxSongs:5,afterCeremony:true,options:[{val:'top',name:'顶级舞美',cost:10000000,songs:5,boost:3},{val:'normal',name:'常规舞美',cost:1000000,songs:5,boost:1.5},{val:'minimal',name:'简约纯享版',cost:0,songs:5,boost:.7}]};if(typeof openSetlistUI==='function')return openSetlistUI('提名典礼现场版表演');return settleCeremony&&settleCeremony.apply(this,arguments);};
   window.confirmPerformance=function(){var award=window.performContext&&window.performContext.type==='award',ctx=window.performContext,r=confirmAwardPerformance&&confirmAwardPerformance.apply(this,arguments);if(award&&ctx&&ctx.afterCeremony){window.performContext=null;setTimeout(function(){settleCeremony&&settleCeremony();},20);}return r;};
-  function fashionInviteState(){if(!ad.fashionInvites)ad.fashionInvites={weeksWithout:0,lastKey:'',history:[]};if(!Array.isArray(ad.magazineCovers))ad.magazineCovers=[];if(!Array.isArray(ad.pendingMagazineIssues))ad.pendingMagazineIssues=[];if(!Array.isArray(ad.magazineSales))ad.magazineSales=[];if(!Array.isArray(ad.endorsements))ad.endorsements=[];if(!Array.isArray(ad.coutureLoans))ad.coutureLoans=[];if(!ad.wardrobe)ad.wardrobe={};ad.wardrobe.hc=Number(ad.wardrobe.hc||0);return ad.fashionInvites;}
+  function fashionInviteState(){if(!ad.fashionInvites)ad.fashionInvites={weeksWithout:0,lastKey:'',history:[]};if(!Array.isArray(ad.magazineCovers))ad.magazineCovers=[];if(!Array.isArray(ad.pendingMagazineIssues))ad.pendingMagazineIssues=[];if(!Array.isArray(ad.magazineSales))ad.magazineSales=[];if(!Array.isArray(ad.endorsements))ad.endorsements=[];if(!Array.isArray(ad.coutureLoans))ad.coutureLoans=[];if(!ad.wardrobe)ad.wardrobe={};ad.wardrobe.hc=Number(ad.wardrobe.hc||0);ensureInitialFashionRankingRecords();return ad.fashionInvites;}
+  function ensureInitialFashionRankingRecords(){
+    if(ad._initialFashionChartsSeeded)return;
+    var artists=Array.isArray(worldArtists)?worldArtists.filter(function(x){return x&&x.n;}).slice(0,10):[],mags=Array.isArray(ad.fashionMags)&&ad.fashionMags.length?ad.fashionMags:(Array.isArray(window.fashionMags)?window.fashionMags:[]),brands=Array.isArray(ad.coutureBrands)&&ad.coutureBrands.length?ad.coutureBrands:(Array.isArray(window.coutureBrands)?window.coutureBrands:[]);
+    if(!artists.length||!mags.length||!brands.length)return;
+    var year=Number(time&&time.y||2026),labels=['第1分钟','第10分钟','第30分钟','第1小时','第6小时','第12小时','第24小时'],points=[.004,.035,.11,.22,.58,.78,1];
+    artists.forEach(function(a,i){var magazine=mags[i%mags.length],issue=i%5===0?'金九刊':i%5===1?'银十刊':'常规刊',price=issue==='金九刊'?20:issue==='银十刊'?17:12,buyers=Math.max(12000,Math.floor(Math.sqrt(Number(a.fans||100000))*900*(1+(i%4)*.18))),poster=labels.map(function(label,j){return {label:label,copies:Math.floor(buyers*points[j])};});ad.magazineSales.push({id:'initial_mag_'+i,artist:a.n,magazine:magazine.n,issue:issue,year:year,month:(i%12)+1,unitPrice:price,buyers:buyers,totalSales:buyers*price,poster:poster,createdAt:year+'年'+((i%12)+1)+'月2日',initial:true});var brand=brands[i%brands.length];if(!Array.isArray(brand.wearHistory))brand.wearHistory=[];for(var j=0;j<1+(i%3);j++)brand.wearHistory.push({name:a.n,date:(year-1)+'年'+(9+i%3)+'月',loan:true,initial:true});});
+    ad._initialFashionChartsSeeded=true;if(typeof save==='function')save();else if(typeof saveGame==='function')saveGame();
+  }
   function fashionRelationship(){return (conts||[]).reduce(function(best,c){var role=String(c&&c.t||c&&c.role||'');return /主编|编辑|时尚|品牌|设计师/.test(role)?Math.max(best,Number(c.affinity||c.rel||0)):best;},0);}
   function playerFashionRank(){var mine=Number(ad&&ad.st&&ad.st.f||0),higher=(worldArtists||[]).filter(function(x){return Number(x.fans||0)>mine;}).length;return higher+1;}
   function runFashionInvitationWeek(){if(!ad||!ad.r)return;var s=fashionInviteState(),key=[time.y,time.m,time.w].join('_');if(s.lastKey===key)return;s.lastKey=key;s.weeksWithout++;var rank=playerFashionRank(),rel=fashionRelationship(),fashion=Number(ad.sk&&ad.sk.fa||0),top=rank===1,chance=Math.min(.75,.025+(top?.22:rank<=5?.10:rank<=20?.04:0)+rel/500+fashion/2500),pity=top&&s.weeksWithout>=4;if(!pity&&Math.random()>chance)return;var mags=ad.fashionMags||window.fashionMags||[],brands=ad.luxuryBrands||window.luxuryBrands||[],couture=ad.coutureBrands||[],counts=[ad.pendingMagazineIssues.length,ad.endorsements.length,ad.coutureLoans.length],kind=counts.indexOf(Math.min.apply(Math,counts)),notice='';if(kind===0&&mags.length){var m=mags[Math.floor(Math.random()*mags.length)],record={id:'mag_'+Date.now(),year:time.y,month:time.m,magazine:m.n,issue:time.m===9?'金九刊':time.m===10?'银十刊':'常规刊',shooting:false,shootDone:false,saleProcessed:false};ad.pendingMagazineIssues.push(record);notice='杂志拍摄邀请：'+m.n+' 邀请 '+ad.s+' 拍摄'+record.issue+'，拍摄约 1 天，发售后才会统计销量。';}else if(kind===1&&brands.length){var b=brands[Math.floor(Math.random()*brands.length)],title=(b.titles&&b.titles[0])||'品牌大使';ad.endorsements.push({year:time.y,month:time.m,brand:b.n,title:title});if(!Array.isArray(b.ambassadors))b.ambassadors=[];if(b.ambassadors.indexOf(ad.s)<0)b.ambassadors.push(ad.s);notice='代言邀请：'+b.n+' 邀请 '+ad.s+' 成为'+title+'。';}else if(couture.length){var c=couture[Math.floor(Math.random()*couture.length)],loan={year:time.y,month:time.m,brand:c.n,event:'公开活动借衣'};ad.coutureLoans.push(loan);ad.wardrobe.hc++;if(!Array.isArray(c.wearHistory))c.wearHistory=[];c.wearHistory.unshift({name:ad.s,date:time.y+'年'+time.m+'月',loan:true});notice='高定借衣：'+c.n+' 主动借给 '+ad.s+' 一套高定礼服，已加入衣橱。';}if(!notice)return;s.weeksWithout=0;s.history.unshift({year:time.y,month:time.m,week:time.w,text:notice,rank:rank,editorRelation:rel});if(posts&&Array.isArray(posts.mom))posts.mom.unshift({t:'时尚邀约',c:notice});save();alert(notice+'\n当前粉丝排名：#'+rank+(rel?' · 时尚人脉 '+rel:''));}
@@ -25229,6 +25263,7 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
   var advMagazineSales=window.advTime;window.advTime=function(){var r=advMagazineSales&&advMagazineSales.apply(this,arguments);processMagazineSales();return r;};
   setTimeout(function(){var map=document.getElementById('mapFashion');if(map&&!document.getElementById('magazineSalesEntry'))map.insertAdjacentHTML('afterbegin','<div id="magazineSalesEntry" class="card"><b>杂志发行数据</b><br><button onclick="openMagazineProjects()">拍摄与待发售</button><button class="sec" onclick="openMagazineSalesChart(\'year\')">杂志销量榜</button></div>');mountFashionRankingApps();},1200);
   setTimeout(mountFashionRankingApps,2400);
+  setTimeout(function(){fashionInviteState();},1400);
   var oldLoad=window.loadGame;window.loadGame=function(slot){var r=oldLoad&&oldLoad.apply(this,arguments);setTimeout(function(){if(typeof ensureInitialArtists==='function')ensureInitialArtists();if(typeof updAttr==='function')updAttr();},80);return r;};
   function restoreSnapshot(data){
     if(!data||typeof data!=='object'||!data.ad||typeof data.ad!=='object')throw new Error('存档缺少玩家核心数据');

@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>星路制作人 - 真实乐坛重制版</title>
+<style>
+/* Dedicated shiny trait visuals: these are layered on top of the base 2D pet. */
+.pet-trait-layer.cream.effect-8.slot-8{right:-18px;top:7px;width:12px;height:12px;border:2px solid currentColor;background:rgba(255,255,255,.45);box-shadow:16px -9px 0 -2px rgba(255,255,255,.65),27px 5px 0 -3px rgba(255,255,255,.7),0 0 7px currentColor;animation:pet-bubbles 2.2s ease-in-out infinite}
+.pet-trait-layer.cream.effect-9.slot-9{left:5px;right:5px;top:-19px;height:18px;border:0;background:radial-gradient(circle at 12% 55%,#fff 0 3px,transparent 4px),radial-gradient(circle at 32% 28%,currentColor 0 3px,transparent 4px),radial-gradient(circle at 55% 62%,#fff5a8 0 3px,transparent 4px),radial-gradient(circle at 78% 30%,currentColor 0 3px,transparent 4px);animation:pet-crown-stars 1.8s ease-in-out infinite}
+.pet-trait-layer.pixel.effect-7.slot-7{inset:-13px;border:2px solid #00e7ff;box-shadow:5px 0 #ff2bd6,-4px 4px #d8ff38;animation:pet-popup-glitch 1.1s steps(2,end) infinite}
+.pet-trait-layer.pixel.effect-9.slot-9{left:2px;right:2px;top:-18px;height:16px;border:0;background:linear-gradient(90deg,transparent 0 8%,#00e7ff 8% 12%,transparent 12% 28%,#ff2bd6 28% 33%,transparent 33% 54%,#d8ff38 54% 59%,transparent 59% 78%,#00e7ff 78% 84%,transparent 84%);animation:pet-reassemble 1.4s steps(3,end) infinite}
+@keyframes pet-bubbles{0%,100%{transform:translateY(3px) scale(.82);opacity:.45}50%{transform:translate(6px,-10px) scale(1.12);opacity:1}}
+@keyframes pet-crown-stars{0%,100%{transform:translateY(3px) rotate(-4deg);opacity:.55}50%{transform:translateY(-5px) rotate(4deg);opacity:1}}
+@keyframes pet-popup-glitch{0%,100%{clip-path:inset(0 0 0 0);opacity:.65}45%{clip-path:inset(0 35% 45% 0);transform:translate(4px,-2px)}70%{clip-path:inset(45% 0 0 35%);transform:translate(-3px,2px)}}
+@keyframes pet-reassemble{0%,100%{transform:translateX(0);opacity:.55}35%{transform:translateX(-6px);opacity:1}68%{transform:translateX(5px);opacity:.8}}
+</style>
 <script>
 // 登录由文件末尾的云端 device-auth 权威层统一接管。
 // ==================== 最终音乐数据一致性修复：同名新歌、概率复评、榜单走势 ====================
@@ -24695,7 +24706,7 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
             var result=await request('/api/verify',{password:password,deviceId:deviceId()});
             if(!result.ok){
                 try{localStorage.removeItem(VERIFIED_KEY);}catch(error){}
-                if(result.data.code==='DEVICE_MISMATCH')nativeAlert('该密码已经绑定其他设备。如需换设备，请让管理员先解绑。');
+                if(result.data.code==='DEVICE_MISMATCH')nativeAlert('该密码已经绑定其他设备。请点击“使用一次性恢复码换绑”，输入恢复码即可迁移到当前设备。');
                 else if(result.data.code==='DEVICE_ALREADY_BOUND')nativeAlert('当前设备已经绑定过另一个密码，不能再使用新的密码。');
                 else nativeAlert(result.data.message||'密码错误或已停用。');
                 return;
@@ -24713,9 +24724,47 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
             if(button){button.disabled=false;button.textContent='验证并进入大厅';}
         }
     };
+    window.rebindWithRecoveryCode=async function(){
+        if(loginBusy)return;
+        var input=document.getElementById('loginPwd'),password=input?input.value.trim():'';
+        if(!password){nativeAlert('请先输入账号密码。');return;}
+        var code=window.prompt('请输入一次性恢复码（使用成功后立即作废）：');
+        if(!code||!code.trim())return;
+        loginBusy=true;
+        try{
+            var result=await request('/api/rebind',{password:password,recoveryCode:code.trim(),deviceId:deviceId()});
+            if(!result.ok){
+                nativeAlert(result.data.message||'恢复码换绑失败。');
+                return;
+            }
+            try{localStorage.setItem(VERIFIED_KEY,'true');localStorage.removeItem('starPro_login_pwd');localStorage.removeItem('starPro_is_unlocked');}catch(error){}
+            if(input)input.value='';
+            enterLobby();
+            nativeAlert('换绑成功。该恢复码已作废，请妥善保管新的恢复码。');
+        }catch(error){nativeAlert('无法连接登录服务器，请稍后重试。');}
+        finally{loginBusy=false;}
+    };
+    window.generateRecoveryCode=async function(){
+        if(loginBusy)return;
+        var input=document.getElementById('loginPwd'),password=input?input.value.trim():'';
+        if(!password){nativeAlert('请先输入账号密码。');return;}
+        loginBusy=true;
+        try{
+            var result=await request('/api/recovery-code',{password:password,deviceId:deviceId()});
+            if(!result.ok){nativeAlert(result.data.message||'恢复码生成失败。');return;}
+            window.prompt('恢复码已生成。它只能使用一次，请立即保存：',result.data.recoveryCode||'');
+        }catch(error){nativeAlert('无法连接登录服务器，请稍后重试。');}
+        finally{loginBusy=false;}
+    };
     window.autoLoginSkip=function(){showLogin();};
     try{localStorage.removeItem('starPro_login_pwd');localStorage.removeItem('starPro_is_unlocked');}catch(error){}
     function start(){
+        var login=document.getElementById('loginPage');
+        if(login&&!document.getElementById('rebindRecoveryButton')){
+            var b=document.createElement('button');b.id='rebindRecoveryButton';b.type='button';b.className='sec';b.textContent='使用一次性恢复码换绑';b.onclick=window.rebindWithRecoveryCode;
+            var anchor=login.querySelector('button');if(anchor&&anchor.parentNode)anchor.parentNode.appendChild(b);else login.appendChild(b);
+            var g=document.createElement('button');g.id='generateRecoveryButton';g.type='button';g.className='sec';g.textContent='在当前设备生成恢复码';g.onclick=window.generateRecoveryCode;b.parentNode.insertBefore(g,b);
+        }
         var verified=false;try{verified=localStorage.getItem(VERIFIED_KEY)==='true';}catch(error){}
         if(!verified){showLogin();return;}
         // Keep the password page hidden while the remembered device session is checked.
@@ -24998,6 +25047,17 @@ var PET_TRAIT_SLOTS=["轮廓","毛发","眼睛","耳朵","尾巴","爪印","移�
 function buildPetTraitPool(family,effects,details){var out=[];effects.forEach(function(effect,ei){details.forEach(function(detail,di){out.push({id:family+"_"+(ei*10+di+1),family:family,name:effect+"·"+detail,slot:PET_TRAIT_SLOTS[di],effect:effect,detail:detail});});});return out;}
 var PIXEL_SHINY_TRAITS=buildPetTraitPool("pixel",["RGB残影","彩码错位","全息描边","数据缺口","像素溢出","扫描脉冲","乱码闪烁","帧率漂移","霓虹缓存","量子贴图"],["轮廓分色","毛色代码块","符号瞳孔","信号耳尖","延迟尾迹","数据脚印","故障冲刺","待机弹窗","互动乱码","启动重组"]);
 var CREAM_SHINY_TRAITS=buildPetTraitPool("cream",["玫瑰珍珠","蓝月极光","香槟糖霜","彩虹星砂","牛奶银河","果冻晶糖","梦境云锦","季节糖晶","音乐虹光","皇冠星屑"],["珍珠轮廓","糖霜毛色","宝石瞳孔","水晶耳尖","梦境尾迹","糖果脚印","极光移动","彩虹呼吸","泡泡互动","星光登场"]);
+var PET_SHINY_EFFECT_DESCRIPTIONS={
+pixel:["RGB红绿蓝残影沿动作方向轻微分离，形成电子屏信号拖影","彩色代码方块局部错位，像贴图坐标短暂发生偏移","细薄全息彩边环绕主体，随角度出现青紫粉色变化","身体局部出现透明数据缺口，缺口内可见流动字符和网格","少量方形像素从轮廓向外溢出，随后重新吸附回身体","横向扫描光带周期性掠过，经过区域短暂提高亮度与饱和度","短促乱码符号在毛发上闪现，保持可爱且不遮挡脸部","动作边缘出现跳帧式重影，像低帧率动画中的连续姿态","柔和霓虹色块像缓存残留一样停留数帧后淡出","身体纹理短暂拆分成彩色模块，再以正确顺序重组"],
+cream:["玫瑰色珍珠光泽沿表面滚动，点缀细小乳白珠粒","蓝紫月光极光在柔软毛发上缓慢流动，边缘带银白微光","香槟金糖霜般的细闪覆盖局部，质感柔软而非金属","细密彩虹星砂散落在毛尖，移动时留下短暂星点","乳白银河纹理在身体表面缓慢旋转，夹杂淡粉和淡蓝星云","半透明果冻晶糖形成圆润高光，颜色清透且保持二维质感","柔和彩云织锦纹理随呼吸轻微变化，像梦境中的丝带","春夏秋冬四色糖晶以小面积斑点随机闪现，不改变基础纯色","音符形虹光随动作出现，颜色依次从粉、蓝、黄、绿过渡","皇冠状星屑在头顶和轮廓附近短暂聚合，再化为细闪落下"]
+};
+var PET_SHINY_SLOT_DESCRIPTIONS={
+pixel:["仅作用于外轮廓，保持内部纯色清晰","以规则代码块覆盖少量毛色区域，不形成第二种基础毛色","集中在眼睛高光与瞳孔符号，可与异瞳独立叠加","集中在一只或两只耳尖，耳朵动作时同步变化","沿尾巴摆动方向形成短距离延迟尾迹","只在脚掌落地位置生成短暂数据脚印","在奔跑、跳跃和转身时加强，静止时明显减弱","休息时形成小型系统弹窗式装饰，不出现文字商标","被点击或抚摸时短暂出现，随后自然消失","只在登场或状态切换瞬间完整展示一次"],
+cream:["沿身体外轮廓排列珍珠与柔光，不遮挡五官","以糖霜般渐变覆盖毛尖，底层仍保持初代纯色","集中在眼睛高光，可形成星星、爱心或宝石切面且不替代异瞳","集中在一只或两只耳尖，使用小颗水晶和柔软亮片","沿尾巴摆动留下轻薄梦境光带，不产生实体第二条尾巴","脚掌落地时留下糖果色星点和小型晶糖脚印","移动时出现柔和极光丝带，静止后缓慢淡出","呼吸时亮度与彩虹色泽轻微起伏，禁止强烈频闪","被点击、喂食或抚摸时生成半透明泡泡与珍珠光点","出生、登场或觉醒时出现星光环与细小皇冠星屑"]
+};
+function buildPetShinyTextDescriptions(style){var effects=PET_SHINY_EFFECT_DESCRIPTIONS[style]||[],slots=PET_SHINY_SLOT_DESCRIPTIONS[style]||[],names=style==='pixel'?PIXEL_SHINY_TRAITS:CREAM_SHINY_TRAITS;return names.map(function(trait,i){return {id:trait.id,name:trait.name||trait.effect+'·'+trait.slot,description:'2D透明背景宠物闪光叠加层；'+effects[Math.floor(i/10)]+'；'+slots[i%10]+'；必须保留动物原本的头、脸、四肢、耳朵和尾巴结构，不改变基础纯色毛色，不生成文字、品牌、商标或现成IP，可与其他闪光层同时叠加。'};});}
+window.PET_SHINY_TEXT_DESCRIPTIONS={pixel:buildPetShinyTextDescriptions('pixel'),cream:buildPetShinyTextDescriptions('cream')};
+window.exportPetShinyDescriptions=function(style){var list=style==='cream'?window.PET_SHINY_TEXT_DESCRIPTIONS.cream:window.PET_SHINY_TEXT_DESCRIPTIONS.pixel,text=list.map(function(x,i){return (i+1)+'. '+x.name+'\n'+x.description;}).join('\n\n'),blob=new Blob([text],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(style==='cream'?'奶油风':'电子像素风')+'100种闪光特效文字描述.txt';a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);};
 function petTraitVisual(trait){if(!trait||!trait.id)return "";var number=Math.max(1,Number(String(trait.id).split("_").pop())||1),effectIndex=Math.floor((number-1)/10),slotIndex=(number-1)%10,family=String(trait.family||String(trait.id).split("_")[0]).replace(/[^a-z]/g,""),hue=(effectIndex*36+slotIndex*11+(family==="cream"?18:0))%360,delay=-(slotIndex*.13+effectIndex*.07).toFixed(2);return '<i class="pet-trait-layer '+family+' effect-'+effectIndex+' slot-'+slotIndex+'" data-trait-id="'+String(trait.id).replace(/[^a-z0-9_\-]/gi,"")+'" data-effect-name="'+String(trait.effect||"").replace(/["<>]/g,"")+'" data-slot-name="'+String(trait.slot||"").replace(/["<>]/g,"")+'" style="--trait-hue:'+hue+';--trait-delay:'+delay+'s;--trait-variant:'+number+'"></i>';}
 function petShinyPool(style){return style==="fusion"?PIXEL_SHINY_TRAITS.concat(CREAM_SHINY_TRAITS):style==="pixel"?PIXEL_SHINY_TRAITS:CREAM_SHINY_TRAITS;}
 function petInheritedShinyRate(parentAShiny,parentBShiny){return parentAShiny&&parentBShiny?.002:parentAShiny||parentBShiny?.0015:PET_SHINY_BASE_RATE;}
@@ -25067,7 +25127,7 @@ async function enrichPetEggColorsAI(a,b,egg){if(a.growthMode==="local"||typeof a
 window.breedWithPetCode=async function(id){var a=findPet(id);if(!a)return;var code=prompt("输入另一只宠物的宠物码");if(!code)return;var b;try{b=decodePetCode(code);}catch(e){return alert(e.message);}a.partner={id:b.id,name:b.name,species:b.species,affection:100,pet:b,lastBreedingWeek:null};a.events.unshift({type:"love",text:"与 "+b.name+" 建立恋爱关系",at:Date.now()});petSave();alert("恋爱关系已建立。恋爱不会立刻产蛋；今后每次转周时，所有宠物伴侣都有概率触发繁育事件。");openPetSystem();};
 window.generatePetPersonalityAI=async function(id){var p=findPet(id);if(!p)return;if(p.growthMode==="local")return alert("当前宠物使用本地模式，请切换到混合或 AI 模式。");try{var response=await api("为一只游戏桌宠生成一句20字以内的可爱性格描述。只返回文字。宠物信息："+petSpeciesLabel(p)+"，"+p.style+"风格，已有经历："+p.events.slice(0,5).map(function(x){return x.text;}).join("；"));if(!response)throw new Error("AI 无返回");p.personality=String(response).replace(/<[^>]*>/g,"").replace(/[{}\[\]`]/g,"").trim().slice(0,40)||p.personality;p.events.unshift({type:"personality",text:"AI 根据成长轨迹形成性格："+p.personality,at:Date.now()});petSave();openPetDetail(id);}catch(e){p.personality=petRandomItem(["外冷内热","爱听 Demo","喜欢追着光点跑","看到奖杯就兴奋","安静但很黏人"],Math.random);p.events.unshift({type:"personality",text:"AI 不可用，使用本地性格："+p.personality,at:Date.now()});petSave();openPetDetail(id);}};
 function mountPetShopApp(){var grid=document.getElementById("phoneGrid");if(!grid||document.getElementById("appPetShop"))return false;grid.insertAdjacentHTML("beforeend",'<div class="app-icon" id="appPetShop" style="background:#f7cde0;color:#3d2d3b;" onclick="openPetShop()"><div class="picon" style="font-weight:900;">P</div><span>宠物商店</span></div>');return true;}
-function mountPetSystem(){var page=document.getElementById("pApi");if(page&&!document.getElementById("petSystemSettingsCard")){var card=document.createElement("div");card.id="petSystemSettingsCard";card.className="card";card.innerHTML='<h2 class="tg" style="font-size:16px;margin-bottom:6px;">桌面宠物</h2><p style="font-size:11px;color:#666;">可选的时尚配饰支线：孵蛋、喂养、成长、恋爱、繁育与闪光轨迹。闪光特征池：电子像素 100 项 · 可爱奶油 100 项。</p><button onclick="openPetSystem()">打开宠物系统</button>';page.insertBefore(card,page.firstChild);}mountPetShopApp();setTimeout(mountPetShopApp,600);try{var local=JSON.parse(localStorage.getItem("starPro_pet_ui_v1")||"null"),s=petStore();if(local&&s){["desktopVisible","size","activePetId","x","y"].forEach(function(k){if(local[k]!==undefined&&s[k]===undefined)s[k]=local[k];});}}catch(e){}renderDesktopPet();}
+function mountPetSystem(){var page=document.getElementById("pApi");if(page&&!document.getElementById("petSystemSettingsCard")){var card=document.createElement("div");card.id="petSystemSettingsCard";card.className="card";card.innerHTML='<h2 class="tg" style="font-size:16px;margin-bottom:6px;">桌面宠物</h2><p style="font-size:11px;color:#666;">可选的时尚配饰支线：孵蛋、喂养、成长、恋爱、繁育与闪光轨迹。闪光特征池：电子像素 100 项 · 可爱奶油 100 项。</p><button onclick="openPetSystem()">打开宠物系统</button><button class="sec" onclick="exportPetShinyDescriptions(\'pixel\')">导出像素风100种描述</button><button class="sec" onclick="exportPetShinyDescriptions(\'cream\')">导出奶油风100种描述</button>';page.insertBefore(card,page.firstChild);}mountPetShopApp();setTimeout(mountPetShopApp,600);try{var local=JSON.parse(localStorage.getItem("starPro_pet_ui_v1")||"null"),s=petStore();if(local&&s){["desktopVisible","size","activePetId","x","y"].forEach(function(k){if(local[k]!==undefined&&s[k]===undefined)s[k]=local[k];});}}catch(e){}renderDesktopPet();}
 window.__petSystemDebug={pixelTraits:PIXEL_SHINY_TRAITS,creamTraits:CREAM_SHINY_TRAITS,createPetBirth:createPetBirth,decodePetCode:decodePetCode,encodePetCode:encodePetCode,localBreedEgg:localBreedEgg};
 var petOriginalAdvTime=window.advTime;window.advTime=function(weeks,showMsg){var count=Math.max(0,Math.floor(Number(weeks)||0)),result;if(!count)return petOriginalAdvTime.apply(this,arguments);for(var petWeek=0;petWeek<count;petWeek++){result=petOriginalAdvTime.call(this,1,!!showMsg&&petWeek===count-1);processWeeklyPetBreeding();}return result;};
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(mountPetSystem,50);});else setTimeout(mountPetSystem,50);
@@ -25133,6 +25193,9 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
   function readIndexedSave(key){return new Promise(function(resolve,reject){if(!window.indexedDB)return resolve(null);var request=indexedDB.open('starProLocalSaves',1);request.onerror=function(){reject(request.error);};request.onsuccess=function(){var get=request.result.transaction('saves','readonly').objectStore('saves').get(key);get.onsuccess=function(){resolve(get.result||null);};get.onerror=function(){reject(get.error);};};});}
   window.mainMenuLoad=async function(){var slot=(document.getElementById('mainMenuSlot')||{}).value||'1',key='starProSave_'+slot,raw=null;if(document.getElementById('selSaveSlot'))document.getElementById('selSaveSlot').value=slot;try{raw=localStorage.getItem(key);if(!raw)raw=await readIndexedSave(key);if(!raw)return alert('存档槽位 '+slot+' 为空。');var data=JSON.parse(raw);restoreSnapshot(data);try{localStorage.setItem(key,raw);}catch(e){}document.getElementById('createPage').style.display='none';document.getElementById('createPage').classList.remove('active');var main=document.getElementById('gameMain');if(main){main.style.display='block';main.classList.add('active');}var top=document.getElementById('topBar');if(top)top.style.display='flex';alert('读取成功：已恢复 '+trackPool.length+' 项音乐数据、'+worldArtists.length+' 位艺人。');}catch(error){console.error('读档失败',error);alert('读取失败：'+(error&&error.message||String(error)));}};
 })();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){document.querySelectorAll('button').forEach(function(b){if(/导出(像素风|奶油风)100种描述/.test(b.textContent||''))b.remove();});},100);});
 </script>
 </body>
 </html>

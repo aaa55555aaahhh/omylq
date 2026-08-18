@@ -24157,7 +24157,7 @@ function installRuntimeAuthority(){
         if(typeof updAttr==='function')updAttr();if(showNotice)alert(notices.length?notices.join('\n')+'\n\n'+summaries.join('\n'):summaries.join('\n'));return notices;
     }
     window.checkTitles=function(){var result=updateTitleCompetition(true);saveNow();return result;};window.updateTitleCompetition=updateTitleCompetition;window.__titleCompetitionDebug={normalizeGender:normalizedTitleGender,eligible:eligibleTitleArtists,strength:titleStrength};
-    var baseAdvAuthority=window.advTime;window.advTime=function(){var r=baseAdvAuthority.apply(this,arguments);normalizeDailyMarket();scanRumors(false);settleRumors();updateTitleCompetition(false);return r;};
+    var baseAdvAuthority=window.advTime;window.advTime=function(){var r=typeof baseAdvAuthority==='function'?baseAdvAuthority.apply(this,arguments):undefined;normalizeDailyMarket();scanRumors(false);settleRumors();updateTitleCompetition(false);return r;};
     var baseShowMapAuthority=window.showMap;window.showMap=function(id){var r=baseShowMapAuthority.apply(this,arguments);if(id==='mapHome')mountBasement();if(id==='mapFashion')window.renderFashionHouse();return r;};
 
     // One authoritative repair/migration kernel. It repairs invalid state only and never rerolls valid progress.
@@ -24670,7 +24670,7 @@ repairZeroStreamSongs();setInterval(repairZeroStreamSongs,1500);
 function recordAllSongTrends(){var songs=(trackPool||[]).filter(function(t){return t&&t.type==='track';}),global=songs.slice().sort(function(a,b){return Number(b.stmGlobal||0)-Number(a.stmGlobal||0);}),us=songs.slice().sort(function(a,b){return Number(b.stmUS||b.stmGlobal||0)-Number(a.stmUS||a.stmGlobal||0);}),key=[time&&time.y,time&&time.m,time&&time.w].join('_');songs.forEach(function(t){if(!Array.isArray(t.chartHistory))t.chartHistory=[];if(t._trendKey===key)return;var gi=global.indexOf(t)+1,ui=us.indexOf(t)+1;t.chartHistory.push({key:key,global:gi<=100?gi:'OUT',us:ui<=100?ui:'OUT',inGlobal:gi<=100,inUS:ui<=100,streams:Number(t.stmGlobal||0)});t.trendChart=t.chartHistory.map(function(x){return x.global;});t._trendKey=key;});}
 recordAllSongTrends();
 var _trendAdvance=window.advTime;if(typeof _trendAdvance==='function')window.advTime=function(){var r=_trendAdvance.apply(this,arguments);recordAllSongTrends();return r;};
-var _shootMVBase=window.shootMV;window.shootMV=function(tid,type){var t=(trackPool||[]).find(function(x){return String(x.id)===String(tid);});if(!t||typeof _shootMVBase!=='function')return;type=Number(type)||0;var count=type===0?Number(t.mvLyricCount||0):Number(t.mvRealCount||0),limit=type===0?5:3;if(count>=limit)return alert((type===0?'歌词 MV':'真人 MV')+' 已达到最多 '+limit+' 次拍摄次数。');if(type===0)t.hasLyricMV=false;else t.hasRealMV=false;var result=_shootMVBase.apply(this,arguments);if(type===0){t.mvLyricCount=count+1;t.hasLyricMV=false;}else{t.mvRealCount=count+1;t.hasRealMV=false;}t.mvN=Number(t.mvN||0);if(typeof saveGameImmediate==='function')saveGameImmediate();else if(typeof saveGame==='function')saveGame();return result;};
+    var _shootMVBase=window.shootMV;window.shootMV=function(tid,type){var t=(trackPool||[]).find(function(x){return String(x.id)===String(tid);});if(!t||typeof _shootMVBase!=='function')return;type=Number(type)||0;var count=type===0?Number(t.mvLyricCount||0):Number(t.mvRealCount||0),limit=type===0?5:3;if(count>=limit)return alert((type===0?'歌词 MV':'真人 MV')+' 已达到最多 '+limit+' 次拍摄次数。');var beforeMv=Number(t.mvN||0),result=_shootMVBase.apply(this,arguments);if(type===0){t.mvLyricCount=Math.max(count+1,Number(t.mvLyricCount||0));if(Number(t.mvN||0)>beforeMv||t.mvLyricCount>count)t.hasLyricMV=true;}else{t.mvRealCount=Math.max(count+1,Number(t.mvRealCount||0));if(Number(t.mvN||0)>beforeMv||t.mvRealCount>count)t.hasRealMV=true;}t.mvN=Number(t.mvN||0);if(typeof saveGameImmediate==='function')saveGameImmediate();else if(typeof saveGame==='function')saveGame();return result;};
 function normalizeEntertainmentCredits(){
   var directors=['Alex Morgan','Sofia Bennett','Jordan Reed','Maya Collins'],writersList=['Evan Brooks','Nora Hayes','Liam Carter','Ivy Morgan'],cameras=['Theo Grant','Riley Stone','Clara Woods','Noah Blake'],locations=['Vancouver Studio','Atlanta Backlot','London Stage','Los Angeles Lot'];
   var grades=['E','D','C','B','A','A+','S','S+'],venues=['废弃仓库','普通棚拍','城市外景','专业摄影棚','精品片场','历史建筑','顶级摄影棚','地标级场景'];
@@ -25244,9 +25244,10 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
   function ensureInitialFashionRankingRecords(){
     if(ad._initialFashionChartsSeeded)return;
     var artists=Array.isArray(worldArtists)?worldArtists.filter(function(x){return x&&x.n;}).slice(0,10):[],mags=Array.isArray(ad.fashionMags)&&ad.fashionMags.length?ad.fashionMags:(Array.isArray(window.fashionMags)?window.fashionMags:[]),brands=Array.isArray(ad.coutureBrands)&&ad.coutureBrands.length?ad.coutureBrands:(Array.isArray(window.coutureBrands)?window.coutureBrands:[]);
-    if(!artists.length||!mags.length||!brands.length)return;
+    if(!mags.length){mags=[{n:'全球时尚月刊',tier:'T1',type:'综合'}];ad.fashionMags=mags;}
+    if(!artists.length||!mags.length)return;
     var year=Number(time&&time.y||2026),labels=['第1分钟','第10分钟','第30分钟','第1小时','第6小时','第12小时','第24小时'],points=[.004,.035,.11,.22,.58,.78,1];
-    artists.forEach(function(a,i){var magazine=mags[i%mags.length],issue=i%5===0?'金九刊':i%5===1?'银十刊':'常规刊',price=issue==='金九刊'?20:issue==='银十刊'?17:12,buyers=Math.max(12000,Math.floor(Math.sqrt(Number(a.fans||100000))*900*(1+(i%4)*.18))),poster=labels.map(function(label,j){return {label:label,copies:Math.floor(buyers*points[j])};});ad.magazineSales.push({id:'initial_mag_'+i,artist:a.n,magazine:magazine.n,issue:issue,year:year,month:(i%12)+1,unitPrice:price,buyers:buyers,totalSales:buyers*price,poster:poster,createdAt:year+'年'+((i%12)+1)+'月2日',initial:true});var brand=brands[i%brands.length];if(!Array.isArray(brand.wearHistory))brand.wearHistory=[];for(var j=0;j<1+(i%3);j++)brand.wearHistory.push({name:a.n,date:(year-1)+'年'+(9+i%3)+'月',loan:true,initial:true});});
+    artists.forEach(function(a,i){var magazine=mags[i%mags.length],issue=i%5===0?'金九刊':i%5===1?'银十刊':'常规刊',price=issue==='金九刊'?20:issue==='银十刊'?17:12,buyers=Math.max(12000,Math.floor(Math.sqrt(Number(a.fans||100000))*900*(1+(i%4)*.18))),poster=labels.map(function(label,j){return {label:label,copies:Math.floor(buyers*points[j])};});if(!ad.magazineSales.some(function(x){return x&&x.id==='initial_mag_'+i;}))ad.magazineSales.push({id:'initial_mag_'+i,artist:a.n,magazine:magazine.n,issue:issue,year:year,month:(i%12)+1,unitPrice:price,buyers:buyers,totalSales:buyers*price,poster:poster,createdAt:year+'年'+((i%12)+1)+'月2日',initial:true});if(brands.length){var brand=brands[i%brands.length];if(!Array.isArray(brand.wearHistory))brand.wearHistory=[];for(var j=0;j<1+(i%3);j++)brand.wearHistory.push({name:a.n,date:(year-1)+'年'+(9+i%3)+'月',loan:true,initial:true});}});
     ad._initialFashionChartsSeeded=true;if(typeof save==='function')save();else if(typeof saveGame==='function')saveGame();
   }
   function fashionRelationship(){return (conts||[]).reduce(function(best,c){var role=String(c&&c.t||c&&c.role||'');return /主编|编辑|时尚|品牌|设计师/.test(role)?Math.max(best,Number(c.affinity||c.rel||0)):best;},0);}
@@ -25332,6 +25333,7 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
       if(value===1&&typeof window.advHour==='function')window.advHour(24);
       else if(value===30&&typeof window.advTime==='function')window.advTime(4,true);
       else if(typeof window.advTime==='function')window.advTime(1,true);
+      if(window.__starProSaveDirty&&typeof window.updAttr==='function')window.updAttr();
     }catch(error){
       console.error('时间推演失败',error);
       var message='时间推演失败：'+(error&&error.message||String(error));
@@ -25352,7 +25354,53 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   function normalizeMagazineChartState(){if(!window.ad||typeof ad!=='object')return;if(!Array.isArray(ad.magazineSales))ad.magazineSales=[];if(!Array.isArray(ad.pendingMagazineIssues))ad.pendingMagazineIssues=[];if(!Array.isArray(ad.magazineCovers))ad.magazineCovers=[];ad.magazineSales=ad.magazineSales.filter(function(x){return x&&typeof x==='object';}).map(function(x,i){x.id=String(x.id||('mag_sale_'+i));x.artist=String(x.artist||ad.s||'未命名艺人');x.magazine=String(x.magazine||'未命名杂志');x.issue=String(x.issue||'常规刊');x.buyers=Math.max(0,Number(x.buyers)||0);x.unitPrice=Math.max(0,Number(x.unitPrice)||0);x.totalSales=Number(x.totalSales)||x.buyers*x.unitPrice;x.poster=Array.isArray(x.poster)?x.poster:[];return x;});ad.pendingMagazineIssues=ad.pendingMagazineIssues.filter(function(x){return x&&typeof x==='object';}).map(function(x,i){x.id=String(x.id||('mag_pending_'+i));x.magazine=String(x.magazine||'未命名杂志');x.issue=String(x.issue||'常规刊');x.shootDone=!!x.shootDone;x.saleProcessed=!!x.saleProcessed;return x;});}
   var oldMagazineChart=window.openMagazineSalesChart;window.openMagazineSalesChart=function(scope){normalizeMagazineChartState();try{return oldMagazineChart&&oldMagazineChart.call(this,scope||'year');}catch(error){console.error('杂志销量榜读取失败',error);var title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo');if(title)title.innerText='杂志销量榜';if(content)content.innerHTML='<p>榜单数据正在修复，请重新打开。</p>';if(modal)modal.classList.add('open');}};
   function showLoadedGame(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.style.display='none';});var create=document.getElementById('createPage');if(create){create.style.display='none';create.classList.remove('active');}var main=document.getElementById('gameMain');if(main){main.style.display='block';main.classList.add('active');}var attr=document.getElementById('pAttr');if(attr)attr.classList.add('active');var top=document.getElementById('topBar');if(top)top.style.display='flex';if(typeof updTimeUI==='function')updTimeUI();if(typeof updAttr==='function')updAttr();if(typeof renderAlb==='function')renderAlb();if(typeof renderNpcList==='function')renderNpcList();}
-  window.loadGame=async function(slotOverride){var slot=slotId(slotOverride),key='starProSave_'+slot,raw=null;try{if(typeof window.readBoundLocalSave==='function')try{raw=await window.readBoundLocalSave(slot,false);}catch(e){}if(!raw)try{raw=localStorage.getItem(key);}catch(e){}if(!raw&&typeof window.readIndexedSave==='function')try{raw=await window.readIndexedSave(key);}catch(e){}if(!raw){alert('未找到存档槽位 '+slot+'。');return false;}var data=parseSave(raw);try{localStorage.setItem(key,typeof raw==='string'?raw:JSON.stringify(raw));}catch(e){}restoreFullSave(data);normalizeMagazineChartState();if(window.GameRuntime&&typeof GameRuntime.repair==='function')GameRuntime.repair({scope:'all',save:false});showLoadedGame();return true;}catch(error){console.error('统一读档失败',error);alert('读取失败：'+(error&&error.message||String(error)));return false;}};
+  window.loadGame=async function(slotOverride){var slot=slotId(slotOverride),key='starProSave_'+slot,raw=null;try{if(typeof window.readBoundLocalSave==='function')try{raw=await window.readBoundLocalSave(slot,false);}catch(e){}if(!raw)try{raw=localStorage.getItem(key);}catch(e){}if(!raw&&typeof window.readIndexedSave==='function')try{raw=await window.readIndexedSave(key);}catch(e){}if(!raw){console.warn('存档槽位不存在：'+slot);return false;}var data=parseSave(raw);try{localStorage.setItem(key,typeof raw==='string'?raw:JSON.stringify(raw));}catch(e){}restoreFullSave(data);normalizeMagazineChartState();if(window.GameRuntime&&typeof GameRuntime.repair==='function')GameRuntime.repair({scope:'all',save:false});showLoadedGame();return true;}catch(error){console.error('统一读档失败',error);alert('读取失败：'+(error&&error.message||String(error)));return false;}};
+})();
+</script>
+<script>
+// Simple song chart authority: independent daily, weekly and yearly ranks.
+(function installSimpleSongChartAuthority(){
+  function songs(){return (window.trackPool||[]).filter(function(t){return t&&t.type==='track';});}
+  function stamp(kind){return kind==='daily'?[time.y,time.m,time.d].join('_'):kind==='weekly'?[time.y,time.m,time.w].join('_'):String(time.y);}
+  function rankValue(list,item){var index=list.indexOf(item);return index>=0&&index<100?index+1:'OUT';}
+  function historyFor(t){if(!t.rankHistory||typeof t.rankHistory!=='object')t.rankHistory={daily:[],weekly:[],yearly:[],decade:[]};['daily','weekly','yearly','decade'].forEach(function(kind){if(!Array.isArray(t.rankHistory[kind]))t.rankHistory[kind]=[];});return t.rankHistory;}
+  function recordRankHistory(t,kind,key,rank){var history=historyFor(t)[kind],last=history[history.length-1];if(last&&last.key===key){last.rank=rank;return;}history.push({key:key,rank:rank});if(history.length>104)history.shift();}
+  function yearlyScore(t,key){if(t._yearRankYear!==key){t._yearRankYear=key;t._yearRankScore=0;t._yearRankDay='';}var dayKey=stamp('daily');if(t._yearRankDay!==dayKey){t._yearRankScore+=Math.max(0,Number(t.stmGlobal_Day||0));t._yearRankDay=dayKey;}return Number(t._yearRankScore||0);}
+  function decadeBucket(){return Math.floor(Number(time.y||2026)/10)*10;}
+  function decadeLabel(){return String(decadeBucket()).slice(-2)+'s';}
+  function decadeScore(t){var key=decadeBucket();return Number(t.stmGlobal_Decade||((t.decadeStats||{})[key])||t.stmGlobal||0);}
+  function recordIndependentSongRanks(){var list=songs(),daily=list.slice().sort(function(a,b){return Number(b.stmGlobal_Day||0)-Number(a.stmGlobal_Day||0);}),weekly=list.slice().sort(function(a,b){return Number(b.stmGlobal_Week||0)-Number(a.stmGlobal_Week||0);}),yearKey=String(time.y),yearly=list.slice().sort(function(a,b){return yearlyScore(b,yearKey)-yearlyScore(a,yearKey);}),decadeKey=decadeLabel(),decade=list.slice().sort(function(a,b){return decadeScore(b)-decadeScore(a);});list.forEach(function(t){t.dailyRank=rankValue(daily,t);t.weeklyRank=rankValue(weekly,t);t.yearlyRank=rankValue(yearly,t);t.decadeRank=rankValue(decade,t);recordRankHistory(t,'daily',stamp('daily'),t.dailyRank);recordRankHistory(t,'weekly',stamp('weekly'),t.weeklyRank);recordRankHistory(t,'yearly',yearKey,t.yearlyRank);recordRankHistory(t,'decade',decadeKey,t.decadeRank);});}
+  function trend(t,kind){var rows=historyFor(t)[kind];return rows.length?rows.map(function(x){return x.rank==='OUT'?'OUT':'#'+x.rank;}).join(' → '):'暂无记录';}
+  function esc(value){return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  var previousRanks=window.updatePeakRanks;
+  window.updatePeakRanks=function(){var result=typeof previousRanks==='function'?previousRanks.apply(this,arguments):undefined;recordIndependentSongRanks();return result;};
+  recordIndependentSongRanks();
+  var previousShootMV=window.shootMV;
+  window.shootMV=function(tid,type){var t=songs().find(function(x){return String(x.id)===String(tid);});if(!t)return;type=Number(type)||0;if(type===0&&t.hasLyricMV)return alert('这首歌已经拍过歌词 MV。');if(type===1&&t.hasRealMV)return alert('这首歌已经拍过真人 MV。');var before=Number(t.mvN||0),result=typeof previousShootMV==='function'?previousShootMV.apply(this,arguments):undefined;if(Number(t.mvN||0)>before){if(type===0)t.hasLyricMV=true;else t.hasRealMV=true;}return result;};
+  window.viewSongStats=function(songId){var t=songs().find(function(x){return String(x.id)===String(songId);});if(!t)return alert('找不到这首歌曲。');recordIndependentSongRanks();var title=document.getElementById('mGameInputTitle'),desc=document.getElementById('mGameInputDesc'),field=document.getElementById('mGameInputField'),modal=document.getElementById('mGameInput');if(!title||!desc||!modal)return;title.innerText='歌曲详情';desc.innerHTML='<div style="font-size:12px;line-height:1.8;"><b>《'+esc(t.n||'未命名歌曲')+'》</b><br>艺人：'+esc(t.artist||'未知')+'<br>全球流媒：'+Number(t.stmGlobal||0).toLocaleString()+'<br>日榜当前：'+(t.dailyRank==='OUT'?'OUT':'#'+t.dailyRank)+'<br>周榜当前：'+(t.weeklyRank==='OUT'?'OUT':'#'+t.weeklyRank)+'<br>年榜当前：'+(t.yearlyRank==='OUT'?'OUT':'#'+t.yearlyRank)+'<br>'+decadeLabel()+'当前：'+(t.decadeRank==='OUT'?'OUT':'#'+t.decadeRank)+'<div class="card" style="margin-top:8px;"><b>日榜走势</b><br>'+trend(t,'daily')+'</div><div class="card"><b>周榜走势</b><br>'+trend(t,'weekly')+'</div><div class="card"><b>年榜走势</b><br>'+trend(t,'yearly')+'</div><div class="card"><b>'+decadeLabel()+'走势</b><br>'+trend(t,'decade')+'</div></div>';if(field)field.style.display='none';modal.classList.add('open');};
+  window.__simpleSongCharts={record:recordIndependentSongRanks};
+})();
+</script>
+<script>
+// Manual-save authority: gameplay changes stay in memory until the player saves.
+(function installManualSaveAuthority(){
+  var writeLocalSnapshot=window.saveGameImmediate;
+  window.__starProSaveDirty=false;
+  window.saveGame=function(){window.__starProSaveDirty=true;return false;};
+  window.saveGameImmediate=function(){window.__starProSaveDirty=true;return false;};
+  window.manualSaveGame=function(){
+    try{
+      var result=writeLocalSnapshot&&writeLocalSnapshot.apply(this,arguments);
+      window.__starProSaveDirty=false;
+      if(result!==false)alert('已手动保存到本地存档。');
+      return result;
+    }catch(error){
+      console.error('手动保存失败',error);
+      alert('手动保存失败：'+(error&&error.message||String(error)));
+      return false;
+    }
+  };
+  document.querySelectorAll('button[onclick="saveGameImmediate()"]').forEach(function(button){button.setAttribute('onclick','manualSaveGame()');});
 })();
 </script>
 </body>

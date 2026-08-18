@@ -25354,6 +25354,159 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
 })();
 </script>
 <script>
+// Final feature runtime reconciliation: ensure new systems receive state and visible entry points after every start or load.
+(function installFeatureRuntimeReconciliation(){
+  if(window.__featureRuntimeReconciliationInstalled)return;
+  window.__featureRuntimeReconciliationInstalled=true;
+  function activeCareer(){return typeof ad!=='undefined'&&ad&&typeof ad==='object'&&!!ad.r;}
+  function ensureArray(key){if(!Array.isArray(ad[key]))ad[key]=[];}
+  function addPhoneApp(id,label,color,handler){var grid=document.getElementById('phoneGrid');if(!grid||document.getElementById(id))return;var app=document.createElement('div');app.className='app-icon';app.id=id;app.style.background=color;app.innerHTML='<div class="picon">'+label.slice(0,2)+'</div><span>'+label+'</span>';app.onclick=handler;grid.appendChild(app);}
+  function mountProjectEntries(){var project=document.querySelector('#pProj > .card')||document.querySelector('#pProj .card');if(project&&!document.getElementById('btnGroupProject')){var button=document.createElement('button');button.id='btnGroupProject';button.className='sec';button.textContent='团体企划';button.onclick=function(){if(typeof window.openGroupHub==='function')window.openGroupHub();};project.insertBefore(button,project.firstChild);}}
+  function reconcile(){if(!activeCareer())return;['screenActors','entertainmentGroups','castingAnnouncements','screenProjects','pendingMagazineIssues','magazineSales','magazineCovers','endorsements','coutureLoans','fashionRivals'].forEach(ensureArray);if(!ad.groupCareer||typeof ad.groupCareer!=='object')ad.groupCareer={activeGroupId:'',soloStatus:'solo'};if(typeof mountWorldEntries==='function')mountWorldEntries();mountProjectEntries();if(typeof mountPetSystem==='function')mountPetSystem();if(typeof mountFashionRankingApps==='function')mountFashionRankingApps();addPhoneApp('appMagazineSales','杂志销量榜','#ef476f',function(){if(typeof window.openMagazineSalesChart==='function')window.openMagazineSalesChart('year');});addPhoneApp('appCoutureLoans','高定借出榜','#f4c542',function(){if(typeof window.openCoutureLoanChart==='function')window.openCoutureLoanChart();});}
+  function schedule(){setTimeout(reconcile,80);setTimeout(reconcile,900);}
+  var baseStart=window.startGame;if(typeof baseStart==='function')window.startGame=function(){var result=baseStart.apply(this,arguments);schedule();return result;};
+  var baseLoad=window.loadGame;if(typeof baseLoad==='function')window.loadGame=function(){var result=baseLoad.apply(this,arguments);if(result&&typeof result.then==='function')return result.then(function(value){schedule();return value;});schedule();return result;};
+  var baseShowMap=window.showMap;if(typeof baseShowMap==='function')window.showMap=function(){var result=baseShowMap.apply(this,arguments);schedule();return result;};
+  var observer=new MutationObserver(function(){if(activeCareer()&&(!document.getElementById('petSystemSettingsCard')||!document.getElementById('appMagazineSales')||!document.getElementById('appCoutureLoans')||!document.getElementById('btnGroupProject')))reconcile();});observer.observe(document.body,{childList:true,subtree:true});
+  schedule();
+})();
+</script>
+<script>
+// Regional authority: groups and fashion titles use one shared regional model.
+(function installRegionalAuthority(){
+  if(window.__regionalAuthorityInstalled)return;
+  window.__regionalAuthorityInstalled=true;
+  var REGION_SYSTEM={
+    global:{name:'国际',tier:0,market:1.00},fr:{name:'法国',tier:0,market:1.16},it:{name:'意大利',tier:0,market:1.13},uk:{name:'英国',tier:0,market:1.10},us:{name:'美国',tier:0,market:1.10},
+    cn:{name:'中国',tier:1,market:.91},jp:{name:'日本',tier:2,market:.82},kr:{name:'韩国',tier:3,market:.76},
+    de:{name:'德国',tier:2,market:.83},es:{name:'西班牙',tier:2,market:.81},ca:{name:'加拿大',tier:2,market:.80},au:{name:'澳大利亚',tier:2,market:.78},br:{name:'巴西',tier:2,market:.79},mx:{name:'墨西哥',tier:2,market:.77},sea:{name:'东南亚',tier:3,market:.72},in:{name:'印度',tier:3,market:.73},af:{name:'非洲',tier:3,market:.68}
+  };
+  window.REGION_SYSTEM=REGION_SYSTEM;
+  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function regions(){return Object.keys(REGION_SYSTEM);}
+  function regionName(key){return (REGION_SYSTEM[key]||REGION_SYSTEM.global).name;}
+  function regionOptions(selected,includeGlobal){return regions().filter(function(key){return includeGlobal||key!=='global';}).map(function(key){return '<option value="'+key+'" '+(key===selected?'selected':'')+'>'+regionName(key)+'</option>';}).join('');}
+  function regionEdition(item){
+    var base=REGION_SYSTEM[item&&item.motherRegion]||REGION_SYSTEM.global,edition=REGION_SYSTEM[item&&item.editionRegion]||base;
+    var kind=item&&item.editionKind==='regional'?'地区刊':'母版';
+    return {kind:kind,mother:item&&item.motherRegion||'global',region:item&&item.editionRegion||item&&item.motherRegion||'global',motherTier:base.tier,editionTier:edition.tier,market:edition.market*(item&&item.editionKind==='regional'?1:1.08)};
+  }
+  window.regionEdition=regionEdition;
+  function normalizeRegionalFashionData(){
+    if(!window.ad||typeof ad!=='object')return;
+    var mags=Array.isArray(ad.fashionMags)&&ad.fashionMags.length?ad.fashionMags:(Array.isArray(window.fashionMags)?window.fashionMags:[]);
+    var brands=Array.isArray(ad.luxuryBrands)&&ad.luxuryBrands.length?ad.luxuryBrands:(Array.isArray(window.luxuryBrands)?window.luxuryBrands:[]);
+    var cores=['fr','it','uk','us','cn'];
+    mags.forEach(function(m,i){if(!m||typeof m!=='object')return;if(!REGION_SYSTEM[m.motherRegion])m.motherRegion=cores[i%cores.length];if(!REGION_SYSTEM[m.editionRegion])m.editionRegion=m.motherRegion;if(m.editionKind!=='regional')m.editionKind='mother';});
+    brands.forEach(function(b,i){if(!b||typeof b!=='object')return;if(!REGION_SYSTEM[b.homeRegion])b.homeRegion=cores[i%cores.length];if(!b.brandReach)b.brandReach=b.homeRegion==='global'?'international':'regional';});
+    ad.fashionMags=mags;ad.luxuryBrands=brands;window.fashionMags=mags;window.luxuryBrands=brands;
+  }
+  window.normalizeRegionalFashionData=normalizeRegionalFashionData;
+  function groupMarketType(group){return group&&['international','regional','coLaunch'].indexOf(group.marketType)>=0?group.marketType:'international';}
+  window.groupMarketType=groupMarketType;
+  function normalizeRegionalGroup(group){
+    if(!group||typeof group!=='object')return group;
+    if(!REGION_SYSTEM[group.homeRegion])group.homeRegion='global';
+    if(!REGION_SYSTEM[group.trainingRegion])group.trainingRegion=group.homeRegion;
+    group.marketType=groupMarketType(group);
+    if(!Array.isArray(group.marketTags))group.marketTags=[];
+    return group;
+  }
+  window.normalizeRegionalGroup=normalizeRegionalGroup;
+  function regionalGroupMultiplier(group){
+    group=normalizeRegionalGroup(group);var home=REGION_SYSTEM[group.homeRegion]||REGION_SYSTEM.global,type=group.marketType;
+    if(type==='international')return 1.08;
+    if(type==='coLaunch')return 1.04+Math.max(0,home.market-0.7)*.10;
+    return .84+home.market*.20;
+  }
+  window.regionalGroupMultiplier=regionalGroupMultiplier;
+  function groupTypeLabel(group){var type=groupMarketType(group);return type==='regional'?'地区团体':type==='coLaunch'?'地区与国际联推团体':'国际团体';}
+  function normalizeAll(){normalizeRegionalFashionData();if(ad&&Array.isArray(ad.entertainmentGroups))ad.entertainmentGroups.forEach(normalizeRegionalGroup);}
+  function editionLabel(item){var x=regionEdition(item);return x.kind+' · 母版 '+regionName(x.mother)+'（T'+x.motherTier+'） · '+regionName(x.region)+'版（T'+x.editionTier+'）';}
+  function brandLabel(item){return '所属地区：'+regionName(item.homeRegion)+' · '+(item.brandReach==='international'?'国际线':'地区线');}
+
+  var baseFashion=window.renderFashionHouse;
+  window.renderFashionHouse=function(){normalizeRegionalFashionData();var result=typeof baseFashion==='function'?baseFashion.apply(this,arguments):undefined,magBox=document.getElementById('fashionMag'),brandBox=document.getElementById('fashionBrand');
+    if(magBox){var cards=magBox.querySelectorAll('.card');(window.fashionMags||[]).forEach(function(m,i){var card=cards[i];if(!card)return;var old=card.querySelector('.regional-line');if(old)old.remove();var line=document.createElement('div');line.className='regional-line';line.style.cssText='font-size:11px;color:#666;margin:4px 0;';line.textContent=editionLabel(m);card.insertBefore(line,card.querySelector('button')||null);});if(!document.getElementById('regionalFashionGuide')){var guide=document.createElement('div');guide.id='regionalFashionGuide';guide.className='card';guide.style.cssText='font-size:11px;line-height:1.65;margin:7px 0;';guide.innerHTML='<b>地区刊规则</b><br>母版高于同类型地区刊；母版地 T0 的地区刊高于 T2 母版。刊期（金九、银十、周年）在同一地区体系内再比较。';magBox.insertBefore(guide,magBox.firstChild);}}
+    if(brandBox){var brandCards=brandBox.querySelectorAll('.card');(window.luxuryBrands||[]).forEach(function(b,i){var card=brandCards[i];if(!card)return;var old=card.querySelector('.regional-brand-line');if(old)old.remove();var line=document.createElement('div');line.className='regional-brand-line';line.style.cssText='font-size:11px;color:#666;margin:4px 0;';line.textContent=brandLabel(b);card.insertBefore(line,card.querySelector('button')||null);});}
+    return result;
+  };
+  var baseEditMag=window.editFashionMag;
+  window.editFashionMag=function(i){normalizeRegionalFashionData();var result=typeof baseEditMag==='function'?baseEditMag.apply(this,arguments):undefined,m=(window.fashionMags||[])[i],box=document.getElementById('mInfoContent');if(!m||!box||box.querySelector('#editMagMotherRegion'))return result;var fields='<label>母版地区</label><select id="editMagMotherRegion">'+regionOptions(m.motherRegion,true)+'</select><label>当前版本</label><select id="editMagEditionKind"><option value="mother" '+(m.editionKind==='mother'?'selected':'')+'>母版</option><option value="regional" '+(m.editionKind==='regional'?'selected':'')+'>地区刊</option></select><label>发行地区</label><select id="editMagEditionRegion">'+regionOptions(m.editionRegion,true)+'</select>';box.insertAdjacentHTML('beforeend',fields);return result;};
+  var baseSaveMag=window.saveFashionMagEraEditor;
+  window.saveFashionMagEraEditor=function(){var idx=window.editingFashionMagIdx,m=(window.fashionMags||[])[idx],mother=(document.getElementById('editMagMotherRegion')||{}).value,kind=(document.getElementById('editMagEditionKind')||{}).value,region=(document.getElementById('editMagEditionRegion')||{}).value;if(m){m.motherRegion=REGION_SYSTEM[mother]?mother:m.motherRegion;m.editionKind=kind==='regional'?'regional':'mother';m.editionRegion=REGION_SYSTEM[region]?region:m.motherRegion;}var result=typeof baseSaveMag==='function'?baseSaveMag.apply(this,arguments):undefined;normalizeRegionalFashionData();return result;};
+  var baseEditBrand=window.editLuxuryBrand;
+  window.editLuxuryBrand=function(i){normalizeRegionalFashionData();var result=typeof baseEditBrand==='function'?baseEditBrand.apply(this,arguments):undefined,b=(window.luxuryBrands||[])[i],box=document.getElementById('mInfoContent');if(!b||!box||box.querySelector('#editBrandHomeRegion'))return result;box.insertAdjacentHTML('beforeend','<label>品牌所属地区</label><select id="editBrandHomeRegion">'+regionOptions(b.homeRegion,true)+'</select><label>品牌发行范围</label><select id="editBrandReach"><option value="international" '+(b.brandReach==='international'?'selected':'')+'>国际线</option><option value="regional" '+(b.brandReach==='regional'?'selected':'')+'>地区线</option></select>');return result;};
+  var baseSaveBrand=window.saveLuxuryBrandEraEditor;
+  window.saveLuxuryBrandEraEditor=function(){var idx=window.editingLuxuryBrandIdx,b=(window.luxuryBrands||[])[idx],home=(document.getElementById('editBrandHomeRegion')||{}).value,reach=(document.getElementById('editBrandReach')||{}).value;if(b){b.homeRegion=REGION_SYSTEM[home]?home:b.homeRegion;b.brandReach=reach==='international'?'international':'regional';}var result=typeof baseSaveBrand==='function'?baseSaveBrand.apply(this,arguments):undefined;normalizeRegionalFashionData();return result;};
+
+  var baseCreateUI=window.openCreateGroup;
+  window.openCreateGroup=function(){normalizeAll();var result=typeof baseCreateUI==='function'?baseCreateUI.apply(this,arguments):undefined,box=document.getElementById('mInfoContent');if(!box||box.querySelector('#newGroupMarketType'))return result;var fields='<label>团体市场定位</label><select id="newGroupMarketType"><option value="international">国际团体</option><option value="regional">地区团体</option><option value="coLaunch">地区与国际联推团体</option></select><label>主要地区</label><select id="newGroupHomeRegion">'+regionOptions('global',true)+'</select><label>训练/工业体系地区</label><select id="newGroupTrainingRegion">'+regionOptions('global',true)+'</select><p style="font-size:11px;color:#666;">地区团体在本地宣发更有优势，但国际扩张更难；国际联推由地区训练体系与国际发行资源共同支持。</p>';box.insertAdjacentHTML('afterbegin',fields);return result;};
+  var baseCreateGroup=window.createPlayerGroup;
+  window.createPlayerGroup=function(){var market=(document.getElementById('newGroupMarketType')||{}).value,home=(document.getElementById('newGroupHomeRegion')||{}).value,training=(document.getElementById('newGroupTrainingRegion')||{}).value,before=ad&&Array.isArray(ad.entertainmentGroups)?ad.entertainmentGroups.length:0,result=typeof baseCreateGroup==='function'?baseCreateGroup.apply(this,arguments):undefined;if(ad&&ad.entertainmentGroups&&ad.entertainmentGroups.length>before){var group=ad.entertainmentGroups[ad.entertainmentGroups.length-1];group.marketType=['international','regional','coLaunch'].indexOf(market)>=0?market:'international';group.homeRegion=REGION_SYSTEM[home]?home:'global';group.trainingRegion=REGION_SYSTEM[training]?training:group.homeRegion;normalizeRegionalGroup(group);if(typeof saveGame==='function')saveGame();}return result;};
+  var baseGroupHub=window.openGroupHub;
+  window.openGroupHub=function(){normalizeAll();var result=typeof baseGroupHub==='function'?baseGroupHub.apply(this,arguments):undefined,box=document.getElementById('mInfoContent'),active=ad&&ad.groupCareer&&ad.groupCareer.activeGroupId,group=active&&ad.entertainmentGroups&&ad.entertainmentGroups.find(function(x){return String(x.id)===String(active);});if(box&&group&&!box.querySelector('#regionalGroupStatus')){var card=document.createElement('div');card.id='regionalGroupStatus';card.className='card';card.style.cssText='font-size:11px;line-height:1.7;';card.innerHTML='<b>地区体系</b><br>'+groupTypeLabel(group)+' · 主要地区 '+esc(regionName(group.homeRegion))+' · 训练体系 '+esc(regionName(group.trainingRegion))+'<br>本次回归市场系数 '+regionalGroupMultiplier(group).toFixed(2)+'。';box.insertBefore(card,box.firstChild);}return result;};
+  var baseGroupRelease=window.releaseGroupSingle;
+  window.releaseGroupSingle=function(){var active=ad&&ad.groupCareer&&ad.groupCareer.activeGroupId,group=active&&ad.entertainmentGroups&&ad.entertainmentGroups.find(function(x){return String(x.id)===String(active);});if(!group)return typeof baseGroupRelease==='function'?baseGroupRelease.apply(this,arguments):undefined;normalizeRegionalGroup(group);var factor=regionalGroupMultiplier(group),originalFans=Number(group.fans||0),beforeIds=(trackPool||[]).map(function(t){return t&&t.id;});group.fans=Math.floor(originalFans*factor);var result;try{result=typeof baseGroupRelease==='function'?baseGroupRelease.apply(this,arguments):undefined;}finally{var gain=Math.max(0,Number(group.fans||0)-Math.floor(originalFans*factor));group.fans=originalFans+gain;}(trackPool||[]).filter(function(t){return t&&beforeIds.indexOf(t.id)<0&&String(t.groupId)===String(group.id);}).forEach(function(t){t.marketType=group.marketType;t.homeRegion=group.homeRegion;t.trainingRegion=group.trainingRegion;t.regionalMultiplier=factor;t.marketLabel=groupTypeLabel(group)+' · '+regionName(group.homeRegion);});return result;};
+  function applyRegionalMagazineResults(){if(!ad||!Array.isArray(ad.magazineSales))return;normalizeRegionalFashionData();ad.magazineSales.forEach(function(sale){if(!sale||sale._regionalAdjusted)return;var magazine=(ad.fashionMags||[]).find(function(m){return m&&m.n===sale.magazine;});if(!magazine)return;var edition=regionEdition(magazine),issue=String(sale.issue||''),issueBoost=/金九/.test(issue)?1.16:/银十/.test(issue)?1.09:1,adjust=Math.max(.55,edition.market*issueBoost);sale.buyers=Math.max(1,Math.floor(Number(sale.buyers||0)*adjust));sale.totalSales=sale.buyers*Math.max(0,Number(sale.unitPrice||0));sale.motherRegion=magazine.motherRegion;sale.editionRegion=magazine.editionRegion;sale.editionKind=magazine.editionKind;sale._regionalAdjusted=true;});}
+  var priorAdvance=window.advTime;
+  window.advTime=function(){normalizeAll();var result=typeof priorAdvance==='function'?priorAdvance.apply(this,arguments):undefined;applyRegionalMagazineResults();return result;};
+  var baseMagazineChart=window.openMagazineSalesChart;
+  window.openMagazineSalesChart=function(){applyRegionalMagazineResults();return typeof baseMagazineChart==='function'?baseMagazineChart.apply(this,arguments):undefined;};
+  var oldAlert=window.alert;
+  window.alert=function(message){var text=String(message==null?'':message);if(/内存运行不足|内存.*(?:不足|已满)|浏览器.*(?:空间|存储).*(?:不足|已满)|存档未能写入/.test(text)){window.__starProSaveDirty=true;console.warn('已静默旧存储提示',text);return;}return oldAlert.call(window,message);};
+  var oldGameAlert=window.gameAlert;
+  if(typeof oldGameAlert==='function')window.gameAlert=function(message){var text=String(message==null?'':message);if(/内存运行不足|内存.*(?:不足|已满)|浏览器.*(?:空间|存储).*(?:不足|已满)|存档未能写入/.test(text)){window.__starProSaveDirty=true;console.warn('已静默旧存储提示',text);return;}return oldGameAlert.apply(this,arguments);};
+  normalizeAll();
+  setTimeout(function(){normalizeAll();if(typeof window.renderFashionHouse==='function')window.renderFashionHouse();},900);
+})();
+</script>
+<script>
+// Final live PK authority: reconcile promo mutations before any chart/detail render.
+(function installLivePkAuthority(){
+  if(window.__livePkAuthorityInstalled)return;
+  window.__livePkAuthorityInstalled=true;
+  function pool(){return (typeof trackPool!=='undefined'&&Array.isArray(trackPool)?trackPool:(window.trackPool||[])).filter(function(t){return t&&t.type==='track';});}
+  function numeric(v){v=Number(v);return Number.isFinite(v)&&v>0?v:0;}
+  function rankMap(field){var list=pool().slice().sort(function(a,b){return numeric(b[field])-numeric(a[field])||String(a.id||'').localeCompare(String(b.id||''));}),map={};list.forEach(function(t,i){if(i<100)map[t.id]=i+1;});return map;}
+  function syncMetrics(t){
+    var total=numeric(t.stmGlobal||t.stm||0),day=numeric(t.stmGlobal_Day),week=numeric(t.stmGlobal_Week),prev=numeric(t._pkLastTotal),prevWeek=numeric(t._pkLastWeek);
+    // Several legacy promo handlers only changed cumulative streams. Fold that delta into the live week.
+    if(prev>0&&total>prev&&week<=prevWeek){var delta=total-prev;week=Math.max(week,prevWeek+delta);day=Math.max(day,Math.floor(week/7));t.stmGlobal_Week=week;t.stmGlobal_Day=day;}
+    else if(day>0&&week<day*7){week=day*7;t.stmGlobal_Week=week;}
+    else if(!week&&total>0){week=Math.max(1,Math.floor(total/Math.max(1,Number(t.weeks||1))));day=Math.max(1,Math.floor(week/7));t.stmGlobal_Week=week;t.stmGlobal_Day=day;}
+    var usWeek=numeric(t.stmUS_Week),usDay=numeric(t.stmUS_Day),usTotal=numeric(t.stmUS||0);
+    if(usWeek<usDay*7){usWeek=usDay*7;t.stmUS_Week=usWeek;}
+    if(!usWeek&&usTotal>0){usWeek=Math.max(1,Math.floor(usTotal/Math.max(1,Number(t.weeks||1))));t.stmUS_Week=usWeek;t.stmUS_Day=Math.max(1,Math.floor(usWeek/7));}
+    if(!usWeek&&week>0){t.stmUS_Week=Math.floor(week*.4);t.stmUS_Day=Math.floor(t.stmUS_Week/7);}
+    t._pkLastTotal=total;t._pkLastWeek=numeric(t.stmGlobal_Week);
+  }
+  function liveRanks(){
+    pool().forEach(syncMetrics);
+    var global=rankMap('stmGlobal_Week'),us=rankMap('stmUS_Week');
+    pool().forEach(function(t){var g=global[t.id]||999,u=us[t.id]||999;t.lastW=g;t.lastB=u;t.lastSpotifyUS=u;t.currentRankGlobal=g;t.currentRankUS=u;t.currentRankBillboard=u;if(g<Number(t.peakS||999))t.peakS=g;if(u<Number(t.peakB||999))t.peakB=u;});
+    return {global:global,us:us};
+  }
+  window.refreshSongRanks=liveRanks;
+  var baseView=window.viewSongStats;
+  window.viewSongStats=function(id){liveRanks();return typeof baseView==='function'?baseView.apply(this,arguments):undefined;};
+  var baseRender=window.renderChart;
+  window.renderChart=function(){liveRanks();return typeof baseRender==='function'?baseRender.apply(this,arguments):undefined;};
+  function wrapAfter(name){var old=window[name];if(typeof old!=='function')return;window[name]=function(){var result=old.apply(this,arguments);liveRanks();return result;};}
+  wrapAfter('promoAlbSong');wrapAfter('doTVPromo');wrapAfter('runTVProgram');wrapAfter('confirmPick');
+  var oldAdvance=window.advTime;
+  if(typeof oldAdvance==='function')window.advTime=function(){var result=oldAdvance.apply(this,arguments);liveRanks();return result;};
+  liveRanks();
+})();
+</script>
+<script>
+// Final automatic-popup policy: old browser-quota warnings must never interrupt gameplay.
+(function installAutomaticPopupPolicy(){
+  var originalAlert=window.alert;
+  window.alert=function(message){var text=String(message==null?'':message),isLegacySavePopup=/存档未能写入|浏览器为本地存档分配的空间已满|存档未读入|内存运行不足|内存.*(?:不足|已满)|空间已满/.test(text);if(isLegacySavePopup){window.__starProSaveDirty=true;console.warn('已静默旧浏览器存储提示；游戏数据保留在当前内存，等待玩家手动保存。',text);return;}return originalAlert.call(window,message);};
+})();
+</script>
+<script>
 // Manual-save authority: gameplay changes stay in memory until the player saves.
 (function installManualSaveAuthority(){
   var writeLocalSnapshot=window.saveGameImmediate;

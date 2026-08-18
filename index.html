@@ -25645,6 +25645,85 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   pruneSavedNominations();
 })();
 </script>
+<script>
+// Final authority for company-led group comebacks, regional market placement,
+// and the weekly "good-sounding" streaming effect.
+(function installFinalGroupMarketAndSoundRules(){
+  if(window.__finalGroupMarketAndSoundRulesInstalled)return;
+  window.__finalGroupMarketAndSoundRulesInstalled=true;
+  function escText(value){return typeof E==='function'?E(value):String(value==null?'':value).replace(/[&<>"']/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  function playerGroup(){var career=typeof ad!=='undefined'&&ad&&ad.groupCareer,groups=career&&Array.isArray(ad.entertainmentGroups)?ad.entertainmentGroups:[];return groups.find(function(g){return career&&String(g.id)===String(career.activeGroupId);});}
+  function proposalFor(group){
+    if(!group)return null;
+    var d=group.groupDraft&&typeof group.groupDraft==='object'?group.groupDraft:{};
+    if(!d.companyProposal){
+      var month=Number(time&&time.m||1),year=Number(time&&time.y||2026);
+      d.companyProposal={name:(group.name||'团体')+' · '+year+'年'+month+'月回归',genre:group.concept||'流行',plan:'equal',issuedAt:[year,month].join('-')};
+      group.groupDraft=d;
+    }
+    return d;
+  }
+  window.acceptCompanyComebackPlan=function(){
+    var group=playerGroup(),d=proposalFor(group);if(!group||!d)return;
+    d.prepared=true;d.companyDecided=true;d.name=d.companyProposal.name;d.genre=d.companyProposal.genre;d.plan=d.companyProposal.plan||'equal';
+    if(!d.promotionPlan)d.promotionPlan={baseShows:Math.max(1,Math.min(3,1+Math.floor(Math.random()*3))),approvedShows:1,maxShows:6,requests:[],status:'pending',companyGrade:1};
+    d.promotionPlan.approvedShows=d.promotionPlan.baseShows;save();alert('已接受公司回归企划：'+d.name+'。歌曲、概念和初始打歌安排由公司决定。');window.openGroupRelease();
+  };
+  window.openGroupRelease=function(){
+    var group=playerGroup();if(!group)return;
+    var key=Number(time.y)+'_'+Number(time.m);if(group.lastComebackKey===key)return alert('本月已经进行过团体大型回归，需要等待冷却。');
+    var d=proposalFor(group),p=d.promotionPlan||{};
+    var body='<div class="card" style="font-size:12px;line-height:1.7;"><b>公司回归企划</b><br>公司将决定本次回归歌曲、概念和打歌资源，玩家不能直接替换为自定义回归。<br><b>歌曲：</b>'+escText(d.companyProposal.name)+'<br><b>曲风：</b>'+escText(d.companyProposal.genre)+'<br><b>初始打歌：</b>'+Number(p.baseShows||1)+' 场</div>';
+    if(!d.prepared)body+='<button onclick="acceptCompanyComebackPlan()">接受公司回归企划并进入录音</button>';
+    else body+='<button class="sec" onclick="openGroupPromotionNegotiation()">查看公司打歌计划（'+Number(p.approvedShows||p.baseShows||1)+' 场）</button><button class="sec" onclick="shootGroupMV()">拍摄 MV</button><button onclick="releaseGroupSingle()" '+(!d.mv?'disabled':'')+'>发布团体单曲</button>';
+    document.getElementById('mInfoTitle').innerText=group.name+' 团体回归';document.getElementById('mInfoContent').innerHTML=body;document.getElementById('mInfo').classList.add('open');
+  };
+  var finalCompanyGroupRelease=window.openGroupRelease;
+  window.openRegionalMarketApp=function(){
+    if(typeof window.normalizeRegionalFashionData==='function')window.normalizeRegionalFashionData();
+    var groups=typeof ad!=='undefined'&&ad&&Array.isArray(ad.entertainmentGroups)?ad.entertainmentGroups.slice().sort(function(a,b){return Number(b.fans||0)-Number(a.fans||0);}):[];
+    function region(g){var key=g&&g.homeRegion,dict=window.REGION_SYSTEM||{};return dict[key]&&dict[key].name||key||'国际';}
+    function type(g){return g&&g.marketType==='regional'?'地区团体':g&&g.marketType==='coLaunch'?'地区与国际联推团体':'国际团体';}
+    var rows=groups.map(function(g){return '<div class="card"><b>'+escText(g.name||'未命名团体')+'</b><br><span style="font-size:11px;color:#666;">'+type(g)+' · 主要地区 '+escText(region(g))+' · 团粉 '+Number(g.fans||0).toLocaleString()+'</span></div>';}).join('');
+    document.getElementById('mInfoTitle').innerText='地区市场 · 团体';document.getElementById('mInfoContent').innerHTML='<div class="card" style="font-size:11px;line-height:1.7;"><b>团体地区市场</b><br>这里仅显示国际团体、地区团体和地区与国际联推团体。杂志与品牌地区信息归入地图的时尚周页面。</div>'+rows||'<p>暂无团体地区数据。</p>';document.getElementById('mInfo').classList.add('open');
+  };
+  var finalRegionalMarket=window.openRegionalMarketApp;
+  function applyGoodSoundEffect(){
+    var songs=(typeof trackPool!=='undefined'&&Array.isArray(trackPool)?trackPool:[]),stamp=[Number(time&&time.y||0),Number(time&&time.m||0),Number(time&&time.w||0)].join('_');
+    songs.forEach(function(t){if(!t||t.type!=='track'||Number(t.Spub||0)<=80||t._goodSoundEffectStamp===stamp)return;var score=Math.max(0,Math.min(20,Number(t.Spub)-80)),multiplier=1+score/20*.60,base=Math.max(0,Number(t.stmGlobal_Week||0),Number(t.stmGlobal_Day||0)*7);if(base<=0)return;var gain=Math.max(1,Math.floor(base*(multiplier-1)));t.stmGlobal_Week=base+gain;t.stmGlobal_Day=Math.max(1,Math.floor(t.stmGlobal_Week/7));t.stmGlobal=Math.max(0,Number(t.stmGlobal||0))+gain;t.goodSoundEffect={active:true,stamp:stamp,score:Number(t.Spub),multiplier:multiplier,gain:gain};t._goodSoundEffectStamp=stamp;});
+  }
+  var previousAdvance=window.advTime;window.advTime=function(){var result=typeof previousAdvance==='function'?previousAdvance.apply(this,arguments):undefined;applyGoodSoundEffect();return result;};
+  window.applyGoodSoundEffect=applyGoodSoundEffect;
+  // Every legacy promotion/MV/live-show handler writes raw streams directly.
+  // Normalize immediately after those handlers finish so displayed and ranked
+  // values use the same compressed market scale.
+  function applyCompressedStreamState(){
+    var songs=(typeof trackPool!=='undefined'&&Array.isArray(trackPool)?trackPool:[]).filter(function(t){return t&&t.type==='track';}),before={};
+    songs.forEach(function(t){if(!Number.isFinite(Number(t._compressedSeenTotal)))t._compressedSeenTotal=Math.max(0,Number(t.stmGlobal||0));before[t.id]={day:Math.max(0,Number(t.stmGlobal_Day||0)),total:Number(t.stmGlobal||0)};t._marketFloatStamp='';});
+    var marketCap=Math.max(100000,Number(typeof ad!=='undefined'&&ad&&ad.marketSettings&&ad.marketSettings.dailyBase||3000000)),ordered=songs.slice().sort(function(a,b){return Number(b.stmGlobal_Day||0)-Number(a.stmGlobal_Day||0);}),rawDays=ordered.map(function(t){return Math.max(0,Number(t.stmGlobal_Day||0));}),compressed=typeof window.rankStableMarketCompression==='function'?window.rankStableMarketCompression(rawDays,marketCap):rawDays.slice();
+    ordered.forEach(function(t,i){var raw=rawDays[i],day=compressed[i],factor=raw>0?day/raw:1;t.stmGlobal_Day=day;t.stmGlobal_Week=Math.max(0,Math.round(Number(t.stmGlobal_Week||0)*factor));t.stmUS_Day=Math.min(day,Math.max(0,Math.round(Number(t.stmUS_Day||0)*factor)));t.stmUS_Week=Math.min(t.stmGlobal_Week,Math.max(0,Math.round(Number(t.stmUS_Week||0)*factor)));});
+    var ratio=1;
+    songs.forEach(function(t){var b=before[t.id]||{day:0,total:0},currentTotal=Math.max(0,Number(t.stmGlobal||0)),seen=Math.max(0,Number(t._compressedSeenTotal||0)),delta=currentTotal-seen,dayRatio=b.day>0?Math.max(0,Number(t.stmGlobal_Day||0))/b.day:1;if(delta>0&&dayRatio<1)t.stmGlobal=seen+Math.floor(delta*dayRatio);t._compressedSeenTotal=Math.max(0,Number(t.stmGlobal||0));if(delta>0)ratio=Math.min(ratio,dayRatio);});
+    window.__lastCompressedStreamRatio=ratio;return ratio;
+  }
+  window.applyCompressedStreamState=applyCompressedStreamState;
+  var priorStreamAlert=window.alert;window.alert=function(message){var ratio=applyCompressedStreamState(),text=String(message==null?'':message);if(ratio<.999){text=text.replace(/(流媒(?:激增|增加|暴增)[^\d]*)([\d,]+)/g,function(_,prefix,value){return prefix+Math.max(1,Math.floor(Number(String(value).replace(/,/g,''))*ratio)).toLocaleString();});}return priorStreamAlert.call(this,text);};
+  function wrapStreamSave(name){var prior=window[name];if(typeof prior!=='function')return;window[name]=function(){applyCompressedStreamState();return prior.apply(this,arguments);};}
+  wrapStreamSave('save');wrapStreamSave('saveGame');wrapStreamSave('saveGameImmediate');
+  function removeRegionalMarketUI(){document.querySelectorAll('#appRegionalMarket,#regionalMarketEntry').forEach(function(node){node.remove();});}
+  window.removeRegionalMarketUI=removeRegionalMarketUI;
+  var priorRegionalMount=window.mountRegionalPhoneApps;window.mountRegionalPhoneApps=function(){var result=typeof priorRegionalMount==='function'?priorRegionalMount.apply(this,arguments):undefined;removeRegionalMarketUI();return result;};
+  setInterval(removeRegionalMarketUI,500);
+  var priorArtistRender=window.renderNpcList;window.renderNpcList=function(){var result=typeof priorArtistRender==='function'?priorArtistRender.apply(this,arguments):undefined,box=document.getElementById('uiNpcList');if(box&&!document.getElementById('artistRegionalGroupSection')){var groups=typeof ad!=='undefined'&&ad&&Array.isArray(ad.entertainmentGroups)?ad.entertainmentGroups:[],section=document.createElement('div');section.id='artistRegionalGroupSection';section.className='card';section.innerHTML='<b>团体地区信息</b><br><span style="font-size:11px;color:#666;">'+(groups.map(function(g){var type=g.marketType==='regional'?'地区团体':g.marketType==='coLaunch'?'地区与国际联推团体':'国际团体';return escText(g.name||'未命名团体')+' · '+type;}).join('<br>')||'暂无团体')+'</span>';box.appendChild(section);}return result;};
+  // Legacy initialization reassigns these globals asynchronously; keep the final authority through startup.
+  var finalAdvance=window.advTime;
+  try{
+    Object.defineProperty(window,'openGroupRelease',{configurable:false,get:function(){return finalCompanyGroupRelease;},set:function(){}});
+    Object.defineProperty(window,'openRegionalMarketApp',{configurable:false,get:function(){return finalRegionalMarket;},set:function(){}});
+    Object.defineProperty(window,'advTime',{configurable:false,get:function(){return finalAdvance;},set:function(){}});
+  }catch(error){setInterval(function(){window.openGroupRelease=finalCompanyGroupRelease;window.openRegionalMarketApp=finalRegionalMarket;window.advTime=finalAdvance;},250);}
+})();
+</script>
 </body>
 </html>
 

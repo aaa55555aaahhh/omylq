@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>星路制作人 - 真实乐坛重制版</title>
+<link rel="icon" href="data:,">
 <style>
 /* Dedicated shiny trait visuals: these are layered on top of the base 2D pet. */
 .pet-trait-layer.cream.effect-8.slot-8{right:-18px;top:7px;width:12px;height:12px;border:2px solid currentColor;background:rgba(255,255,255,.45);box-shadow:16px -9px 0 -2px rgba(255,255,255,.65),27px 5px 0 -3px rgba(255,255,255,.7),0 0 7px currentColor;animation:pet-bubbles 2.2s ease-in-out infinite}
@@ -1230,6 +1231,7 @@ setTimeout(function installFinalUserRequestedFixes(){
     window.__finalAwardSubmitUI=window.openAwardSubmitUI;
     window.__finalAwardBranchSave=window.saveAwardBranchSubmission;
     window.viewNominationsUI = function(awardId){
+        if (typeof window.reconcileAwardSubmissionEligibility === 'function') window.reconcileAwardSubmissionEligibility();
         ensureAwardDataFinal();
         var info = getCurrentAwardStageInfo(), awds = info.nomination.length ? info.nomination : A(awardRegistry);
         if(awardId) awds = A(awardRegistry).filter(function(a){return a.id===awardId;});
@@ -20487,6 +20489,9 @@ function getAwardTop5(awd, cat, poolYear) {
 // ==================== 3. 生成提名名单 (颁奖月的前一个月触发) ====================
 window.generateNominations = function(month, year) {
     standardizeAwards();
+    // A nomination cache can outlive a withdrawn or missed submission.
+    // Reconcile it before building new entries so only submitted player works remain.
+    if (typeof window.reconcileAwardSubmissionEligibility === 'function') window.reconcileAwardSubmissionEligibility();
     let targetAwds = awardRegistry.filter(a => {
         let nomMonth = a.month - 1;
         if (nomMonth <= 0) nomMonth += 12;
@@ -20504,6 +20509,7 @@ window.generateNominations = function(month, year) {
             if(posts && posts.mom) posts.mom.unshift({t: `📰 【入围名单公布】`, c: `${awd.name} 的各项提名现已出炉，快去日程面板查看你是否入围吧！`});
         }
     });
+    if (typeof window.reconcileAwardSubmissionEligibility === 'function') window.reconcileAwardSubmissionEligibility();
 };
 
 // ==================== 4. 记事面板深度整合 ====================
@@ -20563,6 +20569,7 @@ window.refreshTodoStatus = function() {
 
 // ==================== 5. 提名与颁奖弹窗 ====================
 window.viewNominationsUI = function() {
+    if (typeof window.reconcileAwardSubmissionEligibility === 'function') window.reconcileAwardSubmissionEligibility();
     let curM = time.m;
     let curY = time.y;
     // 因为是提前一个月公布的名单，奖项的归属年份标记为当年
@@ -20606,6 +20613,7 @@ window.viewNominationsUI = function() {
 };
 
 window.startCeremonyUI = function() {
+    if (typeof window.reconcileAwardSubmissionEligibility === 'function') window.reconcileAwardSubmissionEligibility();
     let curM = time.m;
     let curY = time.y;
     let cerAwds = awardRegistry.filter(a => a.month === curM);
@@ -24621,7 +24629,7 @@ function normalizeEntertainmentCredits(){
 }
 normalizeEntertainmentCredits();
 setTimeout(normalizeEntertainmentCredits,1800);
-function advanceScreenHeatByTrend(){if(!ad||!Array.isArray(ad.screenProjects))return;ad.screenProjects.forEach(function(p){if(!p||p.exhibitionStatus==='已下映')return;var base=Math.max(0,Number(p.heat)||0),watch=p.kind==='film'?Number(p.boxOffice||0)/1000000:Number(p.watchHours||0),quality=(Number(p.directorLevel||3)+Number(p.writerLevel||3)+Number(p.cameraLevel||3)+Number(p.locationLevel||2))*1.8,delta=watch*.012+Number(p.reputation||50)*.08+quality-18;if(String(p.scriptGrade||'').indexOf('A')===0&&Math.random()<.18){p.screenEvents.push({type:'精美场景与紧密剧本',at:[time.y,time.m,time.d].join('-')});delta+=quality*.65;}if(Math.random()<.035+Math.min(.08,Number(p.scriptQuality||0)/1800)){p.screenEvents.push({type:'神级演技爆发',at:[time.y,time.m,time.d].join('-')});delta+=35+Math.random()*55;}var next=Math.max(0,Math.round(base+delta));p.heatDelta=Math.round(next-base);p.heat=next;p.heatHistory.push({key:[time.y,time.m,time.w].join('_'),heat:next,delta:p.heatDelta});if(p.heatHistory.length>104)p.heatHistory.shift();});}
+ function advanceScreenHeatByTrend(){if(!ad||!Array.isArray(ad.screenProjects))return;ad.screenProjects.forEach(function(p){if(!p||p.exhibitionStatus==='已下映')return;if(!Array.isArray(p.screenEvents))p.screenEvents=[];if(!Array.isArray(p.heatHistory))p.heatHistory=[];var base=Math.max(0,Number(p.heat)||0),watch=p.kind==='film'?Number(p.boxOffice||0)/1000000:Number(p.watchHours||0),quality=(Number(p.directorLevel||3)+Number(p.writerLevel||3)+Number(p.cameraLevel||3)+Number(p.locationLevel||2))*1.8,delta=watch*.012+Number(p.reputation||50)*.08+quality-18;if(String(p.scriptGrade||'').indexOf('A')===0&&Math.random()<.18){p.screenEvents.push({type:'精美场景与紧密剧本',at:[time.y,time.m,time.d].join('-')});delta+=quality*.65;}if(Math.random()<.035+Math.min(.08,Number(p.scriptQuality||0)/1800)){p.screenEvents.push({type:'神级演技爆发',at:[time.y,time.m,time.d].join('-')});delta+=35+Math.random()*55;}var next=Math.max(0,Math.round(base+delta));p.heatDelta=Math.round(next-base);p.heat=next;p.heatHistory.push({key:[time.y,time.m,time.w].join('_'),heat:next,delta:p.heatDelta});if(p.heatHistory.length>104)p.heatHistory.shift();});}
 function ensureScreenMarketLimits(){if(!ad.screenMarketLimits)ad.screenMarketLimits={film:50000000000,tv:180000,short:30000};return ad.screenMarketLimits;}
 function applyScreenMarketCompression(){
   var limits=ensureScreenMarketLimits(),projects=Array.isArray(ad.screenProjects)?ad.screenProjects:[];
@@ -25500,6 +25508,60 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
 })();
 </script>
 <script>
+// Visible regional apps: every regional rule has a phone entry and a usable chart workflow.
+(function installRegionalPhoneApps(){
+  if(window.__regionalPhoneAppsInstalled)return;
+  window.__regionalPhoneAppsInstalled=true;
+  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function active(){return !!(window.ad&&ad&&ad.r);}
+  function regionName(key){return window.REGION_SYSTEM&&REGION_SYSTEM[key]?REGION_SYSTEM[key].name:'国际';}
+  function regionOptions(selected){return Object.keys(window.REGION_SYSTEM||{global:{name:'国际'}}).map(function(key){return '<option value="'+key+'" '+(key===selected?'selected':'')+'>'+esc(regionName(key))+'</option>';}).join('');}
+  function addIcon(id,label,color,handler){var grid=document.getElementById('phoneGrid');if(!grid||document.getElementById(id))return;var icon=document.createElement('div');icon.id=id;icon.className='app-icon';icon.style.background=color;icon.style.color='#fff';icon.innerHTML='<div class="picon">'+esc(label.slice(0,1))+'</div><span>'+esc(label)+'</span>';icon.onclick=handler;grid.appendChild(icon);}
+  function chartStore(){if(!ad.customMusicCharts||!Array.isArray(ad.customMusicCharts))ad.customMusicCharts=[];return ad.customMusicCharts;}
+  function appStore(){if(!ad.customPhoneApps||!Array.isArray(ad.customPhoneApps))ad.customPhoneApps=[];return ad.customPhoneApps;}
+  function marketScore(t,region){var weekly=Math.max(0,Number(t.stmGlobal_Week||0),Number(t.stmGlobal_Day||0)*7),regions=t.amRegions||t.itunesRegions||{},direct=Math.max(0,Number(regions[String(region||'').toUpperCase()]||0));if(region==='global')return weekly;var base=window.REGION_SYSTEM&&REGION_SYSTEM[region]?Number(REGION_SYSTEM[region].market||.75):.75;return direct>0?direct*7:Math.floor(weekly*base);}
+  function groupType(g){return g&&g.marketType==='regional'?'地区团体':g&&g.marketType==='coLaunch'?'地区与国际联推团体':'国际团体';}
+  window.openRegionalMarketApp=function(){
+    if(!active())return alert('请先进入游戏。');
+    if(typeof window.normalizeRegionalFashionData==='function')window.normalizeRegionalFashionData();
+    var groups=(ad.entertainmentGroups||[]).slice().sort(function(a,b){return Number(b.fans||0)-Number(a.fans||0);});
+    var mags=ad.fashionMags||window.fashionMags||[],brands=ad.luxuryBrands||window.luxuryBrands||[];
+    document.getElementById('mInfoTitle').innerText='地区市场';
+    document.getElementById('mInfoContent').innerHTML='<div class="card" style="font-size:11px;line-height:1.7;"><b>团体市场</b><br>国际团体使用全球发行资源；地区团体拥有本地市场倾斜；地区与国际联推团体同时记录训练体系与国际发行。</div><h4>团体</h4>'+groups.map(function(g){return '<div class="card"><b>'+esc(g.name||'未命名团体')+'</b><br><span style="font-size:11px;color:#666;">'+groupType(g)+' · 主要地区 '+esc(regionName(g.homeRegion))+' · 训练体系 '+esc(regionName(g.trainingRegion))+' · 团粉 '+Number(g.fans||0).toLocaleString()+'</span></div>';}).join('')+'<h4>杂志</h4>'+mags.map(function(m){var mother=regionName(m.motherRegion),edition=regionName(m.editionRegion);return '<div class="card"><b>'+esc(m.n||'未命名杂志')+'</b><br><span style="font-size:11px;color:#666;">'+(m.editionKind==='regional'?'地区刊':'母版')+' · 母版 '+esc(mother)+' · '+esc(edition)+'版</span></div>';}).join('')+'<h4>品牌</h4>'+brands.map(function(b){return '<div class="card"><b>'+esc(b.n||'未命名品牌')+'</b><br><span style="font-size:11px;color:#666;">所属地区 '+esc(regionName(b.homeRegion))+' · '+(b.brandReach==='international'?'国际线':'地区线')+'</span></div>';}).join('');
+    document.getElementById('mInfo').classList.add('open');
+  };
+  window.openCustomChartStudio=function(){
+    if(!active())return alert('请先进入游戏。');
+    var rows=chartStore();
+    document.getElementById('mInfoTitle').innerText='自定义榜单';
+    document.getElementById('mInfoContent').innerHTML='<div class="card" style="font-size:11px;line-height:1.7;">新增后会直接安装为手机软件。当前支持音乐榜单，可选择国际或地区榜单。</div><label>软件名称</label><input id="customChartName" value="我的音乐榜"><label>榜单类型</label><select id="customChartType"><option value="music">音乐榜单</option></select><label>市场范围</label><select id="customChartScope" onchange="toggleCustomChartRegion()"><option value="global">国际榜单</option><option value="regional">地区榜单</option></select><div id="customChartRegionRow" style="display:none;"><label>所属地区</label><select id="customChartRegion">'+regionOptions('cn')+'</select></div><button onclick="createCustomMusicChart()">新增软件</button><h4>已安装的软件</h4>'+rows.map(function(c){return '<div class="card"><b>'+esc(c.name)+'</b><br><span style="font-size:11px;color:#666;">'+(c.scope==='regional'?esc(regionName(c.region))+'地区音乐榜':'国际音乐榜')+'</span><button class="sec" onclick="openCustomMusicChart(\''+esc(c.id)+'\')">打开</button></div>';}).join('');
+    document.getElementById('mInfo').classList.add('open');
+  };
+  window.toggleCustomChartRegion=function(){var row=document.getElementById('customChartRegionRow'),scope=(document.getElementById('customChartScope')||{}).value;if(row)row.style.display=scope==='regional'?'block':'none';};
+  window.createCustomMusicChart=function(){
+    if(!active())return;var name=((document.getElementById('customChartName')||{}).value||'').trim(),scope=(document.getElementById('customChartScope')||{}).value,region=(document.getElementById('customChartRegion')||{}).value;
+    if(!name)return alert('请输入软件名称。');var id='custom_chart_'+Date.now(),chart={id:id,name:name,type:'music',scope:scope==='regional'?'regional':'global',region:scope==='regional'&&window.REGION_SYSTEM&&REGION_SYSTEM[region]?region:'global'};chartStore().push(chart);appStore().push({id:id,type:'musicChart'});mountRegionalPhoneApps();if(typeof saveGame==='function')saveGame();alert('“'+name+'”已安装到手机。');openCustomChartStudio();
+  };
+  window.openCustomMusicChart=function(id){
+    if(!active())return;var chart=chartStore().find(function(x){return String(x.id)===String(id);});if(!chart)return alert('未找到该自定义榜单。');if(typeof window.refreshSongRanks==='function')window.refreshSongRanks();var rows=(trackPool||[]).filter(function(t){return t&&t.type==='track';}).map(function(t){return {track:t,score:marketScore(t,chart.scope==='regional'?chart.region:'global')};}).filter(function(x){return x.score>0;}).sort(function(a,b){return b.score-a.score||String(a.track.id||'').localeCompare(String(b.track.id||''));}).slice(0,100);
+    document.getElementById('mInfoTitle').innerText=chart.name;
+    document.getElementById('mInfoContent').innerHTML='<div class="card" style="font-size:11px;color:#666;">'+(chart.scope==='regional'?esc(regionName(chart.region))+'地区市场，地区团体与本土资源会在该市场获得更高曝光。':'国际市场，使用全球周流媒排序。')+'</div>'+rows.map(function(row,i){var t=row.track;return '<div class="card"><b>#'+(i+1)+' '+esc(t.n||'未命名歌曲')+'</b><br><span style="font-size:11px;color:#666;">'+esc(t.artist||'')+' · '+row.score.toLocaleString()+' 市场流媒</span><button class="sec" onclick="viewSongStats(\''+esc(t.id)+'\')">详情</button></div>';}).join('')||'<p style="color:#888;">暂无可计入该榜单的歌曲。</p>';
+    document.getElementById('mInfo').classList.add('open');
+  };
+  function mountRegionalPhoneApps(){
+    if(!active())return;addIcon('appRegionalMarket','地区市场','#d45178',function(){window.openRegionalMarketApp();});addIcon('appCustomCharts','自定义榜单','#2867b2',function(){window.openCustomChartStudio();});chartStore().forEach(function(chart){addIcon('app_'+chart.id,chart.name,'#5e60ce',function(){window.openCustomMusicChart(chart.id);});});
+  }
+  window.mountRegionalPhoneApps=mountRegionalPhoneApps;
+  var baseFashion=window.renderFashionHouse;
+  window.renderFashionHouse=function(){var result=typeof baseFashion==='function'?baseFashion.apply(this,arguments):undefined,map=document.getElementById('mapFashion');if(map&&!document.getElementById('regionalMarketEntry')){var card=document.createElement('div');card.id='regionalMarketEntry';card.className='card';card.innerHTML='<b>地区体系</b><br><span style="font-size:11px;color:#666;">查看团体市场、杂志母版与地区刊、品牌所属地区。</span><br><button class="sec" onclick="openRegionalMarketApp()">打开地区市场</button>';map.insertBefore(card,map.firstChild);}return result;};
+  function schedule(){setTimeout(mountRegionalPhoneApps,80);setTimeout(mountRegionalPhoneApps,800);}
+  var baseStart=window.startGame;if(typeof baseStart==='function')window.startGame=function(){var result=baseStart.apply(this,arguments);schedule();return result;};
+  var baseLoad=window.loadGame;if(typeof baseLoad==='function')window.loadGame=function(){var result=baseLoad.apply(this,arguments);if(result&&typeof result.then==='function')return result.then(function(value){schedule();return value;});schedule();return result;};
+  var observer=new MutationObserver(function(){if(active()&&(!document.getElementById('appRegionalMarket')||!document.getElementById('appCustomCharts')))mountRegionalPhoneApps();});observer.observe(document.body,{childList:true,subtree:true});
+  schedule();
+})();
+</script>
+<script>
 // Final automatic-popup policy: old browser-quota warnings must never interrupt gameplay.
 (function installAutomaticPopupPolicy(){
   var originalAlert=window.alert;
@@ -25528,6 +25590,59 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
     }catch(error){console.error('手动保存失败',error);alert('本地文件保存失败：'+(error&&error.message||String(error)));return false;}
   };
   document.querySelectorAll('button[onclick="saveGameImmediate()"]').forEach(function(button){button.setAttribute('onclick','manualSaveGame()');});
+})();
+</script>
+<script>
+// Final award submission authority: player nominations and ceremony entries require a saved submission.
+(function installAwardSubmissionGate(){
+  if(window.__awardSubmissionGateInstalled)return;
+  window.__awardSubmissionGateInstalled=true;
+  function list(value){return Array.isArray(value)?value:[];}
+  function career(){return typeof ad!=='undefined'&&ad?ad:(window.ad||null);}
+  function registry(){return typeof awardRegistry!=='undefined'&&Array.isArray(awardRegistry)?awardRegistry:list(window.awardRegistry);}
+  function isPlayerEntry(entry){var current=career();return !!(entry&&(entry.isMe||current&&entry.artist===current.s));}
+  function submittedIds(award,category,year){
+    var current=career(),data=current&&current.awardData&&current.awardData.submissions||{},submission=data[String(year)+'_'+award.id]||{},categories=submission.categories||{},ids=list(categories[category.id]);
+    if(ids.length)return ids.map(String);
+    var legacy=category.targetType==='track'?submission.track:category.targetType==='album'?submission.album:category.targetType==='mv'?submission.mv:category.targetType==='cover'?submission.cover:category.targetType==='artist'&&submission.artist?'player_self':'';
+    return legacy?[String(legacy)]:[];
+  }
+  function playerEntryWasSubmitted(entry,award,category,year){
+    if(!isPlayerEntry(entry))return true;
+    var ids=submittedIds(award,category,year),id=category.targetType==='artist'?'player_self':String(entry.id||'');
+    return ids.indexOf(id)>=0;
+  }
+  function pruneSavedNominations(){
+    var current=career();if(!current||!current.awardData||!current.awardData.nominations)return;
+    Object.keys(current.awardData.nominations).forEach(function(key){
+      var parts=key.split('_'),year=Number(parts.shift()),awardId=parts.join('_'),award=registry().find(function(item){return item&&String(item.id)===awardId;}),noms=current.awardData.nominations[key];
+      if(!award||!noms)return;
+      list(award.categories).forEach(function(category){if(Array.isArray(noms[category.id]))noms[category.id]=noms[category.id].filter(function(entry){return playerEntryWasSubmitted(entry,award,category,year);});});
+    });
+  }
+  window.reconcileAwardSubmissionEligibility=pruneSavedNominations;
+  var previousTop5=window.getAwardTop5;
+  window.getAwardTop5=function(award,category,year){
+    var rows=typeof previousTop5==='function'?previousTop5.apply(this,arguments):[];
+    return list(rows).filter(function(entry){return playerEntryWasSubmitted(entry,award,category,year);}).slice(0,5);
+  };
+  var previousGenerate=window.generateNominations;
+  window.generateNominations=function(){
+    var result=typeof previousGenerate==='function'?previousGenerate.apply(this,arguments):undefined;
+    pruneSavedNominations();
+    return result;
+  };
+  ['viewNominationsUI','startCeremonyUI'].forEach(function(name){
+    var previous=window[name];
+    if(typeof previous!=='function')return;
+    window[name]=function(){pruneSavedNominations();return previous.apply(this,arguments);};
+  });
+  ['startGame','loadGame','advTime'].forEach(function(name){
+    var previous=window[name];
+    if(typeof previous!=='function')return;
+    window[name]=function(){var result=previous.apply(this,arguments);pruneSavedNominations();return result;};
+  });
+  pruneSavedNominations();
 })();
 </script>
 </body>

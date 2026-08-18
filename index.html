@@ -4344,55 +4344,6 @@ function renderLbl(){
     }).join(''); 
 }
 
-window.shootMV = function(tid, type){ 
-    if(!costEnergy(10)) return; 
-    let t = trackPool.find(function(x){return x.id===tid}); 
-    if(!t) return; 
-    
-    // type 0是歌词版，type 1是真人版
-    let cost = 0;
-    let isCompanyPaying = false;
-
-    if (type === 1) {
-        // 真人版MV价格：100万 到 1亿 之间随机
-        cost = Math.floor(Math.random() * 99000000) + 1000000;
-        
-        // 判定公司是否帮忙付钱（独立音乐人自己掏钱，签了公司且这首歌没拍过真人MV，公司出钱当做主打）
-        if (ad.co !== "独立" && !t.hasRealMV) {
-            isCompanyPaying = true;
-            cost = 0; // 公司全额报销
-            t.hasRealMV = true; // 标记这首歌已经拍过主打真人MV了，不能再白嫖
-        } else if (ad.co !== "独立" && t.hasRealMV) {
-            return alert("公司拒绝了申请：这首歌已经拍过真人主打MV了！非主打不能拍真人版！");
-        }
-    } else {
-        // 歌词版MV固定1万
-        cost = 10000;
-        if (t.hasLyricMV) return alert("这首歌已经出过歌词版MV了！");
-        t.hasLyricMV = true;
-    }
-
-    if(ad.m < cost) return alert(`资金不足！拍摄需要 $${cost.toLocaleString()}`); 
-    ad.m -= cost; 
-    if(type===1) advHour(24 * 3); // 拍真人MV耗时3天
-    else advHour(24); // 歌词版耗时1天
-
-     let bonus = type === 1 ? (Math.random() * 2.0 + 1.0) : (Math.random() * 0.5 + 0.2); 
-    let safeStm = t.stmGlobal || t.stm || 10000; // 防错处理：旧歌保底基数
-    let finalAdd = Math.floor(safeStm * bonus * ad.Geffect); 
-    
-    t.stmGlobal = safeStm + finalAdd; 
-    if(!t.stmGlobal_Day) t.stmGlobal_Day = 0;
-    t.stmGlobal_Day += Math.floor(finalAdd/7); 
-    t.viralWk = 3; // 触发回春效应，强行获得3周回榜权
-    t.slTotal += Math.floor(finalAdd/150); 
-    t.mvN = (t.mvN||0) + 1; 
-    
-    updAttr(); updatePeakRanks(); renderMVMap(); saveGame(); 
-    let payStr = isCompanyPaying ? "【公司全额垫资】" : `花费了 $${cost.toLocaleString()}`;
-    alert(`🎬 MV拍摄完成！${payStr}\n最终带来 ${finalAdd.toLocaleString()} 全球流媒大爆发！`); 
-}
-
 window.doTVPromo = function(){ 
     if(!costEnergy(10)) return; 
     let myTrks = trackPool.filter(function(x){return x.isMe && x.type==="track"}); 
@@ -10484,26 +10435,6 @@ window.preheatSong = function(songName) {
     advHour(2);
     alert(`📢 预热造势成功！\n你的新歌预告登上了热搜，粉丝们期待值拉满！`);
     saveGame();
-};
-
-window.shootMV = function(tid, type){ 
-    if(!costEnergy(10)) return; 
-    let t = trackPool.find(x => x.id === tid); 
-    if(!t) return; 
-    let cost = type === 1 ? 1000000 : 10000;
-    if (type === 1 && ad.co !== "独立" && !t.hasRealMV) cost = 0; // 公司全包
-    if (ad.m < cost) return alert(`资金不足！拍摄需要 $${cost.toLocaleString()}`); 
-    ad.m -= cost; 
-    
-    let bonus = type === 1 ? (Math.random() * 2.0 + 1.0) : (Math.random() * 0.5 + 0.2); 
-    let finalAdd = Math.floor((t.stmGlobal || 10000) * bonus * ad.Geffect); 
-    t.stmGlobal += finalAdd; 
-    t.stmGlobal_Day += Math.floor(finalAdd/7); 
-    t.viralWk = 3; t.slTotal += Math.floor(finalAdd/150); t.mvN = (t.mvN||0) + 1; 
-    if(type===1) { t.hasRealMV = true; advHour(72); } else { t.hasLyricMV = true; advHour(24); }
-    
-    alert(`🎬 MV拍摄完成！\n带来了 ${finalAdd.toLocaleString()} 全球流媒大爆发！`); 
-    updAttr(); updatePeakRanks(); renderMVMap(); saveGame(); 
 };
 
 window.openRelSingle = function(sid){ 
@@ -24497,13 +24428,14 @@ function bootScreenAndGroupWorld(){
     window.editPlayerGroupRoles=function(){var group=playerGroup(),me=playerMember(group);if(!me)return;var roles=['主唱','Rapper','舞蹈担当','门面','创作担当','ACE'];document.getElementById('mInfoTitle').innerText='调整团体定位';document.getElementById('mInfoContent').innerHTML='<p style="font-size:11px;">一人可多定位；频繁调整会使粉丝困惑。</p>'+roles.map(function(r){return '<label style="display:block;"><input class="playerGroupRole" type="checkbox" value="'+r+'" '+(me.roles.indexOf(r)>=0?'checked':'')+' style="width:auto;"> '+r+'</label>';}).join('')+'<button onclick="savePlayerGroupRoles()">保存定位</button>';};
     window.savePlayerGroupRoles=function(){var group=playerGroup(),me=playerMember(group),roles=Array.from(document.querySelectorAll('.playerGroupRole:checked')).map(function(x){return x.value;});if(!roles.length)return alert('至少保留一个定位。');if(me.roleChangedAt&&me.roleChangedAt.year===time.y&&me.roleChangedAt.month===time.m){ad.publicFavor=Math.max(0,Number(ad.publicFavor||20)-2);group.cohesion=Math.max(0,group.cohesion-2);}me.roles=roles;me.roleChangedAt=currentStamp();save();openGroupHub();};
     function groupHeat(group,streams,social,search,memberIds,eventMod){var members=memberIds?group.members.filter(function(m){return memberIds.indexOf(m.id)>=0;}):group.members,count=Math.max(1,members.length),star=members.reduce(function(s,m){return s+Math.max(.5,Math.min(2,Math.log10(Number(m.fans||0)+1)/4));},0)/count,mod=1/Math.sqrt(count),days=1,d=decay(days,.007,.38);return clampHeat(Math.sqrt(Math.max(0,streams/1000000))*Math.pow(social,.35)*Math.pow(search,.35)*star*mod*1*d*Number(eventMod||1)*12);}
+    function groupReleaseStreams(group,promotionPlan){var members=Array.isArray(group&&group.members)?group.members:[],memberCount=Math.max(1,members.length),totalFans=Math.max(0,Number(group&&group.fans||0),members.reduce(function(sum,m){return sum+Math.max(0,Number(m&&m.fans||0));},0)),company=ad&&ad.companyContracts&&ad.companyContracts.group,companyGrade=Math.max(.5,Math.min(3,Number(company&&company.grade||1))),shows=Math.max(1,Number(promotionPlan&&promotionPlan.approvedShows||1)),cohesion=Math.max(.35,Math.min(1,Number(group&&group.cohesion||55)/100));return Math.max(2000,Math.floor(totalFans*(.012+Math.random()*.052)*companyGrade*(1+(shows-1)*.035)*cohesion/Math.sqrt(memberCount)));}
     function ensureGroupPromotionPlan(group){var d=group&&group.groupDraft;if(!d)return null;var p=d.promotionPlan;if(!p||typeof p!=='object'){var company=ad.companyContracts&&ad.companyContracts.group,grade=Number(company&&company.grade||1),base=Math.max(1,Math.min(3,1+Math.floor(Math.random()*3)));p=d.promotionPlan={baseShows:base,approvedShows:base,maxShows:6,requests:[],status:'pending',companyGrade:grade};}if(!Array.isArray(p.requests))p.requests=[];p.approvedShows=Math.max(1,Math.min(Number(p.maxShows||6),Number(p.approvedShows||p.baseShows||1)));return p;}
     window.openGroupPromotionNegotiation=function(){var group=playerGroup(),p=ensureGroupPromotionPlan(group);if(!p)return;var title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo'),canAdd=p.approvedShows<p.maxShows&&!p.requests.some(function(x){return x.action==='add'&&x.accepted;}),canCancel=p.approvedShows>1&&!p.requests.some(function(x){return x.action==='cancel'&&x.accepted;});title.innerText=group.name+' 公司打歌协商';content.innerHTML='<div class="card" style="font-size:12px;line-height:1.7;">公司当前计划：<b>'+p.approvedShows+' 场</b>（基础 '+p.baseShows+' 场）。追加或撤销都要经过公司审批，结果会写入本次回归。</div>'+(canAdd?'<button onclick="negotiateGroupPromotion(\'add\')">要求追加 1 场打歌</button>':'<button disabled>追加请求已使用</button>')+(canCancel?'<button class="red" onclick="negotiateGroupPromotion(\'cancel\')">要求撤销 1 场打歌</button>':'<button class="red" disabled>当前不能再撤销</button>')+'<div style="font-size:11px;color:#777;margin-top:8px;">'+(p.requests.length?p.requests.map(function(r){return (r.action==='add'?'追加':'撤销')+'：'+(r.accepted?'公司同意':'公司拒绝')+'（'+r.chance+'%）';}).join('<br>'):'尚未提出请求。')+'</div>';modal.classList.add('open');};
     window.negotiateGroupPromotion=function(action){var group=playerGroup(),p=ensureGroupPromotionPlan(group);if(!p||['add','cancel'].indexOf(action)<0)return;var already=p.requests.some(function(x){return x.action===action;});if(already)return alert('同一类型的打歌请求本次回归只能提出一次。');if(action==='add'&&p.approvedShows>=p.maxShows)return alert('公司计划已达到本次回归的打歌上限。');if(action==='cancel'&&p.approvedShows<=1)return alert('本次回归至少保留 1 场打歌。');var company=ad.companyContracts&&ad.companyContracts.group,grade=Number(company&&company.grade||p.companyGrade||1),creative=Number(ad.sk&&ad.sk.w||50),heat=Number(group.heat||0),chance=Math.round(Math.max(15,Math.min(90,48+grade*10+creative/35+Math.min(12,heat/2000)+(action==='add'?4:-2))));var accepted=Math.random()<chance/100;p.requests.push({action:action,accepted:accepted,chance:chance,stamp:currentStamp()});if(accepted)p.approvedShows+=action==='add'?1:-1;p.status='negotiated';save();alert(accepted?'公司同意了你的'+(action==='add'?'追加':'撤销')+'打歌请求。':'公司拒绝了你的'+(action==='add'?'追加':'撤销')+'打歌请求。');openGroupRelease();};
     window.openGroupRelease=function(){var group=playerGroup();if(!group)return;var key=time.y+'_'+time.m;if(group.lastComebackKey===key)return alert('本月已经进行过团体大型回归，需要等待冷却。');var d=group.groupDraft||{},p=ensureGroupPromotionPlan(group);document.getElementById('mInfoTitle').innerText=group.name+' 团体回归';document.getElementById('mInfoContent').innerHTML='<label>团体单曲名称</label><input id="groupSongName" value="'+esc(d.name||'')+'"><label>曲风 / 概念</label><input id="groupSongGenre" value="'+esc(d.genre||group.concept||'流行')+'"><label>歌词与镜头分配</label><select id="groupResourcePlan"><option value="equal">平均分配</option><option value="popular">人气成员优先</option><option value="player">重点突出我</option></select><button class="sec" onclick="prepareGroupComeback()">筹备歌曲</button>'+(d.prepared?'<button class="sec" onclick="openGroupPromotionNegotiation()">公司打歌计划（'+p.approvedShows+' 场）</button>':'')+'<button class="sec" onclick="shootGroupMV()" '+(!d.prepared?'disabled':'')+'>拍摄 MV</button><button onclick="releaseGroupSingle()" '+(!d.mv?'disabled':'')+'>发布团体单曲</button>';document.getElementById('mInfo').classList.add('open');};
     window.prepareGroupComeback=function(){var group=playerGroup();if(!group)return;var name=((document.getElementById('groupSongName')||{}).value||'').trim(),genre=((document.getElementById('groupSongGenre')||{}).value||group.concept||'流行').trim();if(!name)return alert('请输入团体单曲名称。');group.groupDraft={prepared:true,name:name,genre:genre,plan:(document.getElementById('groupResourcePlan')||{}).value||'equal'};ensureGroupPromotionPlan(group);save();alert('歌曲《'+name+'》筹备完成，公司已给出初始打歌计划。');openGroupRelease();};
     window.shootGroupMV=function(){var group=playerGroup();if(!group||!group.groupDraft||!group.groupDraft.prepared)return alert('请先筹备团体歌曲。');group.groupDraft.mv=true;group.cohesion=Math.max(1,Number(group.cohesion||55)-1);save();alert('《'+group.groupDraft.name+'》MV 拍摄完成，可以正式发布。');openGroupRelease();};
-    window.releaseGroupSingle=function(){var group=playerGroup(),d=group&&group.groupDraft;if(!group||!d||!d.mv)return alert('请先完成歌曲筹备并拍摄 MV。');var promotionPlan=ensureGroupPromotionPlan(group),name=d.name,genre=d.genre,plan=d.plan||'equal',avgFans=group.members.reduce(function(s,m){return s+Number(m.fans||0);},0)/Math.max(1,group.members.length),streams=Math.floor(avgFans*(5+Math.random()*20)),social=rand(200,1000),search=rand(180,1000),event=1+(Math.max(0,Number(promotionPlan.approvedShows||1)-1)*.04);if(plan==='player'){group.cohesion-=8;Object.keys(groupRelations(group)).forEach(function(k){group.relations.player[k]-=8;});event*=1.08;}else if(plan==='popular'){group.cohesion-=3;}var heat=groupHeat(group,streams,social,search,null,event),track=typeof createEntity==='function'?createEntity(name,group.name,true,'track',[genre],group.fans,Number(ad.sk.w||100),Number(ad.sk.v||100),time.y,time.m,time.w):{id:id('grouptrack'),n:name,artist:group.name,isMe:true,type:'track',gnr:[genre],stmGlobal:streams};track.groupId=group.id;track.isGroupWork=true;track.memberCount=group.members.length;track.heatIndex=heat;track.groupMod=1/Math.sqrt(group.members.length);track.promotionShows=promotionPlan.approvedShows;track.promotionPlan=JSON.parse(JSON.stringify(promotionPlan));track.stmGlobal=Math.max(Number(track.stmGlobal||0),streams);track.stmGlobal_Day=Math.max(Number(track.stmGlobal_Day||0),Math.floor(streams/7));track.stmGlobal_Week=track.stmGlobal_Day*7;trackPool.push(track);group.lastComebackKey=time.y+'_'+time.m;group.phase=group.phase==='筹备期'?'出道爆发期':'平稳发展期';group.heat=heat;group.fans+=Math.floor(heat*50);group.groupDraft=null;save();if(typeof updatePeakRanks==='function')updatePeakRanks();alert(group.name+' 正式发布《'+track.n+'》，全网热度 '+heat.toLocaleString()+'（'+heatLabel(heat)+'），公司安排 '+track.promotionShows+' 场打歌。');openGroupHub();};
+    window.releaseGroupSingle=function(){var group=playerGroup(),d=group&&group.groupDraft;if(!group||!d||!d.mv)return alert('请先完成歌曲筹备并拍摄 MV。');var promotionPlan=ensureGroupPromotionPlan(group),name=d.name,genre=d.genre,plan=d.plan||'equal',social=rand(200,1000),search=rand(180,1000),event=1+(Math.max(0,Number(promotionPlan.approvedShows||1)-1)*.04);if(plan==='player'){group.cohesion-=8;Object.keys(groupRelations(group)).forEach(function(k){group.relations.player[k]-=8;});event*=1.08;}else if(plan==='popular'){group.cohesion-=3;}var streams=groupReleaseStreams(group,promotionPlan),heat=groupHeat(group,streams,social,search,null,event),track=typeof createEntity==='function'?createEntity(name,group.name,true,'track',[genre],group.fans,Number(ad.sk.w||100),Number(ad.sk.v||100),time.y,time.m,time.w):{id:id('grouptrack'),n:name,artist:group.name,isMe:true,type:'track',gnr:[genre],stmGlobal:streams};track.groupId=group.id;track.isGroupWork=true;track.memberCount=group.members.length;track.heatIndex=heat;track.groupMod=1/Math.sqrt(group.members.length);track.promotionShows=promotionPlan.approvedShows;track.promotionPlan=JSON.parse(JSON.stringify(promotionPlan));track.stmGlobal=streams;track.stmGlobal_Day=Math.floor(streams/7);track.stmGlobal_Week=track.stmGlobal_Day*7;trackPool.push(track);group.lastComebackKey=time.y+'_'+time.m;group.phase=group.phase==='筹备期'?'出道爆发期':'平稳发展期';group.heat=heat;group.fans+=Math.floor(heat*50);group.groupDraft=null;save();if(typeof updatePeakRanks==='function')updatePeakRanks();alert(group.name+' 正式发布《'+track.n+'》，首日全球流媒 '+streams.toLocaleString()+' · 全网热度 '+heat.toLocaleString()+'（'+heatLabel(heat)+'），公司安排 '+track.promotionShows+' 场打歌。');openGroupHub();};
     function processAutonomousCareers(){ensureWorld();ad.screenActors.forEach(function(a){if(Math.random()<.003){a.titleIndex=Math.max(0,Math.min(6,a.titleIndex+(Math.random()<.65?1:-1)));a.title=SCREEN_TITLES[a.titleIndex];}if(Math.random()<.002&&a.finance<0)a.dignity=Math.max(5,a.dignity-2);});ad.entertainmentGroups.forEach(function(g){if(!g.active)return;Object.keys(g.relations||{}).forEach(function(a){Object.keys(g.relations[a]||{}).forEach(function(b){if(Math.random()<.01)g.relations[a][b]=Math.max(0,g.relations[a][b]-rand(1,5));});});if(g.cohesion<20&&Math.random()<.03){g.phase='分化期';if(Math.random()<.3)g.active=false;}if(g.npc&&Math.random()<.004){var actor=pick(ad.screenActors);if(actor&&!g.members.some(function(m){return m.actorId===actor.id;}))g.members.push({id:'npc_'+actor.id,n:actor.n,fans:actor.fans,roles:['外援'],solo:true,actorId:actor.id,outsider:true});}});var p=ad.screenCareer.currentProduction;if(p&&p.status==='拍摄中'){p.remainingWeeks=Math.max(0,p.remainingWeeks-1);if(!p.remainingWeeks)completeScreenProduction();}refreshAnnouncements(false);}
     function mountScreenAwards(){var hall=document.getElementById('mapAwards');if(!hall||document.getElementById('screenAwardEntry'))return;var panel=document.createElement('div');panel.id='screenAwardEntry';panel.className='card';panel.innerHTML='<h4>影视奖项体系</h4><p style="font-size:11px;color:#777;">四个电影奖与四个电视剧奖，使用独立影视作品池；支持自定义与增加奖项。</p><button onclick="openScreenAwards()">进入影视奖项</button>';hall.appendChild(panel);}
     window.openScreenAwards=function(){ensureWorld();document.getElementById('mInfoTitle').innerText='电影与电视剧奖项';document.getElementById('mInfoContent').innerHTML='<button class="sec" onclick="openCustomScreenAward()">增加自定义影视奖项</button>'+ad.screenAwardData.registry.map(function(a){return '<div class="card"><b>'+esc(a.name)+'</b> · '+(a.medium==='film'?'电影':'电视剧')+'<br><span style="font-size:11px;">'+esc(a.categories.join('、'))+'</span><button onclick="submitScreenAward(\''+a.id+'\')">报名作品</button></div>';}).join('')+'<h4>获奖历史</h4>'+(ad.screenAwardData.history.map(function(x){return '<div>'+esc(x.year+' '+x.award+' - '+x.category+'《'+x.project+'》')+'</div>';}).join('')||'暂无');document.getElementById('mInfo').classList.add('open');};
@@ -24680,7 +24612,6 @@ repairZeroStreamSongs();setInterval(repairZeroStreamSongs,1500);
 function recordAllSongTrends(){var songs=(trackPool||[]).filter(function(t){return t&&t.type==='track';}),global=songs.slice().sort(function(a,b){return Number(b.stmGlobal||0)-Number(a.stmGlobal||0);}),us=songs.slice().sort(function(a,b){return Number(b.stmUS||b.stmGlobal||0)-Number(a.stmUS||a.stmGlobal||0);}),key=[time&&time.y,time&&time.m,time&&time.w].join('_');songs.forEach(function(t){if(!Array.isArray(t.chartHistory))t.chartHistory=[];if(t._trendKey===key)return;var gi=global.indexOf(t)+1,ui=us.indexOf(t)+1;t.chartHistory.push({key:key,global:gi<=100?gi:'OUT',us:ui<=100?ui:'OUT',inGlobal:gi<=100,inUS:ui<=100,streams:Number(t.stmGlobal||0)});t.trendChart=t.chartHistory.map(function(x){return x.global;});t._trendKey=key;});}
 recordAllSongTrends();
 var _trendAdvance=window.advTime;if(typeof _trendAdvance==='function')window.advTime=function(){var r=_trendAdvance.apply(this,arguments);recordAllSongTrends();return r;};
-    var _shootMVBase=window.shootMV;window.shootMV=function(tid,type){var t=(trackPool||[]).find(function(x){return String(x.id)===String(tid);});if(!t||typeof _shootMVBase!=='function')return;type=Number(type)||0;var count=type===0?Number(t.mvLyricCount||0):Number(t.mvRealCount||0),limit=type===0?5:3;if(count>=limit)return alert((type===0?'歌词 MV':'真人 MV')+' 已达到最多 '+limit+' 次拍摄次数。');var beforeMv=Number(t.mvN||0),result=_shootMVBase.apply(this,arguments);if(type===0){t.mvLyricCount=Math.max(count+1,Number(t.mvLyricCount||0));if(Number(t.mvN||0)>beforeMv||t.mvLyricCount>count)t.hasLyricMV=true;}else{t.mvRealCount=Math.max(count+1,Number(t.mvRealCount||0));if(Number(t.mvN||0)>beforeMv||t.mvRealCount>count)t.hasRealMV=true;}t.mvN=Number(t.mvN||0);if(typeof saveGameImmediate==='function')saveGameImmediate();else if(typeof saveGame==='function')saveGame();return result;};
 function normalizeEntertainmentCredits(){
   var directors=['Alex Morgan','Sofia Bennett','Jordan Reed','Maya Collins'],writersList=['Evan Brooks','Nora Hayes','Liam Carter','Ivy Morgan'],cameras=['Theo Grant','Riley Stone','Clara Woods','Noah Blake'],locations=['Vancouver Studio','Atlanta Backlot','London Stage','Los Angeles Lot'];
   var grades=['E','D','C','B','A','A+','S','S+'],venues=['废弃仓库','普通棚拍','城市外景','专业摄影棚','精品片场','历史建筑','顶级摄影棚','地标级场景'];
@@ -25385,8 +25316,6 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   var previousRanks=window.updatePeakRanks;
   window.updatePeakRanks=function(){var result=typeof previousRanks==='function'?previousRanks.apply(this,arguments):undefined;recordIndependentSongRanks();return result;};
   recordIndependentSongRanks();
-  var previousShootMV=window.shootMV;
-  window.shootMV=function(tid,type){var t=songs().find(function(x){return String(x.id)===String(tid);});if(!t)return;type=Number(type)||0;if(type===0&&t.hasLyricMV)return alert('这首歌已经拍过歌词 MV。');if(type===1&&t.hasRealMV)return alert('这首歌已经拍过真人 MV。');var before=Number(t.mvN||0),result=typeof previousShootMV==='function'?previousShootMV.apply(this,arguments):undefined;if(Number(t.mvN||0)>before){if(type===0)t.hasLyricMV=true;else t.hasRealMV=true;}return result;};
   window.viewSongStats=function(songId){var t=songs().find(function(x){return String(x.id)===String(songId);});if(!t)return alert('找不到这首歌曲。');recordIndependentSongRanks();var title=document.getElementById('mGameInputTitle'),desc=document.getElementById('mGameInputDesc'),field=document.getElementById('mGameInputField'),modal=document.getElementById('mGameInput');if(!title||!desc||!modal)return;title.innerText='歌曲详情';desc.innerHTML='<div style="font-size:12px;line-height:1.8;"><b>《'+esc(t.n||'未命名歌曲')+'》</b><br>艺人：'+esc(t.artist||'未知')+'<br>全球流媒：'+Number(t.stmGlobal||0).toLocaleString()+'<br>日榜当前：'+(t.dailyRank==='OUT'?'OUT':'#'+t.dailyRank)+'<br>周榜当前：'+(t.weeklyRank==='OUT'?'OUT':'#'+t.weeklyRank)+'<br>年榜当前：'+(t.yearlyRank==='OUT'?'OUT':'#'+t.yearlyRank)+'<br>'+decadeLabel()+'当前：'+(t.decadeRank==='OUT'?'OUT':'#'+t.decadeRank)+'<div class="card" style="margin-top:8px;"><b>日榜走势</b><br>'+trend(t,'daily')+'</div><div class="card"><b>周榜走势</b><br>'+trend(t,'weekly')+'</div><div class="card"><b>年榜走势</b><br>'+trend(t,'yearly')+'</div><div class="card"><b>'+decadeLabel()+'走势</b><br>'+trend(t,'decade')+'</div></div>';if(field)field.style.display='none';modal.classList.add('open');};
   window.__simpleSongCharts={record:recordIndependentSongRanks};
 })();
@@ -25394,13 +25323,14 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
 <script>
 // Final music-detail and MV authority: no legacy wrapper may erase the real state.
 (function installFinalMusicDetailAuthority(){
-  function songs(){return (window.trackPool||[]).filter(function(t){return t&&t.type==='track';});}
+  function songPool(){return typeof trackPool!=='undefined'&&Array.isArray(trackPool)?trackPool:(window.trackPool||[]);}
+  function songs(){return songPool().filter(function(t){return t&&t.type!=='album'&&(t.type==='track'||t.isSong||t.songType==='track');});}
+  function songById(id){var raw=String(id==null?'':id),pool=songPool(),t=pool.find(function(x){return x&&String(x.id)===raw;})||pool.find(function(x){return x&&x.type!=='album'&&String(x.n||'')===raw;}),albums=typeof albs!=='undefined'&&Array.isArray(albs)?albs:(window.albs||[]);if(!t&&typeof findTrack==='function')t=findTrack(id);if(!t&&Array.isArray(albums)){for(var i=0;i<albums.length&&!t;i++){var list=Array.isArray(albums[i].s)?albums[i].s:[];t=list.find(function(x){return x&&String(x.id)===raw;})||list.find(function(x){return x&&String(x.n||'')===raw;});}}if(t&&t.type!=='album'&&t.type!=='track')t.type='track';return t||null;}
   function esc(value){return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function releaseDate(t){var y=Number(t.releaseYear||t.t_y||t.y||0),m=Number(t.releaseMonth||t.t_m||t.m||0),w=Number(t.releaseWeek||t.t_w||t.w||0);return y?(y+'年'+(m?m+'月':'')+(w?'第'+w+'周':'')):'未发行';}
   function rank(n){n=Number(n);return n>=1&&n<=100?'#'+n:'OUT';}
   function genres(t){var list=Array.isArray(t.gnr)?t.gnr:Array.isArray(t.g)?t.g:String(t.gnr||t.g||'').split(/[,，/、|]/);return list.map(function(x){return String(x||'').trim();}).filter(Boolean).join(' / ')||'未设置';}
-  var chainedShootMV=window.shootMV;
-  window.shootMV=function(id,type){var t=songs().find(function(x){return String(x.id)===String(id);});if(!t)return alert('找不到这首歌曲。');type=Number(type)||0;var field=type===0?'mvLyricCount':'mvRealCount',flag=type===0?'hasLyricMV':'hasRealMV',limit=type===0?5:3,count=Math.max(0,Number(t[field]||0));if(count>=limit)return alert((type===0?'歌词 MV':'真人 MV')+' 已拍摄 '+limit+' 次；等待歌曲触发回春后可重置次数。');var before=Number(t.mvN||0);t[flag]=false;var result=typeof chainedShootMV==='function'?chainedShootMV.apply(this,arguments):undefined;if(Number(t.mvN||0)>before){t[field]=count+1;t[flag]=true;t._mvAvailableAgain=false;if(typeof saveGame==='function')saveGame();}return result;};
+  window.shootMV=function(id,type){var t=songById(id);if(!t)return alert('找不到这首歌曲。');type=Number(type)||0;var field=type===0?'mvLyricCount':'mvRealCount',flag=type===0?'hasLyricMV':'hasRealMV',limit=type===0?5:3,count=Math.max(0,Number(t[field]||0));if(count>=limit)return alert((type===0?'歌词 MV':'真人 MV')+' 已拍摄 '+limit+' 次；等待歌曲触发回春后可重置次数。');if(typeof costEnergy==='function'&&!costEnergy(10))return;var cost=type===0?10000:1000000;if(type===1&&ad&&ad.co!=='独立')cost=0;if(Number(ad&&ad.m||0)<cost)return alert('资金不足！拍摄需要 $'+cost.toLocaleString());ad.m-=cost;var base=Math.max(10000,Number(t.stmGlobal||t.stm||0)),bonus=type===1?(1+Math.random()*2):(.2+Math.random()*.5),gain=Math.floor(base*bonus*Math.max(.1,Number(ad.Geffect||1)));t.stmGlobal=base+gain;t.stmGlobal_Day=Math.max(0,Number(t.stmGlobal_Day||0))+Math.floor(gain/7);t.slTotal=Math.max(0,Number(t.slTotal||0))+Math.floor(gain/150);t.viralWk=Math.max(3,Number(t.viralWk||0));t.mvN=Math.max(0,Number(t.mvN||0))+1;t[field]=count+1;t[flag]=true;t._mvAvailableAgain=false;if(typeof advHour==='function')advHour(type===1?72:24);if(typeof updatePeakRanks==='function')updatePeakRanks();if(typeof updAttr==='function')updAttr();if(typeof renderMVMap==='function')renderMVMap();if(typeof saveGame==='function')saveGame();alert('MV 拍摄完成！《'+(t.n||'未命名歌曲')+'》新增 '+gain.toLocaleString()+' 全球流媒。');};
   var chainedAdvance=window.advTime;
   window.advTime=function(){var before={};songs().forEach(function(t){before[t.id]=Math.max(0,Number(t.longViral||0),Number(t.viralWk||0));});var result=typeof chainedAdvance==='function'?chainedAdvance.apply(this,arguments):undefined;songs().forEach(function(t){var active=Math.max(0,Number(t.longViral||0),Number(t.viralWk||0));if(active>0&&before[t.id]===0){t.mvLyricCount=0;t.mvRealCount=0;t.hasLyricMV=false;t.hasRealMV=false;t._mvAvailableAgain=true;t.freshness=Math.min(100,Math.max(Number(t.freshness||45),72));t.promoFreshness=Math.min(100,Math.max(Number(t.promoFreshness||45),72));if(window.posts&&Array.isArray(posts.mom))posts.mom.unshift({t:'歌曲回春',c:'《'+(t.n||'未命名歌曲')+'》重新获得大众新鲜感，歌词 MV 与真人 MV 拍摄次数已重置。'});}});return result;};
   var chainedSongStats=window.viewSongStats;
@@ -25411,7 +25341,7 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
 // Final award authority: setlists read from the actual checked controls and submission never has a dead period.
 (function installFinalAwardAuthority(){
   function submissionDeadlineForCycle(award,ceremonyYear){var ceremonyMonth=Math.max(1,Math.min(12,Number(award&&award.month||12))),lead=Math.max(1,Math.min(11,Number(award&&award.submitLeadMonths)||2)),month=((ceremonyMonth-lead-1+12)%12)+1;return {year:Number(ceremonyYear)-(month>ceremonyMonth?1:0),month:month,week:Math.max(1,Math.min(4,Number(award&&award.deadlineWeek)||4)),day:Math.max(1,Math.min(7,Number(award&&award.deadlineDay)||7))};}
-  function nextAwardYear(award){var now={year:Number(window.time&&time.y||2026),month:Number(window.time&&time.m||1),week:Number(window.time&&time.w||1),day:Number(window.time&&time.d||1)},deadline=submissionDeadlineForCycle(award,now.year),beforeDeadline=now.year<deadline.year||(now.year===deadline.year&&(now.month<deadline.month||(now.month===deadline.month&&(now.week<deadline.week||(now.week===deadline.week&&now.day<=deadline.day)))));return beforeDeadline?now.year:now.year+1;}
+  function nextAwardYear(award){var gameTime=typeof time!=='undefined'&&time?time:(window.time||{}),now={year:Number(gameTime.y||2026),month:Number(gameTime.m||1),week:Number(gameTime.w||1),day:Number(gameTime.d||1)},deadline=submissionDeadlineForCycle(award,now.year),beforeDeadline=now.year<deadline.year||(now.year===deadline.year&&(now.month<deadline.month||(now.month===deadline.month&&(now.week<deadline.week||(now.week===deadline.week&&now.day<=deadline.day)))));return beforeDeadline?now.year:now.year+1;}
   window.__awardSubmissionYear=nextAwardYear;
   function awardById(id){return (window.awardRegistry||[]).find(function(x){return x&&String(x.id)===String(id);});}
   var baseOpen=window.openAwardSubmitUI;

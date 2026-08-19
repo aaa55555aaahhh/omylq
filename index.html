@@ -69,6 +69,7 @@
   document.addEventListener('DOMContentLoaded',function(){setTimeout(reassert,0);setTimeout(mountExportButton,200);setTimeout(mountExportButton,1000);});setInterval(reassert,1000);
 })();
 </script>
+<script>
 // 登录由文件末尾的云端 device-auth 权威层统一接管。
 // ==================== 最终音乐数据一致性修复：同名新歌、概率复评、榜单走势 ====================
 document.addEventListener("DOMContentLoaded", function installFinalMusicDataFixes(){
@@ -24803,18 +24804,7 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
         }catch(error){nativeAlert('无法连接登录服务器，请稍后重试。');}
         finally{loginBusy=false;}
     };
-    window.generateRecoveryCode=async function(){
-        if(loginBusy)return;
-        var input=document.getElementById('loginPwd'),password=input?input.value.trim():'';
-        if(!password){nativeAlert('请先输入账号密码。');return;}
-        loginBusy=true;
-        try{
-            var result=await request('/api/recovery-code',{password:password,deviceId:deviceId()});
-            if(!result.ok){nativeAlert(result.data.message||'恢复码生成失败。');return;}
-            window.prompt('恢复码已生成。它只能使用一次，请立即保存：',result.data.recoveryCode||'');
-        }catch(error){nativeAlert('无法连接登录服务器，请稍后重试。');}
-        finally{loginBusy=false;}
-    };
+    window.generateRecoveryCode=async function(){nativeAlert('恢复码只能由管理员生成，请联系管理员。');};
     window.autoLoginSkip=function(){showLogin();};
     try{localStorage.removeItem('starPro_login_pwd');localStorage.removeItem('starPro_is_unlocked');}catch(error){}
     function start(){
@@ -24822,7 +24812,6 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
         if(login&&!document.getElementById('rebindRecoveryButton')){
             var b=document.createElement('button');b.id='rebindRecoveryButton';b.type='button';b.className='sec';b.textContent='使用一次性恢复码换绑';b.onclick=window.rebindWithRecoveryCode;
             var anchor=login.querySelector('button');if(anchor&&anchor.parentNode)anchor.parentNode.appendChild(b);else login.appendChild(b);
-            var g=document.createElement('button');g.id='generateRecoveryButton';g.type='button';g.className='sec';g.textContent='在当前设备生成恢复码';g.onclick=window.generateRecoveryCode;b.parentNode.insertBefore(g,b);
         }
         var verified=false;try{verified=localStorage.getItem(VERIFIED_KEY)==='true';}catch(error){}
         if(!verified){showLogin();return;}

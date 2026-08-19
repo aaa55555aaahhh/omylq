@@ -25371,7 +25371,7 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   var chainedAdvance=window.advTime;
   window.advTime=function(){var before={};songs().forEach(function(t){before[t.id]=Math.max(0,Number(t.longViral||0),Number(t.viralWk||0));});var result=typeof chainedAdvance==='function'?chainedAdvance.apply(this,arguments):undefined;songs().forEach(function(t){var active=Math.max(0,Number(t.longViral||0),Number(t.viralWk||0));if(active>0&&before[t.id]===0){t.mvLyricCount=0;t.mvRealCount=0;t.hasLyricMV=false;t.hasRealMV=false;t._mvAvailableAgain=true;t.freshness=Math.min(100,Math.max(Number(t.freshness||45),72));t.promoFreshness=Math.min(100,Math.max(Number(t.promoFreshness||45),72));if(window.posts&&Array.isArray(posts.mom))posts.mom.unshift({t:'歌曲回春',c:'《'+(t.n||'未命名歌曲')+'》重新获得大众新鲜感，歌词 MV 与真人 MV 拍摄次数已重置。'});}});return result;};
   var chainedSongStats=window.viewSongStats;
-  window.viewSongStats=function(id){var result=typeof chainedSongStats==='function'?chainedSongStats.apply(this,arguments):undefined,t=songs().find(function(x){return String(x.id)===String(id);}),box=document.getElementById('mGameInputDesc');if(!t||!box)return result;var old=box.querySelector('[data-complete-song-meta]');if(old)old.remove();var card=document.createElement('div');card.dataset.completeSongMeta='1';card.className='card';card.style.cssText='margin-top:8px;font-size:12px;line-height:1.8;';card.innerHTML='<b>作品资料</b><br>发行时间：'+esc(releaseDate(t))+'<br>曲风：'+esc(genres(t))+'<br>乐评分：'+Number(t.Spub||0).toFixed(1)+'<br>PK：'+Number(t._chartPts||t.pk||t.score||0).toLocaleString()+'<br>SPO 全球：当前 '+rank(t.lastW)+' · 最高 '+rank(t.peakS)+' · 在榜 '+Number(t.chartWeeks||0)+' 周<br>SPO 美国：当前 '+rank(t.lastSpotifyUS||t.lastB)+' · 最高 '+rank(t.peakSpotifyUS||t.peakB)+' · 在榜 '+Number(t.usChartWeeks||0)+' 周<br>Billboard：当前 '+rank(t.lastB)+' · 最高 '+rank(t.peakB)+' · 在榜 '+Number(t.billboardChartWeeks||0)+' 周<br>MV：歌词版 '+Math.max(0,Number(t.mvLyricCount||0))+'/5 · 真人版 '+Math.max(0,Number(t.mvRealCount||0))+'/3'+(t._mvAvailableAgain?' · 回春已重置次数':'')+'</div>';box.appendChild(card);return result;};
+  window.viewSongStats=function(id){var result=typeof chainedSongStats==='function'?chainedSongStats.apply(this,arguments):undefined,t=songs().find(function(x){return String(x.id)===String(id);}),box=document.getElementById('mGameInputDesc');if(!t||!box)return result;var old=box.querySelector('[data-complete-song-meta]');if(old)old.remove();var card=document.createElement('div');card.dataset.completeSongMeta='1';card.className='card';card.style.cssText='margin-top:8px;font-size:12px;line-height:1.8;';card.innerHTML='<b>作品资料</b><br>发行时间：'+esc(releaseDate(t))+'<br>曲风：'+esc(genres(t))+'<br>乐评分：'+Number(t.Spub||0).toFixed(1)+'<br>PK 点数：'+Number(t._bbPtsExact||t.pkScore||t.score||0).toLocaleString()+'<br>SPO 全球：当前 '+rank(t.lastW)+' · 最高 '+rank(t.peakS)+' · 在榜 '+Number(t.chartWeeks||0)+' 周<br>SPO 美国：当前 '+rank(t.lastSpotifyUS||t.lastB)+' · 最高 '+rank(t.peakSpotifyUS||t.peakB)+' · 在榜 '+Number(t.usChartWeeks||0)+' 周<br>Billboard：当前 '+rank(t.lastB)+' · 最高 '+rank(t.peakB)+' · 在榜 '+Number(t.billboardChartWeeks||0)+' 周<br>MV：歌词版 '+Math.max(0,Number(t.mvLyricCount||0))+'/5 · 真人版 '+Math.max(0,Number(t.mvRealCount||0))+'/3'+(t._mvAvailableAgain?' · 回春已重置次数':'')+'</div><button class="sec inline" onclick="openEmergencyRecall(\''+esc(t.id)+'\')">紧急召回，重新打单</button>';box.appendChild(card);return result;};
 })();
 </script>
 <script>
@@ -25751,6 +25751,66 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
     Object.defineProperty(window,'openRegionalMarketApp',{configurable:false,get:function(){return finalRegionalMarket;},set:function(){}});
     Object.defineProperty(window,'advTime',{configurable:false,get:function(){return finalAdvance;},set:function(){}});
   }catch(error){setInterval(function(){window.openGroupRelease=finalCompanyGroupRelease;window.openRegionalMarketApp=finalRegionalMarket;window.advTime=finalAdvance;},250);}
+})();
+</script>
+<script>
+// Music career additions: chart detail uses chart-state peaks, while acting
+// projects keep the normal music studio available.
+(function installMusicCareerExtensions(){
+  if(window.__musicCareerExtensionsInstalled)return;
+  window.__musicCareerExtensionsInstalled=true;
+  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function songs(){return (typeof trackPool!=='undefined'&&Array.isArray(trackPool)?trackPool:[]).filter(function(x){return x&&x.type==='track';});}
+  function song(id){return songs().find(function(x){return String(x.id)===String(id);});}
+  function save(){if(typeof window.saveGame==='function')window.saveGame();}
+  function currentWeek(){return [Number(time&&time.y||0),Number(time&&time.m||0),Number(time&&time.w||0)].join('_');}
+  function chartPeak(t,chart,fallback){try{var st=typeof ensureChartState==='function'?ensureChartState(t,chart):null;if(st&&Number(st.peak)>0&&Number(st.peak)<=100)return Number(st.peak);}catch(e){}return Number(fallback||999);}
+
+  var oldStats=window.viewSongStats;
+  window.viewSongStats=function(id){
+    var result=typeof oldStats==='function'?oldStats.apply(this,arguments):undefined;
+    var t=song(id),box=document.getElementById('mGameInputDesc');if(!t||!box)return result;
+    var old=box.querySelector('[data-pk-correction]');if(old)old.remove();
+    var globalPeak=chartPeak(t,'spotifyGlobal',t.peakS),usPeak=chartPeak(t,'spotifyUS',t.peakSpotifyUS||t.peakB),bbPeak=chartPeak(t,'billboard',t.peakB);
+    var card=document.createElement('div');card.dataset.pkCorrection='1';card.className='card';card.style.cssText='margin-top:8px;font-size:12px;line-height:1.8;';
+    card.innerHTML='<b>榜单与操作</b><br>PK 点数：'+Number(t._bbPtsExact||t.pkScore||t.score||0).toLocaleString()+'（不再读取临时 _chartPts）<br>Spotify 全球最高：'+(globalPeak<=100?'#'+globalPeak:'Not In')+'<br>Spotify 美国最高：'+(usPeak<=100?'#'+usPeak:'Not In')+'<br>Billboard 最高：'+(bbPeak<=100?'#'+bbPeak:'Not In')+'<br><button class="sec inline" onclick="openEmergencyRecall(\''+esc(t.id)+'\')">紧急召回，重新打单</button>';
+    box.appendChild(card);return result;
+  };
+
+  window.openEmergencyRecall=function(id){
+    var t=song(id);if(!t)return alert('找不到这首歌曲。');
+    var title=document.getElementById('mGameInputTitle'),desc=document.getElementById('mGameInputDesc');
+    if(!title||!desc)return;
+    title.innerText='紧急召回 · '+(t.n||'未命名歌曲');
+    desc.innerHTML='<div class="card" style="font-size:12px;line-height:1.8;"><b>重新打单</b><br>公司可以临时召回已经发行的歌曲，追加一轮重点宣发。它不会复制首发爆发，收益会根据当前名气、歌曲口碑和距发行时间衰减。<br>当前召回次数：'+Number(t.emergencyRecallCount||0)+'/2</div><button onclick="confirmEmergencyRecall(\''+esc(t.id)+'\')">确认紧急召回</button><button class="sec" onclick="viewSongStats(\''+esc(t.id)+'\')">返回歌曲详情</button>';
+    document.getElementById('mGameInputField').style.display='none';document.getElementById('mGameInput').classList.add('open');
+  };
+  window.confirmEmergencyRecall=function(id){
+    var t=song(id);if(!t)return alert('找不到这首歌曲。');
+    if(Number(t.emergencyRecallCount||0)>=2)return alert('这首歌已经达到两次紧急召回上限。');
+    var key=currentWeek();if(t.emergencyRecallLast===key)return alert('本周已经召回过这首歌，请等待下一周。');
+    var fame=Math.max(0,Math.min(100,Number(ad&&ad.st&&ad.st.f||0)/1000000+Number(t.Spub||0)*.45+Number(ad&&ad.publicFavor||0)*.25));
+    var age=Math.max(0,Number(t.weeks||0)),decay=Math.max(.25,1-age/80),base=Math.max(1000,Number(t.stmGlobal_Week||0));
+    var gain=Math.max(1000,Math.floor(base*(.16+fame/850)*decay));
+    t.stmGlobal_Week=base+gain;t.stmGlobal_Day=Math.max(Number(t.stmGlobal_Day||0),Math.floor(t.stmGlobal_Week/7));t.stmGlobal=Math.max(Number(t.stmGlobal||0)+gain,t.stmGlobal_Week);t.emergencyRecallCount=Number(t.emergencyRecallCount||0)+1;t.emergencyRecallLast=key;t.singleLabel='紧急召回主打';t.promoCount=Number(t.promoCount||0)+1;
+    if(typeof window.applyCompressedStreamState==='function')window.applyCompressedStreamState();if(typeof updatePeakRanks==='function')updatePeakRanks();save();alert('《'+(t.n||'未命名歌曲')+'》已紧急召回重新打单。当前名气与口碑带来约 '+gain.toLocaleString()+' 次原始周流媒，已按大盘压缩。');if(typeof viewSongStats==='function')viewSongStats(t.id);
+  };
+
+  window.openAlbumRerecord=function(index){
+    var a=(typeof albs!=='undefined'&&Array.isArray(albs))?albs[Number(index)]:null;if(!a||!a.trackRef)return alert('找不到已发行专辑。');
+    if(a.rerecordCount)return alert('这张专辑已经完成过一次重录。');
+    var ref=a.trackRef,fame=Math.max(0,Math.min(100,Number(ad&&ad.st&&ad.st.f||0)/1000000+Number(ref.Spub||0)*.35+Number(ad&&ad.publicFavor||0)*.25)),quality=Math.max(.25,Math.min(1.15,.35+fame/120));
+    var oldWeek=Math.max(1000,Number(ref.stmGlobal_Week||ref.stmGlobal||0)),gain=Math.floor(oldWeek*quality),oldSales=Math.max(0,Number(ref.slTotal||0));
+    ref.stmGlobal_Week=oldWeek+gain;ref.stmGlobal_Day=Math.max(Number(ref.stmGlobal_Day||0),Math.floor(ref.stmGlobal_Week/7));ref.stmGlobal= Math.max(Number(ref.stmGlobal||0)+gain,ref.stmGlobal_Week);ref.slTotal=oldSales+Math.floor(gain/1500)+Math.floor(Number(ad&&ad.st&&ad.st.f||0)*.003);ref.rerecorded=true;ref.rerecordedAt=[Number(time.y||0),Number(time.m||0)].join('-');a.rerecordCount=1;a.rerecordQuality=quality;a.rerecordReason='根据当前名气、口碑与市场新鲜感重新录制';
+    (Array.isArray(a.s)?a.s:[]).forEach(function(s){var tr=songs().find(function(x){return x.n===s.n&&x.isMe;});if(tr){var part=Math.floor(gain/Math.max(1,a.s.length)*.35);tr.stmGlobal_Week=Number(tr.stmGlobal_Week||0)+part;tr.stmGlobal=Number(tr.stmGlobal||0)+part;tr.rerecorded=true;}});
+    if(typeof window.applyCompressedStreamState==='function')window.applyCompressedStreamState();if(typeof updatePeakRanks==='function')updatePeakRanks();save();if(typeof renderAlb==='function')renderAlb();alert('专辑《'+(a.n||'未命名')+'》已完成重录。新增首周爆发约 '+gain.toLocaleString()+' 次原始流媒，未复制首发数据，已按当前名气与口碑重新计算。');
+  };
+
+  var oldOpenAlbumStats=window.openAlbumStats;
+  window.openAlbumStats=function(index){var result=typeof oldOpenAlbumStats==='function'?oldOpenAlbumStats.apply(this,arguments):undefined;setTimeout(function(){var box=document.getElementById('mInfoContent');if(!box||box.querySelector('[data-rerecord-control]'))return;var a=(typeof albs!=='undefined'&&albs[Number(index)])||null;if(!a)return;var card=document.createElement('div');card.dataset.rerecordControl='1';card.className='card';card.style.cssText='margin-top:8px;font-size:12px;line-height:1.7;';card.innerHTML='<b>专辑重录</b><br>根据当前名气、口碑和市场新鲜感重新录制，额外获得一次不完全复制的首周爆发机会。'+(a.rerecordCount?'（已使用）':'<br><button onclick="openAlbumRerecord('+Number(index)+')">进行专辑重录</button>');box.appendChild(card);},0);return result;};
+
+  var oldOpenRecommend=window.openRecommendActor;
+  window.openRecommendActor=function(){var result=typeof oldOpenRecommend==='function'?oldOpenRecommend.apply(this,arguments):undefined;setTimeout(function(){var box=document.getElementById('mInfoContent');if(!box||box.querySelector('[data-acting-music]'))return;var card=document.createElement('div');card.dataset.actingMusic='1';card.className='card';card.style.cssText='margin-top:10px;font-size:12px;line-height:1.7;';card.innerHTML='<b>拍戏期间的音乐工作</b><br>影视拍摄不会锁死音乐事业；你可以在等待拍摄或宣传期间继续写歌、做专辑企划。<br><button class="sec inline" onclick="startWrite()">继续写歌</button><button class="sec inline" onclick="openMultiAlbumPj()">制作/发行专辑</button>';box.appendChild(card);},0);return result;};
 })();
 </script>
 </body>

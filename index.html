@@ -24167,14 +24167,19 @@ function installRuntimeAuthority(){
     window.repairGameRuntime=function(){var report=performRuntimeRepair({scope:'all'});alert('底层运行校验完成。\n'+repairSummary(report));return report;};
     function buildSaveSnapshot(){return {version:typeof GAME_VERSION!=='undefined'?GAME_VERSION:'1.3.0',ad:ad,lib:lib,std:std,albs:albs,trackPool:trackPool,marketSongs:marketSongs,time:time,Mt:Mt,posts:posts,curPj:curPj,prog:prog,curAlbPj:curAlbPj,historyAwards:historyAwards,conts:conts,worldArtists:worldArtists,writers:writers,myWorks:myWorks,awardRegistry:awardRegistry,currentAwardSeason:currentAwardSeason};}
     var SAVE_DERIVED_FIELDS={trendChart:1,trueTrend:1,_unlimitedTrend:1,itunesParts:1,amParts:1,_chartPts:1,_chartStr:1,_pctStm:1,_pctSales:1,_pctRadio:1,_displayRank:1,_billboardGlobalWeek:1,_billboardUSWeek:1};
-    function saveSnapshotJSON(){
-        return JSON.stringify(buildSaveSnapshot(),function(key,value){
+     function saveSnapshotJSON(){
+         return JSON.stringify(buildSaveSnapshot(),function(key,value){
             if(SAVE_DERIVED_FIELDS[key])return undefined;
             if(key==='chartHistory'&&this&&this.chartStats)return undefined;
             if(key==='spotifyUSHistory'&&this&&this.chartStats&&this.chartStats.spotifyUS)return undefined;
             return value;
-        });
-    }
+         });
+     }
+     // Expose the canonical serializer to the local-file save layer.  The
+     // original functions live inside this runtime IIFE, so sibling modules
+     // must use the explicit public entry point instead of a lexical name.
+     window.buildSaveSnapshot=buildSaveSnapshot;
+     window.saveSnapshotJSON=saveSnapshotJSON;
     function storageUsage(){var chars=0;try{for(var i=0;i<localStorage.length;i++){var key=localStorage.key(i),value=localStorage.getItem(key)||'';chars+=String(key||'').length+value.length;}}catch(e){}return chars*2;}
     function formatStorageBytes(bytes){return bytes>=1048576?(bytes/1048576).toFixed(2)+' MB':Math.max(1,Math.round(bytes/1024))+' KB';}
     function isStorageQuotaError(error){return !!error&&(error.name==='QuotaExceededError'||error.name==='NS_ERROR_DOM_QUOTA_REACHED'||error.code===22||error.code===1014);}
@@ -24834,11 +24839,12 @@ window.importLocalSave=function(input){var file=input&&input.files&&input.files[
   window.openPortfolioItem=function(index){var rows=typeof portfolioRows==='function'?portfolioRows():[];if(!rows.length){(trackPool||[]).filter(function(t){return t&&t.isMe;}).forEach(function(t){rows.push({kind:t.type==='album'?'专辑':'单曲',name:t.n,metric:'全球流媒 '+Number(t.stmGlobal||0).toLocaleString(),detail:'在榜 '+Number(t.weeks||0)+' 周',raw:t});});if(ad&&ad.screenCareer&&Array.isArray(ad.screenCareer.credits))ad.screenCareer.credits.forEach(function(p){rows.push({kind:p.kind==='film'?'电影':p.kind==='tv'?'电视剧':'短剧',name:p.name,metric:p.kind==='film'?'票房 $'+Number(p.boxOffice||0).toLocaleString():'观看 '+Number(p.watchHours||0).toLocaleString()+' 万小时',detail:'热度 '+Number(p.heat||0).toLocaleString(),raw:p});});}var x=rows[index]||rows[0]||{kind:'作品',name:'当前作品',metric:'暂无汇总数据',detail:'原始数据仍保存在当前存档中',raw:{}};var raw=x.raw||{},genres=Array.isArray(raw.gnr)?raw.gnr:Array.isArray(raw.genre)?raw.genre:[raw.genre||'未设置'],lines=['类型：'+(x.kind||'未知'),'名称：'+(x.name||'未命名'),x.metric||'',x.detail||''];if(x.kind==='单曲'||x.kind==='专辑'){lines.push('曲风：'+genres.filter(Boolean).join('、'));lines.push('发行时间：'+(raw.releaseYear||'未知'));lines.push('累计销量：'+Number(raw.slTotal||0).toLocaleString());lines.push('全球流媒：'+Number(raw.stmGlobal||0).toLocaleString());}document.getElementById('mInfoTitle').innerText=(x.name||'作品')+' · 详细数据';document.getElementById('mInfoContent').innerHTML='<div class="card" style="line-height:2;white-space:pre-line;">'+(typeof E==='function'?E(lines.join('\n')):lines.join('\n'))+'</div><button class="sec" onclick="openPortfolioDetails()">返回作品列表</button>';document.getElementById('mInfo').classList.add('open');};
   var saveDbPromise;
   function saveDb(){if(saveDbPromise)return saveDbPromise;saveDbPromise=new Promise(function(resolve,reject){var req=indexedDB.open('starProLocalSaves',2);req.onupgradeneeded=function(){var db=req.result;if(!db.objectStoreNames.contains('saves'))db.createObjectStore('saves');if(!db.objectStoreNames.contains('fileHandles'))db.createObjectStore('fileHandles');};req.onsuccess=function(){resolve(req.result);};req.onerror=function(){reject(req.error);};});return saveDbPromise;}
-  function mirrorSave(slot){try{var raw=typeof saveSnapshotJSON==='function'?saveSnapshotJSON():JSON.stringify(buildSaveSnapshot());saveDb().then(function(db){var tx=db.transaction('saves','readwrite');tx.objectStore('saves').put(raw,'starProSave_'+slot);});}catch(e){console.warn('IndexedDB 存档镜像失败',e);}}
+  function mirrorSave(slot){try{var raw=typeof window.saveSnapshotJSON==='function'?window.saveSnapshotJSON():JSON.stringify(window.buildSaveSnapshot());saveDb().then(function(db){var tx=db.transaction('saves','readwrite');tx.objectStore('saves').put(raw,'starProSave_'+slot);});}catch(e){console.warn('IndexedDB 存档镜像失败',e);}}
   function localFileHandleKey(slot){return 'starProFileHandle_'+slot;}
   function getLocalFileHandle(slot){return saveDb().then(function(db){return new Promise(function(resolve){var req=db.transaction('fileHandles','readonly').objectStore('fileHandles').get(localFileHandleKey(slot));req.onsuccess=function(){resolve(req.result||null);};req.onerror=function(){resolve(null);};});});}
+  window.getLocalFileHandle=getLocalFileHandle;
   function storeLocalFileHandle(slot,handle){return saveDb().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('fileHandles','readwrite');tx.objectStore('fileHandles').put(handle,localFileHandleKey(slot));tx.oncomplete=function(){resolve();};tx.onerror=function(){reject(tx.error);};});});}
-  function currentSaveText(){return typeof saveSnapshotJSON==='function'?saveSnapshotJSON():JSON.stringify(buildSaveSnapshot());}window.currentSaveText=currentSaveText;
+  function currentSaveText(){return typeof window.saveSnapshotJSON==='function'?window.saveSnapshotJSON():JSON.stringify(window.buildSaveSnapshot());}window.currentSaveText=currentSaveText;
   async function writeBoundLocalSave(slot,text,requestPermission){var handle=await getLocalFileHandle(slot);if(!handle)return false;var permission=await handle.queryPermission({mode:'readwrite'});if(permission!=='granted'&&requestPermission)permission=await handle.requestPermission({mode:'readwrite'});if(permission!=='granted')return false;var writable=await handle.createWritable();await writable.write(text);await writable.close();return true;}
   async function readBoundLocalSave(slot,requestPermission){var handle=await getLocalFileHandle(slot);if(!handle)return null;var permission=await handle.queryPermission({mode:'read'});if(permission!=='granted'&&requestPermission)permission=await handle.requestPermission({mode:'read'});if(permission!=='granted')return null;return await (await handle.getFile()).text();}
   window.readBoundLocalSave=readBoundLocalSave;window.writeBoundLocalSave=writeBoundLocalSave;
@@ -25303,7 +25309,30 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   function normalizeMagazineChartState(){if(!window.ad||typeof ad!=='object')return;if(!Array.isArray(ad.magazineSales))ad.magazineSales=[];if(!Array.isArray(ad.pendingMagazineIssues))ad.pendingMagazineIssues=[];if(!Array.isArray(ad.magazineCovers))ad.magazineCovers=[];ad.magazineSales=ad.magazineSales.filter(function(x){return x&&typeof x==='object';}).map(function(x,i){x.id=String(x.id||('mag_sale_'+i));x.artist=String(x.artist||ad.s||'未命名艺人');x.magazine=String(x.magazine||'未命名杂志');x.issue=String(x.issue||'常规刊');x.buyers=Math.max(0,Number(x.buyers)||0);x.unitPrice=Math.max(0,Number(x.unitPrice)||0);x.totalSales=Number(x.totalSales)||x.buyers*x.unitPrice;x.poster=Array.isArray(x.poster)?x.poster:[];return x;});ad.pendingMagazineIssues=ad.pendingMagazineIssues.filter(function(x){return x&&typeof x==='object';}).map(function(x,i){x.id=String(x.id||('mag_pending_'+i));x.magazine=String(x.magazine||'未命名杂志');x.issue=String(x.issue||'常规刊');x.shootDone=!!x.shootDone;x.saleProcessed=!!x.saleProcessed;return x;});}
   var oldMagazineChart=window.openMagazineSalesChart;window.openMagazineSalesChart=function(scope){normalizeMagazineChartState();try{return oldMagazineChart&&oldMagazineChart.call(this,scope||'year');}catch(error){console.error('杂志销量榜读取失败',error);var title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo');if(title)title.innerText='杂志销量榜';if(content)content.innerHTML='<p>榜单数据正在修复，请重新打开。</p>';if(modal)modal.classList.add('open');}};
   function showLoadedGame(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.style.display='none';});var create=document.getElementById('createPage');if(create){create.style.display='none';create.classList.remove('active');}var main=document.getElementById('gameMain');if(main){main.style.display='block';main.classList.add('active');}var attr=document.getElementById('pAttr');if(attr)attr.classList.add('active');var top=document.getElementById('topBar');if(top)top.style.display='flex';if(typeof updTimeUI==='function')updTimeUI();if(typeof updAttr==='function')updAttr();if(typeof renderAlb==='function')renderAlb();if(typeof renderNpcList==='function')renderNpcList();}
-  window.loadGame=async function(slotOverride){var slot=slotId(slotOverride),key='starProSave_'+slot,raw=null;try{if(typeof window.readBoundLocalSave==='function')try{raw=await window.readBoundLocalSave(slot,false);}catch(e){}if(!raw)try{raw=localStorage.getItem(key);}catch(e){}if(!raw&&typeof window.readIndexedSave==='function')try{raw=await window.readIndexedSave(key);}catch(e){}if(!raw){console.warn('存档槽位不存在：'+slot);return false;}var data=parseSave(raw);try{localStorage.setItem(key,typeof raw==='string'?raw:JSON.stringify(raw));}catch(e){}restoreFullSave(data);normalizeMagazineChartState();if(window.GameRuntime&&typeof GameRuntime.repair==='function')GameRuntime.repair({scope:'all',save:false});showLoadedGame();return true;}catch(error){console.error('统一读档失败',error);alert('读取失败：'+(error&&error.message||String(error)));return false;}};
+  window.loadGame=async function(slotOverride){
+    var slot=slotId(slotOverride),key='starProSave_'+slot,raw=null,handle=null;
+    try{
+      // A bound file is the authoritative save. Ask for permission after a
+      // user click instead of silently falling back to an old browser cache.
+      if(typeof window.getLocalFileHandle==='function')handle=await window.getLocalFileHandle(slot);
+      if(handle&&typeof window.readBoundLocalSave==='function'){
+        raw=await window.readBoundLocalSave(slot,true);
+        if(!raw)throw new Error('本地存档文件无法读取，可能需要重新授权或文件已被移动。');
+      }
+      if(!raw&&!handle){
+        // Compatibility import only: browser/IndexedDB data is used when no
+        // local file has ever been bound, never when a bound file exists.
+        try{raw=localStorage.getItem(key);}catch(e){}
+        if(!raw&&typeof window.readIndexedSave==='function')try{raw=await window.readIndexedSave(key);}catch(e){}
+      }
+      if(!raw){console.warn('存档槽位不存在：'+slot);alert('存档槽位 '+slot+' 为空。请先点击“新建并绑定当前槽位文件”，以后存档会直接写入电脑本地文件。');return false;}
+      var data=parseSave(raw);
+      try{localStorage.setItem(key,typeof raw==='string'?raw:JSON.stringify(raw));}catch(e){}
+      restoreFullSave(data);normalizeMagazineChartState();
+      if(window.GameRuntime&&typeof GameRuntime.repair==='function')GameRuntime.repair({scope:'all',save:false});
+      showLoadedGame();return true;
+    }catch(error){console.error('统一读档失败',error);alert('读取失败：'+(error&&error.message||String(error)));return false;}
+  };
 })();
 </script>
 <script>

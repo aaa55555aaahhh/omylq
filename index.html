@@ -1816,6 +1816,9 @@ setTimeout(function installFinalUserRequestedFixes(){
         if(Number(time.y)<next)return {ok:false,text:"下一届："+next+"年（还需 "+(next-Number(time.y))+" 年）"};
         return {ok:true,text:"本届开放 · 每 "+Math.max(1,Number(s.interval||1))+" 年举办"};
     }
+    // Expose the helpers before any early map refresh can call renderShows.
+    window.ensurePeakStages=ensurePeakStages;
+    window.stageAvailability=stageAvailability;
     window.renderShows=function(){
         var box=$("listShows");if(!box)return;
         box.innerHTML=`<button onclick="openPeakStageManager()">管理 / 增加巅峰舞台</button>`+ensurePeakStages().map(function(s){var state=stageAvailability(s);return `<div class="card" style="${state.ok?"":"opacity:.65"}"><b>🏟️ ${E(s.name)}</b><br><span style="font-size:11px;color:#777;">${E(state.text)}　门槛 ${Number(s.minFans||0).toLocaleString()} 粉丝</span><br>${state.ok?`<button onclick="joinPeakStage('${s.id}')">参加本届舞台</button>`:""}</div>`;}).join("");
@@ -25860,6 +25863,157 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
 
   var oldOpenRecommend=window.openRecommendActor;
   window.openRecommendActor=function(){var result=typeof oldOpenRecommend==='function'?oldOpenRecommend.apply(this,arguments):undefined;setTimeout(function(){var box=document.getElementById('mInfoContent');if(!box||box.querySelector('[data-acting-music]'))return;var card=document.createElement('div');card.dataset.actingMusic='1';card.className='card';card.style.cssText='margin-top:10px;font-size:12px;line-height:1.7;';card.innerHTML='<b>拍戏期间的音乐工作</b><br>影视拍摄不会锁死音乐事业；你可以在等待拍摄或宣传期间继续写歌、做专辑企划。<br><button class="sec inline" onclick="startWrite()">继续写歌</button><button class="sec inline" onclick="openMultiAlbumPj()">制作/发行专辑</button>';box.appendChild(card);},0);return result;};
+})();
+</script>
+<script>
+// Peak-stage bridge: inline onclick handlers resolve names on window only.
+(function(){
+  function peakArray(){
+    if(typeof ad==='undefined'||!ad||typeof ad!=='object') return [];
+    if(!Array.isArray(ad.peakStages)) ad.peakStages=[];
+    var seeds=[
+      ['c1','科切拉音乐节',1,10000000],
+      ['c2','世界杯开幕式',4,30000000],
+      ['c3','超级碗中场秀',1,50000000],
+      ['stage_glastonbury','格拉斯顿伯里音乐节',1,15000000],
+      ['stage_global_citizen','Global Citizen Festival',1,8000000]
+    ];
+    seeds.forEach(function(seed){
+      if(!ad.peakStages.some(function(item){return item&&String(item.id)===seed[0];})){
+        ad.peakStages.push({id:seed[0],name:seed[1],interval:seed[2],minFans:seed[3]});
+      }
+    });
+    if(!ad.stageLastYears||typeof ad.stageLastYears!=='object') ad.stageLastYears={};
+    if(typeof time==='undefined'||!time) return ad.peakStages;
+    return ad.peakStages;
+  }
+  function peakAvailability(stage){
+    var currentYear=Number(typeof time!=='undefined'&&time&&time.y||2026);
+    var last=Number(ad.stageLastYears&&ad.stageLastYears[stage.id]||0);
+    var next=last?last+Math.max(1,Number(stage.interval||1)):currentYear;
+    var fans=Number(ad.st&&ad.st.f||0), minimum=Number(stage.minFans||0);
+    if(fans<minimum) return {ok:false,text:'需要 '+minimum.toLocaleString()+' 粉丝'};
+    if(currentYear<next) return {ok:false,text:'下一届：'+next+'年（还需 '+(next-currentYear)+' 年）'};
+    return {ok:true,text:'本届开放 · 每 '+Math.max(1,Number(stage.interval||1))+' 年举办'};
+  }
+  function escapePeak(value){
+    return String(value==null?'':value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];});
+  }
+  window.ensurePeakStages=peakArray;
+  window.stageAvailability=peakAvailability;
+  window.renderShows=function(){
+    var box=document.getElementById('listShows');
+    if(!box)return;
+    var stages=peakArray();
+    box.innerHTML='<button onclick="openPeakStageManager()">管理 / 增加巅峰舞台</button>'+stages.map(function(stage){
+      var state=peakAvailability(stage), safeId=escapePeak(stage.id);
+      return '<div class="card" style="'+(state.ok?'':'opacity:.65')+'"><b>舞台 '+escapePeak(stage.name)+'</b><br><span style="font-size:11px;color:#777;">'+escapePeak(state.text)+'　门槛 '+Number(stage.minFans||0).toLocaleString()+' 粉丝</span><br>'+
+        (state.ok?'<button onclick="joinPeakStage(\''+safeId+'\')">参加本届舞台</button>':'')+'</div>';
+    }).join('');
+  };
+  window.openPeakStageManager=function(){
+    var stages=peakArray(), title=document.getElementById('mInfoTitle'), content=document.getElementById('mInfoContent'), modal=document.getElementById('mInfo');
+    if(!title||!content||!modal) return alert('舞台管理界面暂不可用，请先打开地图。');
+    content.innerHTML=stages.map(function(stage){
+      return '<div class="card peakStageEdit" data-id="'+escapePeak(stage.id)+'" style="padding:8px;">'+
+        '<label>舞台名称</label><input class="peakStageName" value="'+escapePeak(stage.name)+'">'+
+        '<label>举办周期（年）</label><select class="peakStageInterval">'+[1,2,3,4].map(function(n){return '<option value="'+n+'" '+(Number(stage.interval)===n?'selected':'')+'>每 '+n+' 年一次</option>';}).join('')+'</select>'+ 
+        '<label>参与最低粉丝数</label><input class="peakStageFans" type="number" min="0" value="'+Number(stage.minFans||0)+'">'+
+        '<button class="red" onclick="deletePeakStage(\''+escapePeak(stage.id)+'\')">删除</button></div>';
+    }).join('')+'<button onclick="addPeakStage()">增加表演舞台</button><button class="sec" onclick="savePeakStages()">保存全部修改</button>';
+    title.innerText='巅峰舞台管理';
+    modal.classList.add('open');
+  };
+  window.savePeakStages=function(){
+    var stages=peakArray();
+    Array.prototype.forEach.call(document.querySelectorAll('.peakStageEdit'),function(row){
+      var stage=stages.find(function(item){return String(item.id)===String(row.dataset.id);});
+      if(!stage)return;
+      var name=row.querySelector('.peakStageName'), interval=row.querySelector('.peakStageInterval'), fans=row.querySelector('.peakStageFans');
+      stage.name=(name&&name.value||stage.name).trim()||stage.name;
+      stage.interval=Math.max(1,Number(interval&&interval.value)||1);
+      stage.minFans=Math.max(0,Number(fans&&fans.value)||0);
+    });
+    if(typeof saveGame==='function') saveGame(); else if(typeof saveGameImmediate==='function') saveGameImmediate();
+    if(typeof window.renderShows==='function') window.renderShows();
+    if(typeof closeM==='function') closeM('mInfo'); else {var modal=document.getElementById('mInfo');if(modal)modal.classList.remove('open');}
+  };
+  window.addPeakStage=function(){
+    var stages=peakArray();
+    stages.push({id:'stage_custom_'+Date.now(),name:'新巅峰舞台',interval:1,minFans:1000000});
+    if(typeof saveGame==='function') saveGame();
+    window.openPeakStageManager();
+  };
+  window.deletePeakStage=function(id){
+    var stages=peakArray();
+    ad.peakStages=stages.filter(function(stage){return String(stage.id)!==String(id);});
+    if(typeof saveGame==='function') saveGame();
+    window.openPeakStageManager();
+  };
+})();
+</script>
+<script>
+// Canonical save/load authority. Older compatibility layers wrapped loadGame
+// several times and could restore a second, stale source after the first load.
+(function installCanonicalSaveLoad(){
+  function slotId(value){return String(value||((document.getElementById('selSaveSlot')||{}).value||'1'));}
+  function parse(raw){
+    var data=typeof raw==='string'?JSON.parse(raw):raw;
+    if(data&&data.value)data=typeof data.value==='string'?JSON.parse(data.value):data.value;
+    if(!data||typeof data!=='object'||!data.ad||typeof data.ad!=='object'||!data.ad.r)throw new Error('存档缺少有效的玩家核心数据');
+    return data;
+  }
+  function arr(value){return Array.isArray(value)?value:[];}
+  function restore(data){
+    ad=data.ad;
+    lib=arr(data.lib);std=arr(data.std);albs=arr(data.albs);trackPool=arr(data.trackPool);marketSongs=arr(data.marketSongs);
+    worldArtists=arr(data.worldArtists);writers=arr(data.writers);myWorks=arr(data.myWorks);conts=arr(data.conts);historyAwards=arr(data.historyAwards);
+    time=data.time&&typeof data.time==='object'?data.time:{y:2026,m:1,w:1,d:1,h:0};
+    Mt=Number.isFinite(Number(data.Mt))?Number(data.Mt):1;
+    posts=data.posts&&typeof data.posts==='object'?data.posts:{wb:[],x:[],ins:[],tiktok:[],mom:[]};
+    ['wb','x','ins','tiktok','mom'].forEach(function(k){if(!Array.isArray(posts[k]))posts[k]=[];});
+    curPj=data.curPj||null;prog=Number(data.prog)||0;curAlbPj=data.curAlbPj||null;
+    if(Array.isArray(data.awardRegistry))awardRegistry=data.awardRegistry;
+    if(data.currentAwardSeason&&typeof data.currentAwardSeason==='object')currentAwardSeason=data.currentAwardSeason;
+    conts.forEach(function(c){if(!c||typeof c!=='object')return;if(c.affinity===undefined)c.affinity=0;if(c.isCohabiting===undefined)c.isCohabiting=false;});
+    trackPool.forEach(function(t){if(!t||typeof t!=='object')return;if(!Array.isArray(t.gnr))t.gnr=t.gnr?[String(t.gnr)]:[];if(!Number.isFinite(Number(t.stmGlobal)))t.stmGlobal=Number(t.stm||0)||0;});
+  }
+  function show(){
+    document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.style.display='none';});
+    var create=document.getElementById('createPage');if(create){create.style.display='none';create.classList.remove('active');}
+    var main=document.getElementById('gameMain');if(main){main.style.display='block';main.classList.add('active');}
+    var attr=document.getElementById('pAttr');if(attr)attr.classList.add('active');
+    var top=document.getElementById('topBar');if(top)top.style.display='flex';
+    if(typeof updTimeUI==='function')updTimeUI();if(typeof updAttr==='function')updAttr();
+    if(typeof renderAlb==='function')renderAlb();if(typeof renderNpcList==='function')renderNpcList();
+  }
+  async function readSource(slot){
+    var key='starProSave_'+slot,raw=null;
+    if(typeof window.getLocalFileHandle==='function'&&typeof window.readBoundLocalSave==='function'){
+      var handle=await window.getLocalFileHandle(slot);
+      if(handle){raw=await window.readBoundLocalSave(slot,true);if(raw)return raw;}
+    }
+    try{raw=localStorage.getItem(key);}catch(e){}
+    if(raw)return raw;
+    if(typeof window.readIndexedSave==='function')raw=await window.readIndexedSave(key);
+    return raw;
+  }
+  window.loadGame=async function(slotOverride){
+    var slot=slotId(slotOverride);
+    try{
+      var raw=await readSource(slot);if(!raw){alert('存档槽位 '+slot+' 为空。');return false;}
+      var data=parse(raw);restore(data);
+      try{localStorage.setItem('starProSave_'+slot,typeof raw==='string'?raw:JSON.stringify(raw));}catch(e){}
+      if(window.GameRuntime&&typeof GameRuntime.repair==='function')GameRuntime.repair({scope:'all',save:false});
+      show();window.__starProSaveDirty=false;
+      return true;
+    }catch(error){console.error('规范化读档失败',error);alert('读取失败：'+(error&&error.message||String(error)));return false;}
+  };
+  window.mainMenuLoad=async function(){
+    var slot=slotId((document.getElementById('mainMenuSlot')||{}).value);
+    var select=document.getElementById('selSaveSlot');if(select)select.value=slot;
+    return window.loadGame(slot);
+  };
 })();
 </script>
 </body>

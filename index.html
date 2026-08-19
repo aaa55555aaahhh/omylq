@@ -17,6 +17,58 @@
 @keyframes pet-reassemble{0%,100%{transform:translateX(0);opacity:.55}35%{transform:translateX(-6px);opacity:1}68%{transform:translateX(5px);opacity:.8}}
 </style>
 <script>
+// Final custom-platform authority: keep regional platforms inside the
+// compressed global market and give custom charts the same visible metadata
+// as the built-in charts.
+(function installCustomPlatformAuthority(){
+  if(window.__customPlatformAuthorityInstalled)return;
+  window.__customPlatformAuthorityInstalled=true;
+  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function active(){return !!(window.ad&&ad&&ad.r);}
+  function charts(){if(!ad.customMusicCharts||!Array.isArray(ad.customMusicCharts))ad.customMusicCharts=[];return ad.customMusicCharts;}
+  function apps(){if(!ad.customPhoneApps||!Array.isArray(ad.customPhoneApps))ad.customPhoneApps=[];return ad.customPhoneApps;}
+  function songs(){return (typeof trackPool!=='undefined'&&Array.isArray(trackPool)?trackPool:[]).filter(function(t){return t&&t.type==='track';});}
+  function regionName(key){return window.REGION_SYSTEM&&REGION_SYSTEM[key]?REGION_SYSTEM[key].name:'国际';}
+  function periodKey(){return [Number(time&&time.y||0),Number(time&&time.m||0),Number(time&&time.w||0)].join('_');}
+  function globalCompressedWeek(t){return Math.max(0,Number(t.stmGlobal_Week||0),Number(t.stmGlobal_Day||0)*7);}
+  function regionShare(chart){var n=Number(chart&&chart.sharePercent);if(!Number.isFinite(n))n=100;if(!chart||chart.scope!=='regional')return 100;var key=periodKey();if(chart._sharePeriod!==key){var drift=.8+Math.random()*.4;chart._sharePeriod=key;chart._effectiveShare=Math.max(1,Math.min(100,n*drift));}return Number(chart._effectiveShare||n);}
+  function marketScore(t,chart){
+    var weekly=globalCompressedWeek(t),share=regionShare(chart),scope=chart.scope==='regional'?chart.region:'global';
+    if(scope==='global')return weekly;
+    var regions=t.amRegions||t.itunesRegions||{},direct=Math.max(0,Number(regions[String(scope||'').toUpperCase()]||0)*7),regionalBase=window.REGION_SYSTEM&&REGION_SYSTEM[scope]?Number(REGION_SYSTEM[scope].market||.75):.75;
+    // Regional streams are a portion of the already-compressed global market.
+    // Never let a regional platform exceed its declared share or the global
+    // platform total.
+    var shareCap=Math.floor(weekly*share/100),fallback=Math.floor(weekly*Math.max(.05,Math.min(1,regionalBase))*share/100);
+    return Math.max(0,Math.min(weekly,shareCap, direct>0?direct:fallback));
+  }
+  function customPk(t,score){return Math.max(0,Math.floor(score/1000)+Math.floor(Math.max(0,Number(t.slTotal||0))/100)+Math.floor(Math.max(0,Number(t.radioAud||0))*333));}
+  function isWatered(t){return Number(t.waterRisk||0)>0||Number(t.radioBought||0)>0||Number(t.itunesCheatPenalty||0)>0||!!t.payolaUsed||!!t.injectedStreams;}
+  function updateHistory(chart,rows){
+    if(!chart.history||typeof chart.history!=='object')chart.history={};
+    var key=periodKey(),entry={};rows.forEach(function(row,i){entry[row.track.id]=i+1;});chart.history[key]=entry;
+    var keys=Object.keys(chart.history).sort(),prev=keys.length>1?chart.history[keys[keys.length-2]]:{};return {key:key,prev:prev};
+  }
+  function exportCustomSoftware(){
+    if(!active())return alert('请先进入游戏。');
+    var payload={format:'star-pro-custom-software',version:1,exportedAt:new Date().toISOString(),apps:apps().filter(function(x){return x&&x.type==='musicChart';}),charts:charts().map(function(c){return JSON.parse(JSON.stringify(c));})};
+    var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='star-pro-custom-software.json';a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);alert('自定义软件设定已导出。只包含自定义软件与自定义榜单，不包含游戏存档。');
+  }
+  window.exportCustomSoftware=exportCustomSoftware;
+  function mountExportButton(){var api=document.getElementById('pApi');if(!api||document.getElementById('exportCustomSoftwareBtn'))return;var card=document.createElement('div');card.className='card';card.innerHTML='<h2 class="tg" style="margin-bottom:10px;">📦 自定义软件设定</h2><p style="font-size:12px;color:#888;">只导出你创建的自定义手机软件和自定义榜单设定。</p><button id="exportCustomSoftwareBtn" class="sec" onclick="exportCustomSoftware()">导出自定义软件设定</button>';api.insertBefore(card,api.firstElementChild||null);}
+  window.mountCustomSoftwareExport=mountExportButton;
+  function openStudio(){
+    if(!active())return alert('请先进入游戏。');
+    var rows=charts();document.getElementById('mInfoTitle').innerText='自定义榜单';document.getElementById('mInfoContent').innerHTML='<div class="card" style="font-size:11px;line-height:1.7;">地区平台数据属于全球压缩大盘的一部分，不会再出现地区榜超过全球榜的情况。占比是约数，每个游戏周会在设定值上下浮动。</div><label>软件名称</label><input id="customChartName" value="我的音乐榜"><label>榜单类型</label><select id="customChartType"><option value="music">音乐榜单</option></select><label>市场范围</label><select id="customChartScope" onchange="toggleCustomChartRegion()"><option value="global">国际榜单</option><option value="regional">地区榜单</option></select><div id="customChartRegionRow" style="display:none;"><label>所属地区</label><select id="customChartRegion">'+Object.keys(window.REGION_SYSTEM||{global:{name:'国际'}}).map(function(k){return '<option value="'+esc(k)+'">'+esc(regionName(k))+'</option>';}).join('')+'</select><label>约占全球压缩大盘比例（%）</label><input id="customChartShare" type="number" min="1" max="100" value="15"></div><button onclick="createCustomMusicChart()">新增软件</button><h4>已安装的软件</h4>'+rows.map(function(c){return '<div class="card"><b>'+esc(c.name)+'</b><br><span style="font-size:11px;color:#666;">'+(c.scope==='regional'?esc(regionName(c.region))+'地区音乐榜 · 约占全球 '+regionShare(c).toFixed(1)+'%':'国际音乐榜 · 全球 100%')+'</span><button class="sec" onclick="openCustomMusicChart(\''+esc(c.id)+'\')">打开</button></div>';}).join('');document.getElementById('mInfo').classList.add('open');
+  }
+  window.openCustomChartStudio=openStudio;
+  window.createCustomMusicChart=function(){if(!active())return;var name=((document.getElementById('customChartName')||{}).value||'').trim(),scope=(document.getElementById('customChartScope')||{}).value,region=(document.getElementById('customChartRegion')||{}).value,share=Number((document.getElementById('customChartShare')||{}).value||15);if(!name)return alert('请输入软件名称。');if(scope==='regional'&&(!Number.isFinite(share)||share<1||share>100))return alert('地区平台占比必须是 1% 到 100%。');var id='custom_chart_'+Date.now(),chart={id:id,name:name,type:'music',scope:scope==='regional'?'regional':'global',region:scope==='regional'?region:'global',sharePercent:scope==='regional'?Math.round(share):100,history:{}};charts().push(chart);apps().push({id:id,type:'musicChart'});if(typeof mountRegionalPhoneApps==='function')mountRegionalPhoneApps();if(typeof saveGame==='function')saveGame();alert('“'+name+'”已安装到手机。');openStudio();};
+  window.openCustomMusicChart=function(id){if(!active())return;var chart=charts().find(function(x){return String(x.id)===String(id);});if(!chart)return alert('未找到该自定义榜单。');if(typeof window.applyCompressedStreamState==='function')window.applyCompressedStreamState();var effective=regionShare(chart),rows=songs().map(function(t){return {track:t,score:marketScore(t,chart)};}).filter(function(x){return x.score>0;}).sort(function(a,b){return b.score-a.score||String(a.track.id||'').localeCompare(String(b.track.id||''));}).slice(0,100),hist=updateHistory(chart,rows);if(typeof saveGame==='function')saveGame();document.getElementById('mInfoTitle').innerText=chart.name;document.getElementById('mInfoContent').innerHTML='<div class="card" style="font-size:11px;color:#666;">'+(chart.scope==='regional'?esc(regionName(chart.region))+'地区市场 · 约占全球压缩大盘 '+effective.toFixed(1)+'%':'国际市场 · 全球压缩大盘 100%')+'</div>'+rows.map(function(row,i){var t=row.track,rank=i+1,prev=hist.prev[t.id],peak=rank;if(chart.history){Object.keys(chart.history).forEach(function(k){var r=chart.history[k]&&chart.history[k][t.id];if(Number(r)>0)peak=Math.min(peak,Number(r));});}var trend=prev?(Number(prev)>rank?'↑':Number(prev)<rank?'↓':'→'):'NEW',water=isWatered(t)?' · <span style="color:#c2410c;font-weight:700;">注水/风控标志</span>':'';return '<div class="card"><b>#'+rank+' '+esc(t.n||'未命名歌曲')+'</b><br><span style="font-size:11px;color:#666;">'+esc(t.artist||'')+' · '+row.score.toLocaleString()+' 市场流媒 · PK '+customPk(t,row.score).toLocaleString()+' · Peak #'+peak+' · '+trend+water+'</span><br><button class="sec inline" onclick="viewSongStats(\''+esc(t.id)+'\')">详情</button></div>';}).join('')||'<p style="color:#888;">暂无可计入该榜单的歌曲。</p>';document.getElementById('mInfo').classList.add('open');};
+  var finalCreateCustomMusicChart=window.createCustomMusicChart,finalOpenCustomMusicChart=window.openCustomMusicChart;
+  function reassert(){window.openCustomChartStudio=openStudio;window.createCustomMusicChart=finalCreateCustomMusicChart;window.openCustomMusicChart=finalOpenCustomMusicChart;mountExportButton();}
+  document.addEventListener('DOMContentLoaded',function(){setTimeout(reassert,0);setTimeout(mountExportButton,200);setTimeout(mountExportButton,1000);});setInterval(reassert,1000);
+})();
+</script>
 // 登录由文件末尾的云端 device-auth 权威层统一接管。
 // ==================== 最终音乐数据一致性修复：同名新歌、概率复评、榜单走势 ====================
 document.addEventListener("DOMContentLoaded", function installFinalMusicDataFixes(){
@@ -24662,11 +24714,13 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
     function deviceId(){
         var value='';
         try{value=localStorage.getItem(DEVICE_KEY)||'';}catch(error){}
+        if(value.length<32){try{var match=document.cookie.match(/(?:^|; )starProDevice=([^;]+)/);value=match?decodeURIComponent(match[1]):'';}catch(error){}}
         if(value.length<32){
             var bytes=new Uint8Array(32);crypto.getRandomValues(bytes);
             value=Array.from(bytes,function(byte){return byte.toString(16).padStart(2,'0');}).join('');
             try{localStorage.setItem(DEVICE_KEY,value);}catch(error){}
-        }
+            try{document.cookie='starProDevice='+encodeURIComponent(value)+'; max-age=315360000; path=/; SameSite=Lax';}catch(error){}
+        }else{try{localStorage.setItem(DEVICE_KEY,value);}catch(error){}try{document.cookie='starProDevice='+encodeURIComponent(value)+'; max-age=315360000; path=/; SameSite=Lax';}catch(error){}}
         return value;
     }
     function showLogin(){
@@ -24771,16 +24825,11 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
         if(!verified){showLogin();return;}
         // Keep the password page hidden while the remembered device session is checked.
         document.querySelectorAll('.page').forEach(function(page){page.classList.remove('active');page.style.display='none';});
+        // A remembered session is intentionally trusted on startup. Calling
+        // /device-session here used to log out the same browser after a
+        // storage migration or origin change, even though the player had not
+        // switched devices. Explicit password login still verifies binding.
         enterLobby();
-        request('/api/device-session',{deviceId:deviceId()}).then(function(result){
-            if(result.ok)return;
-            // Keep existing remembered players in the game when the server has a
-            // stale/migrated session; only an explicit login flow can replace it.
-            if(result.data&&['DEVICE_MISMATCH','DEVICE_ALREADY_BOUND'].indexOf(result.data.code)>=0){
-                try{localStorage.removeItem(VERIFIED_KEY);}catch(error){}
-                showLogin();
-            }else enterLobby();
-        }).catch(function(){enterLobby();});
     }
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(start,20);});
     else setTimeout(start,20);

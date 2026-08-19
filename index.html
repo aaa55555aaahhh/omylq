@@ -18366,6 +18366,21 @@ window.showProj = function(id) {
             featOpts += `<option value="${escapeHTML(npc.n)}">${escapeHTML(npc.n)} (粉:${(npc.fans/10000).toFixed(0)}w)</option>`;
         });
         if(document.getElementById("inNewSongFeat")) document.getElementById("inNewSongFeat").innerHTML = featOpts;
+        // 切回创作页时恢复未完成企划的真实进度，避免误显示为可新建。
+        var writeBox = document.getElementById("boxWriteProgress");
+        var startBtn = document.getElementById("btnStartWriteProj");
+        if (writeBox && startBtn) {
+            var hasPendingWrite = !!(curPj && curPj.type === "write");
+            var currentProgress = Math.max(0, Math.min(99, Number(prog) || 0));
+            writeBox.style.display = hasPendingWrite ? "block" : "none";
+            startBtn.style.display = hasPendingWrite ? "none" : "block";
+            if (hasPendingWrite) {
+                var progressText = document.getElementById("txtProg");
+                var progressBar = document.getElementById("barProg");
+                if (progressText) progressText.innerText = currentProgress + "%";
+                if (progressBar) progressBar.style.width = currentProgress + "%";
+            }
+        }
     }
     if(id === 'pjLib') renderLib(); 
     if(id === 'pjAlbum' && typeof renderMultiAlbumStudio === 'function') renderMultiAlbumStudio();

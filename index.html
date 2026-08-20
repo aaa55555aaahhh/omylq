@@ -26342,4 +26342,48 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   };
 })();
 </script>
+<script>
+// Final artist directory authority: separate solo/actor details from groups.
+(function installArtistDirectoryAuthority(){
+  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function list(v){return Array.isArray(v)?v:[];}
+  function find(id){
+    id=String(id||'');
+    if(id==='player_self')return {source:window.ad,kind:'player',id:id};
+    if(id.indexOf('group_')===0){var gid=id.slice(6),g=list(window.ad&&ad.entertainmentGroups).find(function(x){return String(x.id)===gid;});return g?{source:g,kind:'group',id:id}:null;}
+    if(id.indexOf('screen_')===0){var sid=id.slice(7),a=list(window.ad&&ad.screenActors).find(function(x){return String(x.id)===sid;});return a?{source:a,kind:'actor',id:id}:null;}
+    var n=list(window.worldArtists).find(function(x){return String(x.id)===id;});return n?{source:n,kind:'solo',id:id}:null;
+  }
+  function fanText(n){return Number(n||0).toLocaleString();}
+  function career(n,kind){if(kind==='actor')return ['演员'];if(kind==='group')return ['团体'];var c=list(n&&n.careers).filter(Boolean);if(!c.length&&n&&n.career)c=[n.career];return c.length?c:['歌手'];}
+  function groupType(g){return g.groupType||g.genderType||g.typeLabel||g.gender||'未设置';}
+  function memberRefs(g){
+    var out=[];list(g&&g.members||g.memberList||g.memberIds).forEach(function(m){
+      if(typeof m==='string'){var x=list(window.worldArtists).find(function(a){return String(a.id)===m||a.n===m;});if(x)out.push({source:x,id:String(x.id)});}
+      else if(m&&typeof m==='object'){var x=list(window.worldArtists).find(function(a){return (m.id&&String(a.id)===String(m.id))||(m.n&&a.n===m.n);});out.push({source:x||m,id:x?String(x.id):String(m.id||('member_'+out.length))});}
+    });
+    if(!out.length&&Array.isArray(g&&g.memberNames))g.memberNames.forEach(function(name){var x=list(window.worldArtists).find(function(a){return a.n===name;});if(x)out.push({source:x,id:String(x.id)});});
+    return out;
+  }
+  function groupNotes(g){var rows=[];list(g&&g.history||g&&g.events||g&&g.records||g&&g.timeline).forEach(function(x){if(typeof x==='string')rows.push(x);else if(x)rows.push([x.date||x.year||'',x.text||x.title||x.name||''].filter(Boolean).join(' · '));});
+    list(g&&g.releases||g&&g.discography||g&&g.albums).forEach(function(x){if(x)rows.push([x.date||x.releaseDate||x.year||'',x.title||x.n||x.name||'发行作品'].filter(Boolean).join(' · '));});
+    list(g&&g.awards||g&&g.awd).forEach(function(x){rows.push(typeof x==='string'?('获得奖项 · '+x):'获得奖项 · '+(x&& (x.name||x.title||x.text)||'未命名奖项'));});return rows;
+  }
+  function deleteArtist(id){var ref=find(id);if(!ref||ref.kind==='player')return;var name=ref.source.n||ref.source.name||ref.source.s||'该艺人';if(!confirm('确定删除“'+name+'”及其榜单记录吗？'))return;if(ref.kind==='group'){ad.entertainmentGroups=list(ad.entertainmentGroups).filter(function(x){return String(x.id)!==String(ref.source.id);});}else if(ref.kind==='actor'){ad.screenActors=list(ad.screenActors).filter(function(x){return String(x.id)!==String(ref.source.id);});}else{worldArtists=list(worldArtists).filter(function(x){return String(x.id)!==String(ref.source.id);});trackPool=list(trackPool).filter(function(x){return x.artist!==name&&x.artistId!==ref.source.id;});}if(typeof saveGame==='function')saveGame();else if(typeof saveGameImmediate==='function')saveGameImmediate();window.renderNpcList();closeM('mInfo');}
+  window.deleteDirectoryArtist=deleteArtist;
+  window.renderNpcList=function(){var box=document.getElementById('uiNpcList');if(!box)return;var rows=[],seen={};function add(x,id,kind){if(!x||seen[id])return;seen[id]=1;rows.push({source:x,id:id,kind:kind,fans:Number(x.fans||0),name:x.n||x.name||x.s||'未命名'});}list(window.worldArtists).forEach(function(x){add(x,String(x.id),'solo');});list(window.ad&&ad.screenActors).forEach(function(x){add(x,'screen_'+x.id,'actor');});list(window.ad&&ad.entertainmentGroups).forEach(function(x){add(x,'group_'+x.id,'group');});rows.sort(function(a,b){return b.fans-a.fans;});box.innerHTML=rows.map(function(r,i){var n=r.source,label=r.kind==='group'?'团体':r.kind==='actor'?'演员':'歌手 / 艺人';return '<div class="card" style="padding:10px;margin-bottom:8px;display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;"><b>'+(i+1)+'.</b><div><b>'+esc(r.name)+'</b><br><span style="font-size:11px;color:#777;">'+label+' · '+(r.kind==='group'?esc(groupType(n)):esc(n.gender||'性别未设置'))+' · 粉丝 '+fanText(r.fans)+'</span></div><button class="sec inline" onclick="openNpcDetail(\''+esc(r.id)+'\')">查看详情</button></div>';}).join('')||'<p style="color:#888;text-align:center;">暂无艺人</p>';};
+  window.openNpcDetail=function(id){var ref=find(id);if(!ref)return;var n=ref.source,box=document.getElementById('mInfoContent'),title=document.getElementById('mInfoTitle');if(!box||!title)return;var name=n.n||n.name||n.s||'未命名';title.innerText=ref.kind==='group'?'团体详情 · '+name:'艺人详情 · '+name;var html='<div class="card" style="line-height:1.8;"><h3 style="margin:0 0 6px;">'+esc(name)+'</h3>';
+    if(ref.kind==='group'){
+      html+='<div>团体粉丝：<b>'+fanText(n.fans)+'</b></div><div>团体类型：<b>'+esc(groupType(n))+'</b></div><div>所属地区：'+esc(n.homeRegion||n.region||'未设置')+'</div></div><h4 class="tg">成员介绍</h4>';
+      var ms=memberRefs(n);html+=ms.map(function(m){var x=m.source;return '<div class="card" style="padding:8px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;"><span><b>'+esc(x.n||x.name||'未命名成员')+'</b><br><span style="font-size:11px;color:#777;">'+esc(x.gender||'性别未设置')+' · '+career(x,'solo').map(esc).join('、')+' · 粉丝 '+fanText(x.fans)+'</span></span><button class="sec inline" onclick="openNpcDetail(\''+esc(m.id)+'\')">成员详情</button></div>';}).join('')||'<p style="color:#888;">暂无成员资料。</p>';
+      html+='<h4 class="tg">团体记事</h4>';var notes=groupNotes(n);html+=notes.map(function(x){return '<div style="padding:6px 0;border-bottom:1px solid #eee;font-size:12px;">'+esc(x)+'</div>';}).join('')||'<p style="color:#888;">暂无发行或获奖记事。</p>';
+    }else{
+      html+='<div>性别：<b>'+esc(n.gender||'未设置')+'</b></div><div>粉丝数量：<b>'+fanText(n.fans)+'</b></div><div>职业：<b>'+career(n,ref.kind).map(esc).join('、')+'</b></div><div>年龄：'+esc(n.age==null?'未设置':n.age+' 岁')+'</div><div>国籍：'+esc(n.nationality||n.country||'未设置')+'</div></div><h4 class="tg">个人简介</h4><div class="card" style="font-size:12px;line-height:1.7;">'+esc(n.bio||n.desc||'暂无简介')+'</div>';
+    }
+    if(ref.kind!=='player')html+='<button class="red" onclick="deleteDirectoryArtist(\''+esc(ref.id)+'\')">删除此艺人 / 团体</button>';
+    box.innerHTML=html;document.getElementById('mInfo').classList.add('open');
+  };
+  setTimeout(function(){if(typeof window.renderNpcList==='function')window.renderNpcList();},1000);
+})();
+</script>
 </html>

@@ -68,6 +68,76 @@
   function reassert(){window.openCustomChartStudio=openStudio;window.createCustomMusicChart=finalCreateCustomMusicChart;window.openCustomMusicChart=finalOpenCustomMusicChart;mountExportButton();}
   document.addEventListener('DOMContentLoaded',function(){setTimeout(reassert,0);setTimeout(mountExportButton,200);setTimeout(mountExportButton,1000);});setInterval(reassert,1000);
 })();
+// ===== 最终兼容修复：巡演歌单、合作曲库、专辑发行状态 =====
+(function installFinalMusicStateFix(){
+  function arr(v){return Array.isArray(v)?v:[];}
+  function esc(v){return typeof escapeHTML==='function'?escapeHTML(String(v==null?'':v)):String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function findSong(id,name){
+    var hit=arr(trackPool).find(function(t){return t&&String(t.id)===String(id);});
+    if(!hit&&name)hit=arr(trackPool).find(function(t){return t&&t.type==='track'&&t.isMe&&String(t.n)===String(name);});
+    return hit;
+  }
+  function normalizeTourSongs(){
+    arr(window.tourLegs).forEach(function(leg){
+      var ids=Array.isArray(leg.songId)?leg.songId:(leg.songId?[leg.songId]:[]);
+      leg.songId=ids.map(String);
+    });
+  }
+  var baseRenderTour=window.renderTourLegs;
+  window.renderTourLegs=function(){
+    normalizeTourSongs();
+    if(typeof baseRenderTour==='function')baseRenderTour.apply(this,arguments);
+    // 重新补正复选框的歌曲标题和勾选状态，兼容数字/字符串 ID。
+    arr(window.tourLegs).forEach(function(leg,i){
+      var selected=arr(leg.songId).map(String);
+      document.querySelectorAll('.leg-song-chk-'+i).forEach(function(input){
+        input.checked=selected.indexOf(String(input.value))>=0;
+        var song=findSong(input.value);
+        if(song){var text=input.parentElement&&input.parentElement.lastChild;if(text)text.textContent=' '+song.n;}
+      });
+    });
+  };
+  function showCollabLibrary(){
+    var box=document.getElementById('listLib');if(!box)return;
+    var invites=arr(ad&&ad.acceptedArtistCollabs).filter(function(x){return x&&x.status==='planning';});
+    if(!invites.length)return;
+    var old=box.querySelector('[data-collab-library]');if(old)old.remove();
+    var node=document.createElement('div');node.dataset.collabLibrary='1';node.style.cssText='margin-top:10px;border-top:2px solid #e5e7eb;padding-top:8px;';
+    node.innerHTML='<b>🤝 合作企划</b>'+invites.map(function(x){return '<div class="card" style="margin-top:6px;padding:8px;"><b>'+esc(x.type||'合作')+' · '+esc(x.npcName||'合作艺人')+'</b><br><span style="font-size:11px;color:#666;">已接受邀请，尚未完成歌曲；可在创作单曲企划中继续制作。</span></div>';}).join('');
+    box.appendChild(node);
+  }
+  var baseRenderLib=window.renderLib;
+  window.renderLib=function(){var r=typeof baseRenderLib==='function'?baseRenderLib.apply(this,arguments):undefined;showCollabLibrary();return r;};
+  function normalizeAlbums(){
+    arr(window.albs).forEach(function(a){
+      if(!a||!a.n)return;
+      var entity=a.trackRef&&a.trackRef.id?findSong(a.trackRef.id,null):arr(trackPool).find(function(t){return t&&t.type==='album'&&((a.id&&String(t.albumId)===String(a.id))||String(t.n)===String(a.n));});
+      if(entity){a.trackRef=entity;a.st='已发';a.released=true;}
+      if(!Array.isArray(a.s))a.s=[];
+      a.s.forEach(function(song){if(song&&song.id){var t=findSong(song.id,song.n);if(t)song.id=t.id;}});
+    });
+  }
+  function albumIsReleased(a){return !!(a&&(a.st==='已发'||a.released||a.trackRef));}
+  var baseOpenAlb=window.openAlbDetail;
+  window.openAlbDetail=function(idx){
+    normalizeAlbums();var a=arr(albs)[idx];
+    if(a&&!albumIsReleased(a)){
+      var songs=arr(a.s).filter(function(s){return !s.released;});
+      if(songs.length!==arr(a.s).length){
+        var title=document.getElementById('mAlbDetailTitle'),content=document.getElementById('mAlbDetailContent'),modal=document.getElementById('mAlbDetail');
+        if(title&&content&&modal){title.innerText='《'+(a.n||'未发行专辑')+'》歌曲一览';content.innerHTML='<div class="card" style="font-size:12px;line-height:1.8;">专辑尚未正式发行。发行前已单独打单的先行曲会保留在单曲页面，发行后才会并入本专辑歌曲一栏。</div>';modal.classList.add('open');return;}
+      }
+    }
+    return typeof baseOpenAlb==='function'?baseOpenAlb.apply(this,arguments):undefined;
+  };
+  var baseLoad=window.loadGame;
+  if(typeof baseLoad==='function')window.loadGame=function(){var r=baseLoad.apply(this,arguments),done=function(){normalizeAlbums();normalizeTourSongs();if(typeof renderAlb==='function')renderAlb();if(typeof renderLib==='function')renderLib();};if(r&&typeof r.then==='function')return r.then(function(v){done();return v;});done();return r;};
+  var baseRelease=window.releaseAlbum;
+  if(typeof baseRelease==='function')window.releaseAlbum=async function(){var r=await baseRelease.apply(this,arguments);normalizeAlbums();if(typeof saveGameImmediate==='function')saveGameImmediate();return r;};
+  var baseReleaseMulti=window.releaseMultiAlb;
+  if(typeof baseReleaseMulti==='function')window.releaseMultiAlb=async function(){var r=await baseReleaseMulti.apply(this,arguments);normalizeAlbums();if(typeof saveGameImmediate==='function')saveGameImmediate();return r;};
+  normalizeAlbums();normalizeTourSongs();
+})();
 </script>
 <script>
 // 登录由文件末尾的云端 device-auth 权威层统一接管。
@@ -982,10 +1052,25 @@ setTimeout(function installFinalUserRequestedFixes(){
             return `<details style="background:#fff;border:1px solid #e5e7eb;border-left:3px solid ${color};padding:8px;margin-top:8px;"><summary style="cursor:pointer;font-weight:bold;color:#333;">${title}</summary><div style="padding-top:7px;color:#555;">${countsText(counts)}</div>${rows||"暂无歌曲数据"}</details>`;
         }
         function pkSummary(){
+            // 排名字段在旧存档中可能是数字字符串，且部分版本只写入走势数组。
+            function rankNumber(value){
+                var n=Number(value);
+                return Number.isFinite(n)&&n>=1&&n<=100?n:null;
+            }
+            function songRank(t,field){
+                if(!t)return null;
+                var direct=rankNumber(t[field]);
+                if(direct!==null)return direct;
+                var history=A(t.chartHistory), key=field==="peakS"?"global":(field==="peakSpotifyUS"?"us":"us");
+                var values=history.map(function(row){return row&&rankNumber(row[key]);}).filter(function(x){return x!==null;});
+                if(values.length)return Math.min.apply(null,values);
+                var current=field==="peakS"?rankNumber(t.lastW):(field==="peakSpotifyUS"?rankNumber(t.lastSpotifyUS||t.lastB):rankNumber(t.lastB));
+                return current;
+            }
             function oneChart(name,field,color){
-                var allSongs=A(a.s).map(function(song,pos){var t=song&&song.id?findTrack(song.id):albumTracks({s:[song]})[0];return {name:(song&&song.n)||(t&&t.n)||("曲目 "+(pos+1)),track:t};});
-                var sorted=allSongs.slice().sort(function(a,b){return Number(a.track&&a.track[field]||999)-Number(b.track&&b.track[field]||999);});
-                var rows=sorted.map(function(item){var peak=item.track?rk(item.track[field]):"OUT";return `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #eee;"><span style="min-width:0;overflow-wrap:anywhere;">${E(item.name)}</span><b style="white-space:nowrap;color:${color};">${peak}</b></div>`;}).join("");
+                var allSongs=A(a.s).map(function(song,pos){var t=song&&song.id?findTrack(song.id):null;if(!t&&song&&song.id)t=A(trackPool).find(function(x){return x&&String(x.id)===String(song.id);});if(!t&&song)t=A(trackPool).find(function(x){return x&&x.type==="track"&&x.isMe&&String(x.n)===String(song.n);});return {name:(song&&song.n)||(t&&t.n)||("曲目 "+(pos+1)),track:t};});
+                var sorted=allSongs.slice().sort(function(a,b){return (songRank(a.track,field)||999)-(songRank(b.track,field)||999);});
+                var rows=sorted.map(function(item){var n=songRank(item.track,field);var peak=n===null?"OUT":"#"+n;return `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #eee;"><span style="min-width:0;overflow-wrap:anywhere;">${E(item.name)}</span><b style="white-space:nowrap;color:${color};">${peak}</b></div>`;}).join("");
                 return `<div style="border-left:3px solid ${color};background:#fff;padding:8px;margin-top:7px;"><b>${name}</b><br><span style="font-size:11px;color:#666;">统计本专全部 ${A(a.s).length} 首歌曲，未发行或未入榜歌曲也计入。</span><div style="font-size:11px;margin-top:6px;">${rows||"暂无歌曲"}</div></div>`;
             }
             return `<details open style="background:#fff;border:1px solid #ead7a1;padding:8px;margin-top:8px;"><summary style="cursor:pointer;font-weight:bold;color:#8a6500;">📊 专辑单曲 Peak 总结</summary>
@@ -24236,7 +24321,7 @@ function installRuntimeAuthority(){
     window.fixReviewAndSocial=function(){var report=performRuntimeRepair({scope:'social'});alert('邮件与社交结构校验完成。\n'+repairSummary(report));return report;};
     window.fixMapAndShows=function(){var report=performRuntimeRepair({scope:'ui'});alert('界面运行层已重新挂载。\n'+repairSummary(report));return report;};
     window.repairGameRuntime=function(){var report=performRuntimeRepair({scope:'all'});alert('底层运行校验完成。\n'+repairSummary(report));return report;};
-    function buildSaveSnapshot(){return {version:typeof GAME_VERSION!=='undefined'?GAME_VERSION:'1.3.0',ad:ad,lib:lib,std:std,albs:albs,trackPool:trackPool,marketSongs:marketSongs,time:time,Mt:Mt,posts:posts,curPj:curPj,prog:prog,curAlbPj:curAlbPj,historyAwards:historyAwards,conts:conts,worldArtists:worldArtists,writers:writers,myWorks:myWorks,awardRegistry:awardRegistry,currentAwardSeason:currentAwardSeason};}
+    function buildSaveSnapshot(){return {version:typeof GAME_VERSION!=='undefined'?GAME_VERSION:'1.3.0',ad:ad,lib:lib,std:std,albs:albs,trackPool:trackPool,marketSongs:marketSongs,tourLegs:typeof tourLegs!=='undefined'?tourLegs:[],time:time,Mt:Mt,posts:posts,curPj:curPj,prog:prog,curAlbPj:curAlbPj,historyAwards:historyAwards,conts:conts,worldArtists:worldArtists,writers:writers,myWorks:myWorks,awardRegistry:awardRegistry,currentAwardSeason:currentAwardSeason};}
     var SAVE_DERIVED_FIELDS={trendChart:1,trueTrend:1,_unlimitedTrend:1,itunesParts:1,amParts:1,_chartPts:1,_chartStr:1,_pctStm:1,_pctSales:1,_pctRadio:1,_displayRank:1,_billboardGlobalWeek:1,_billboardUSWeek:1};
      function saveSnapshotJSON(){
          return JSON.stringify(buildSaveSnapshot(),function(key,value){
@@ -25971,6 +26056,7 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   function restore(data){
     ad=data.ad;
     lib=arr(data.lib);std=arr(data.std);albs=arr(data.albs);trackPool=arr(data.trackPool);marketSongs=arr(data.marketSongs);
+    if(typeof tourLegs!=='undefined')tourLegs=arr(data.tourLegs);
     worldArtists=arr(data.worldArtists);writers=arr(data.writers);myWorks=arr(data.myWorks);conts=arr(data.conts);historyAwards=arr(data.historyAwards);
     time=data.time&&typeof data.time==='object'?data.time:{y:2026,m:1,w:1,d:1,h:0};
     Mt=Number.isFinite(Number(data.Mt))?Number(data.Mt):1;
@@ -26020,13 +26106,240 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   };
 })();
 </script>
+<script>
+// Final authority for the four reported music-state regressions.  This is
+// deliberately last so later duplicate function declarations cannot replace it.
+(function installFinalMusicBugFixes(){
+  if(window.__finalMusicBugFixesInstalled)return;
+  window.__finalMusicBugFixesInstalled=true;
+  function list(v){return Array.isArray(v)?v:[];}
+  function pool(){return list(window.trackPool);}
+  function text(v){return String(v==null?'':v);}
+  function esc(v){return typeof window.escapeHTML==='function'?window.escapeHTML(text(v)):text(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function songById(id,name){
+    var s=pool().find(function(x){return x&&String(x.id)===String(id);});
+    if(!s&&name)s=pool().find(function(x){return x&&x.type==='track'&&String(x.n)===String(name);});
+    return s||null;
+  }
+  function normalizeTourSongs(){
+    if(typeof window.tourLegs==='undefined'||!Array.isArray(window.tourLegs))return;
+    window.tourLegs.forEach(function(leg){
+      if(!leg||typeof leg!=='object')return;
+      var ids=Array.isArray(leg.songId)?leg.songId:(leg.songId==null?[]:[leg.songId]);
+      leg.songId=ids.map(function(id){return String(id);});
+    });
+  }
+  function repairTourDom(){
+    if(typeof window.tourLegs==='undefined')return;
+    list(window.tourLegs).forEach(function(leg,i){
+      var selected=list(leg.songId).map(String);
+      document.querySelectorAll('.leg-song-chk-'+i).forEach(function(input){
+        input.checked=selected.indexOf(String(input.value))>=0;
+        var song=songById(input.value);
+        if(!song||!input.parentElement)return;
+        Array.prototype.slice.call(input.parentElement.childNodes).forEach(function(node){
+          if(node.nodeType===3)node.nodeValue=' '+text(song.n);
+        });
+      });
+    });
+  }
+  var priorTour=window.renderTourLegs;
+  window.renderTourLegs=function(){
+    normalizeTourSongs();
+    var result=typeof priorTour==='function'?priorTour.apply(this,arguments):undefined;
+    repairTourDom();
+    return result;
+  };
+
+  function collabItems(){return list(window.ad&&ad.acceptedArtistCollabs).filter(function(x){return x&&x.status==='planning';});}
+  function renderCollabLibrary(){
+    var box=document.getElementById('listLib');if(!box)return;
+    var old=box.querySelector('[data-final-collabs]');if(old)old.remove();
+    var items=collabItems();if(!items.length)return;
+    var node=document.createElement('div');node.setAttribute('data-final-collabs','1');node.style.cssText='margin-top:10px;padding-top:8px;border-top:2px solid #e5e7eb;';
+    node.innerHTML='<b>合作企划</b>'+items.map(function(x){return '<div class="card" style="padding:8px;margin-top:6px;"><b>'+esc(x.type||'合作')+' · '+esc(x.npcName||'合作艺人')+'</b><br><span style="font-size:11px;color:#666;">已接受邀约，进入单曲企划后可继续创作。</span></div>';}).join('');
+    box.appendChild(node);
+  }
+  var priorLib=window.renderLib;
+  window.renderLib=function(){var r=typeof priorLib==='function'?priorLib.apply(this,arguments):undefined;renderCollabLibrary();return r;};
+  function addCollabOptions(){
+    var sel=document.getElementById('inNewSongFeat');if(!sel)return;
+    var items=collabItems(),existing={};Array.prototype.forEach.call(sel.options,function(o){existing[String(o.value)]=1;});
+    items.forEach(function(x){var value=text(x.npcName);if(!existing[value]){var o=document.createElement('option');o.value=value;o.textContent=value+'（已接受合作）';sel.appendChild(o);}});
+  }
+  var priorStart=window.startWrite;
+  window.startWrite=function(){var r=typeof priorStart==='function'?priorStart.apply(this,arguments):undefined;setTimeout(addCollabOptions,0);return r;};
+  var priorAccept=window.acceptArtistCollabMail;
+  window.acceptArtistCollabMail=function(){
+    var r=typeof priorAccept==='function'?priorAccept.apply(this,arguments):undefined;
+    setTimeout(function(){addCollabOptions();renderCollabLibrary();},0);return r;
+  };
+
+  function isReleased(a){
+    if(!a)return false;
+    if(a.st==='已发'||a.st==='已发行'||a.released===true)return true;
+    if(a.releaseDate&&typeof a.releaseDate==='object')return true;
+    var ref=a.trackRef;
+    return !!(ref&&(ref.released===true||ref.st==='已发'||(ref.releaseDate&&typeof ref.releaseDate==='object')));
+  }
+  function normalizeAlbums(){
+    list(window.albs).forEach(function(a){
+      if(!a||typeof a!=='object')return;
+      if(!Array.isArray(a.s))a.s=[];
+      var ref=a.trackRef&&a.trackRef.id? songById(a.trackRef.id):pool().find(function(t){return t&&t.type==='album'&&((a.id&&String(t.albumId)===String(a.id))||String(t.n)===String(a.n));});
+      if(ref){a.trackRef=ref;if(isReleased(a)||ref.released===true||ref.st==='已发'||ref.releaseDate){a.st='已发';a.released=true;if(!a.releaseDate&&ref.releaseDate)a.releaseDate=ref.releaseDate;}}
+      a.s.forEach(function(item){if(item&&item.id){var t=songById(item.id,item.n);if(t)item.id=t.id;}});
+    });
+  }
+  function renderUnreleasedAlbum(a,idx){
+    var content=document.getElementById('mAlbDetailContent'),title=document.getElementById('mAlbDetailTitle'),modal=document.getElementById('mAlbDetail');if(!content||!title||!modal)return false;
+    var formal=list(a.s).filter(function(s){return !s||s.released!==true;});
+    title.textContent='《'+text(a.n||'未命名专辑')+'》';
+    content.innerHTML='<div class="card" style="font-size:12px;line-height:1.8;">专辑尚未正式发行。发行前已单独打单的歌曲保留在个人单曲数据中，不计入正式专辑歌曲栏。</div>'+(formal.length?formal.map(function(s){return '<div class="card" style="padding:8px;margin-top:6px;"><b>'+esc(s.n||'未命名歌曲')+'</b></div>';}).join(''):'<p style="color:#888;">暂无未单独发行的专辑歌曲。</p>');
+    modal.classList.add('open');return true;
+  }
+  var priorAlbDetail=window.openAlbDetail;
+  window.openAlbDetail=function(idx){
+    normalizeAlbums();var a=list(window.albs)[Number(idx)];
+    if(a&&!isReleased(a)&&list(a.s).some(function(s){return s&&s.released===true;}))return renderUnreleasedAlbum(a,idx);
+    return typeof priorAlbDetail==='function'?priorAlbDetail.apply(this,arguments):undefined;
+  };
+  function markReleased(a){
+    if(!a)return;
+    a.st='已发';a.released=true;
+    if(!a.releaseDate&&typeof window.time!=='undefined'&&time)a.releaseDate={y:Number(time.y)||0,m:Number(time.m)||0,w:Number(time.w)||0};
+  }
+  var priorRelease=window.releaseAlbum;
+  if(typeof priorRelease==='function')window.releaseAlbum=async function(){var r=await priorRelease.apply(this,arguments);list(window.albs).forEach(function(a){if(a&&a.st==='已发')markReleased(a);});normalizeAlbums();if(typeof window.saveGameImmediate==='function')window.saveGameImmediate();return r;};
+  var priorReleaseMulti=window.releaseMultiAlb;
+  if(typeof priorReleaseMulti==='function')window.releaseMultiAlb=async function(){var r=await priorReleaseMulti.apply(this,arguments);list(window.albs).forEach(function(a){if(a&&a.st==='已发')markReleased(a);});normalizeAlbums();if(typeof window.saveGameImmediate==='function')window.saveGameImmediate();return r;};
+  var priorLoad=window.loadGame;
+  if(typeof priorLoad==='function')window.loadGame=function(){var r=priorLoad.apply(this,arguments),done=function(){normalizeAlbums();normalizeTourSongs();if(typeof window.renderAlb==='function')try{window.renderAlb();}catch(e){}if(typeof window.renderLib==='function')try{window.renderLib();}catch(e){}if(typeof window.renderTourLegs==='function')try{window.renderTourLegs();}catch(e){}};if(r&&typeof r.then==='function')return r.then(function(v){setTimeout(done,0);return v;});setTimeout(done,0);return r;};
+  normalizeAlbums();normalizeTourSongs();
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){renderCollabLibrary();addCollabOptions();repairTourDom();},0);});else setTimeout(function(){renderCollabLibrary();addCollabOptions();repairTourDom();},0);
+})();
+</script>
+
+
+
+
+
+
+
+
+<script>
+// Final local-first time flow.  Weekly settlement never depends on an AI
+// endpoint; AI is only an optional narrative rewrite after local settlement.
+(function installLocalFirstWeekFlow(){
+  if(window.__localFirstWeekFlowInstalled)return;
+  window.__localFirstWeekFlowInstalled=true;
+  function byId(id){return document.getElementById(id);}
+  function safe(v){return String(v==null?'':v).replace(/[&<>]/g,'');}
+  function localStory(){
+    var lines=['【本地周报】本周的榜单、市场与关系事件已完成结算。'];
+    if(window.curPj)lines.push('创作企划《'+safe(curPj.n)+'》仍在推进。');
+    if(window.curAlbPj)lines.push('专辑《'+safe(curAlbPj.n)+'》继续进行制作筹备。');
+    var songs=Array.isArray(window.trackPool)?trackPool.filter(function(t){return t&&t.isMe&&t.type==='track';}):[];
+    if(songs.length){var lead=songs.slice().sort(function(a,b){return Number(b.stmGlobal_Week||0)-Number(a.stmGlobal_Week||0);})[0];lines.push('《'+safe(lead.n)+'》本周继续参与市场结算与榜单更新。');}
+    if(!window.curPj&&!window.curAlbPj&&!songs.length)lines.push('你把这周用于休整、积累灵感和观察行业动向。');
+    return lines.join('\n');
+  }
+  function advanceLocalWeek(){
+    if(typeof window.advTime!=='function')throw new Error('时间结算模块未加载');
+    window.advTime(1,true);
+    if(typeof window.updTimeUI==='function')window.updTimeUI();
+    if(typeof window.updAttr==='function')window.updAttr();
+    if(typeof window.saveGameImmediate==='function')window.saveGameImmediate();else if(typeof window.saveGame==='function')window.saveGame();
+  }
+  window.generateAiSchedule=async function(){
+    var result=byId('txtAiScheduleResult'),box=byId('boxAiScheduleResult'),plan=byId('inSchedulePlan'),words=byId('inScheduleWordCount');
+    if(box)box.style.display='block';
+    // Complete game settlement first. An offline player gets the same game state.
+    try{advanceLocalWeek();}catch(error){if(result)result.textContent='时间结算失败：'+(error&&error.message||String(error));return false;}
+    var fallback=localStory();if(result)result.textContent=fallback;
+    var token=(byId('apiToken')||{}).value;
+    if(!token||typeof window.api!=='function')return true;
+    try{
+      var wanted=Math.max(40,Math.min(300,Number(words&&words.value)||100));
+      var prompt='为音乐事业模拟游戏写一段约 '+wanted+' 字的下周剧情。玩家计划：'+safe(plan&&plan.value||'自由安排')+'。只返回剧情正文，不要 JSON。';
+      var aiText=await window.api(prompt);
+      if(aiText&&result)result.textContent=String(aiText).replace(/<[^>]*>/g,'').trim().slice(0,1200)||fallback;
+    }catch(error){console.warn('AI 周报不可用，已保留本地周报',error);}
+    return true;
+  };
+  // The top-bar button always advances locally. It does not require an API key.
+  window.advTimeByFlow=function(){
+    try{advanceLocalWeek();return true;}catch(error){console.error('本地时间推演失败',error);window.alert('时间推演失败：'+(error&&error.message||String(error)));return false;}
+  };
+})();
+</script>
+<style>
+/* Quiet readability pass: keeps each existing layout and only refines hierarchy. */
+:root{--runtime-panel:#ffffff;--runtime-line:#e6e8ee;--runtime-muted:#687386;--runtime-shadow:0 2px 10px rgba(28,42,68,.08)}
+.card{border-color:var(--runtime-line)!important;box-shadow:var(--runtime-shadow);}
+.card h2,.card h3,.card h4{line-height:1.35;margin-top:0;}
+button{min-height:34px;line-height:1.2;transition:transform .15s ease,filter .15s ease,box-shadow .15s ease;}
+button:hover{transform:translateY(-1px);filter:brightness(1.03);}
+button:active{transform:translateY(0);}
+input,select,textarea{border-color:#cfd6e3!important;box-shadow:none!important;}
+input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--ui-accent,#4d83ff) 30%,transparent);outline-offset:1px;}
+.modal,.modal-content,[id^="m"] .card{max-width:100%;}
+@media(max-width:640px){.card{padding:10px!important}button{min-height:36px}.top-btn{min-width:36px}.row{gap:7px!important}}
+</style>
+<script>
+// Final save authority: keep browser cache, IndexedDB, and a bound local file
+// synchronized; loading always uses the newest valid snapshot.
+(function installLatestSaveAuthority(){
+  if(window.__latestSaveAuthorityInstalled)return;
+  window.__latestSaveAuthorityInstalled=true;
+  function slotId(value){return String(value||((document.getElementById('selSaveSlot')||{}).value||'1'));}
+  function valid(data){return !!(data&&typeof data==='object'&&data.ad&&typeof data.ad==='object'&&data.ad.r);}
+  function parse(raw){try{var data=typeof raw==='string'?JSON.parse(raw):raw;if(data&&data.value)data=typeof data.value==='string'?JSON.parse(data.value):data.value;return valid(data)?data:null;}catch(error){return null;}}
+  function stamp(data){var value=(data&&data.__saveMeta&&data.__saveMeta.savedAt)||(data&&data.ad&&data.ad._lastSaveAt)||0,n=Date.parse(value);return Number.isFinite(n)?n:Number(value)||0;}
+  function snapshot(){var raw=typeof window.currentSaveText==='function'?window.currentSaveText():typeof window.saveSnapshotJSON==='function'?window.saveSnapshotJSON():JSON.stringify(window.buildSaveSnapshot()),data=parse(raw);if(!data)throw new Error('当前游戏数据不完整，已阻止覆盖旧存档。');data.__saveMeta={savedAt:new Date().toISOString(),schema:1};data.ad._lastSaveAt=data.__saveMeta.savedAt;return JSON.stringify(data);}
+  function db(){return new Promise(function(resolve,reject){var request=indexedDB.open('starProLocalSaves',2);request.onupgradeneeded=function(){var database=request.result;if(!database.objectStoreNames.contains('saves'))database.createObjectStore('saves');if(!database.objectStoreNames.contains('fileHandles'))database.createObjectStore('fileHandles');};request.onsuccess=function(){resolve(request.result);};request.onerror=function(){reject(request.error);};});}
+  async function readDb(key){try{var database=await db();return await new Promise(function(resolve){var request=database.transaction('saves','readonly').objectStore('saves').get(key);request.onsuccess=function(){resolve(request.result||null);};request.onerror=function(){resolve(null);};});}catch(error){return null;}}
+  async function writeDb(key,raw){try{var database=await db();await new Promise(function(resolve,reject){var tx=database.transaction('saves','readwrite');tx.objectStore('saves').put(raw,key);tx.oncomplete=resolve;tx.onerror=function(){reject(tx.error);};});}catch(error){console.warn('IndexedDB 存档写入失败',error);}}
+  async function writeEverywhere(slot,askPermission){var raw=snapshot(),key='starProSave_'+slot;try{localStorage.setItem(key,raw);}catch(error){console.warn('浏览器缓存存档写入失败',error);}await writeDb(key,raw);if(typeof window.writeBoundLocalSave==='function')try{await window.writeBoundLocalSave(slot,raw,!!askPermission);}catch(error){console.warn('绑定本地文件写入失败',error);}window.__starProSaveDirty=false;window.__lastSaveStatus={ok:true,key:key,savedAt:JSON.parse(raw).__saveMeta.savedAt};return true;}
+  function restore(data){ad=data.ad;lib=Array.isArray(data.lib)?data.lib:[];std=Array.isArray(data.std)?data.std:[];albs=Array.isArray(data.albs)?data.albs:[];trackPool=Array.isArray(data.trackPool)?data.trackPool:[];marketSongs=Array.isArray(data.marketSongs)?data.marketSongs:[];if(typeof tourLegs!=='undefined')tourLegs=Array.isArray(data.tourLegs)?data.tourLegs:[];worldArtists=Array.isArray(data.worldArtists)?data.worldArtists:[];writers=Array.isArray(data.writers)?data.writers:[];myWorks=Array.isArray(data.myWorks)?data.myWorks:[];conts=Array.isArray(data.conts)?data.conts:[];historyAwards=Array.isArray(data.historyAwards)?data.historyAwards:[];time=data.time&&typeof data.time==='object'?data.time:{y:2026,m:1,w:1,d:1,h:0};Mt=Number(data.Mt)||1;posts=data.posts&&typeof data.posts==='object'?data.posts:{wb:[],x:[],ins:[],tiktok:[],mom:[]};curPj=data.curPj||null;prog=Number(data.prog)||0;curAlbPj=data.curAlbPj||null;if(Array.isArray(data.awardRegistry))awardRegistry=data.awardRegistry;if(data.currentAwardSeason&&typeof data.currentAwardSeason==='object')currentAwardSeason=data.currentAwardSeason;}
+  function show(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.style.display='none';});var create=document.getElementById('createPage');if(create){create.style.display='none';create.classList.remove('active');}var main=document.getElementById('gameMain');if(main){main.style.display='block';main.classList.add('active');}var attr=document.getElementById('pAttr');if(attr)attr.classList.add('active');var top=document.getElementById('topBar');if(top)top.style.display='flex';['updTimeUI','updAttr','renderAlb','renderLib','renderNpcList','renderTourLegs'].forEach(function(name){try{if(typeof window[name]==='function')window[name]();}catch(error){console.warn(name+' 刷新失败',error);}});}
+  async function sources(slot){var key='starProSave_'+slot,rows=[];try{var cached=localStorage.getItem(key),cacheData=parse(cached);if(cacheData)rows.push({raw:cached,data:cacheData,label:'浏览器本地存档'});}catch(error){}var indexed=await readDb(key),indexedData=parse(indexed);if(indexedData)rows.push({raw:indexed,data:indexedData,label:'本地存档镜像'});if(typeof window.readBoundLocalSave==='function')try{var file=await window.readBoundLocalSave(slot,true),fileData=parse(file);if(fileData)rows.push({raw:file,data:fileData,label:'绑定的本地存档文件'});}catch(error){console.warn('绑定存档文件读取失败',error);}return rows;}
+  window.saveGameImmediate=function(){var slot=slotId();window.__starProSaveDirty=true;writeEverywhere(slot,false).catch(function(error){console.error('自动保存失败',error);});return true;};
+  window.saveGame=function(){window.__starProSaveDirty=true;if(window.__latestSaveTimer)clearTimeout(window.__latestSaveTimer);window.__latestSaveTimer=setTimeout(function(){window.saveGameImmediate();},250);return true;};
+  window.manualSaveGame=async function(){try{await writeEverywhere(slotId(),true);alert('保存成功：当前进度已写入此槽位的最新本地存档。');return true;}catch(error){console.error('手动保存失败',error);alert('保存失败：'+(error&&error.message||String(error)));return false;}};
+  window.loadGame=async function(slotOverride){var slot=slotId(slotOverride);try{var rows=await sources(slot);if(!rows.length){alert('存档槽位 '+slot+' 为空。');return false;}rows.sort(function(a,b){return stamp(b.data)-stamp(a.data);});var winner=rows[0];restore(winner.data);try{localStorage.setItem('starProSave_'+slot,typeof winner.raw==='string'?winner.raw:JSON.stringify(winner.data));}catch(error){}if(window.GameRuntime&&typeof GameRuntime.repair==='function')GameRuntime.repair({scope:'all',save:false});show();window.__starProSaveDirty=false;console.info('已读取最新存档：'+winner.label);return true;}catch(error){console.error('读取最新存档失败',error);alert('读取失败：'+(error&&error.message||String(error)));return false;}};
+  window.mainMenuLoad=async function(){var slot=slotId((document.getElementById('mainMenuSlot')||{}).value);var select=document.getElementById('selSaveSlot');if(select)select.value=slot;return window.loadGame(slot);};
+  window.__testSaveOrdering=function(){var older={ad:{r:'old'},__saveMeta:{savedAt:'2026-01-01T00:00:00.000Z'}},newer={ad:{r:'new'},__saveMeta:{savedAt:'2026-01-02T00:00:00.000Z'}},rows=[{data:older},{data:newer}].sort(function(a,b){return stamp(b.data)-stamp(a.data);});if(rows[0].data.ad.r!=='new')throw new Error('最新存档选择测试失败');return true;};
+  try{window.__testSaveOrdering();}catch(error){console.error(error);}
+})();
+</script>
 </body>
+<script>
+// Portable JSON save transfer: works in normal browsers and file:// pages.
+(function installPortableSaveTransfer(){
+  function slot(){return String((document.getElementById('selSaveSlot')||{}).value||'1');}
+  function key(){return 'starProSave_'+slot();}
+  function snapshot(){
+    try{if(typeof window.currentSaveText==='function'){var raw=window.currentSaveText();if(raw)return raw;}}catch(e){}
+    try{if(typeof window.saveSnapshotJSON==='function'){var saved=window.saveSnapshotJSON();if(saved)return saved;}}catch(e){}
+    try{if(typeof window.buildSaveSnapshot==='function')return JSON.stringify(window.buildSaveSnapshot());}catch(e){}
+    return localStorage.getItem(key());
+  }
+  function download(raw){
+    if(!raw)throw new Error('当前槽位没有可导出的存档。');
+    var blob=new Blob([raw],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download='star-pro-save-'+slot()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  }
+  window.exportLocalSave=function(){try{download(snapshot());alert('存档已导出为 JSON 文件。');}catch(e){alert('导出失败：'+(e&&e.message||e));}};
+  window.importLocalSave=function(input){var file=input&&input.files&&input.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(){try{var data=JSON.parse(reader.result);if(!data||typeof data!=='object'||!data.ad)throw new Error('不是有效的星路制作人存档');var raw=JSON.stringify(data);localStorage.setItem(key(),raw);if(typeof window.writeDb==='function')window.writeDb(key(),raw);alert('存档已导入当前槽位，正在重新加载。');location.reload();}catch(e){alert('导入失败：'+(e&&e.message||e));}finally{input.value='';}};reader.readAsText(file);};
+  var oldBind=window.bindLocalSaveFile;
+  window.bindLocalSaveFile=async function(s){
+    if(typeof window.showSaveFilePicker!=='function'){
+      alert('当前浏览器无法自动绑定存档文件，已改用兼容模式：现在下载 JSON 存档到电脑；需要读取时点击“导入本地存档”。');
+      return window.exportLocalSave();
+    }
+    return oldBind.apply(this,arguments);
+  };
+})();
+</script>
 </html>
-
-
-
-
-
-
-
-

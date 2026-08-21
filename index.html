@@ -26444,4 +26444,86 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   };
 })();
 </script>
+<script>
+// Final authority: normalize player releases for awards and render tour song names.
+(function installFinalTourAndAwardAuthority(){
+  function list(v){return Array.isArray(v)?v:[];}
+  function esc(v){return String(v==null?'':v).replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c];});}
+  function songs(){try{if(typeof trackPool!=='undefined'&&Array.isArray(trackPool))return trackPool;}catch(e){}return list(window.trackPool);}
+  function tours(){try{if(typeof tourLegs!=='undefined'&&Array.isArray(tourLegs))return tourLegs;}catch(e){}return list(window.tourLegs);}
+  function playerName(){try{if(typeof ad!=='undefined'&&ad&&ad.s)return String(ad.s);}catch(e){}return window.ad&&window.ad.s?String(window.ad.s):'';}
+  function normalizePlayerWorks(){
+    var name=playerName();
+    songs().forEach(function(t){
+      if(!t||t.type!=='track')return;
+      if(t.artist===name||t.artistName===name||t.owner===name||t.playerOwned===true){t.isMe=true;t.artist=t.artist||name;t.artistName=t.artistName||name;}
+      if(t.isMe){
+        if(!t.releaseYear&&t.t_y)t.releaseYear=Number(t.t_y);
+        if(!t.releaseMonth&&t.t_m)t.releaseMonth=Number(t.t_m);
+        if(!t.releaseWeek&&t.t_w)t.releaseWeek=Number(t.t_w);
+        if(!t.releaseYear&&window.time)t.releaseYear=Number(time.y||2026);
+        if(!t.releaseMonth&&window.time)t.releaseMonth=Number(time.m||1);
+        if(!t.releaseWeek&&window.time)t.releaseWeek=Number(time.w||1);
+        if(!t.releaseDate)t.releaseDate={y:Number(t.releaseYear||2026),m:Number(t.releaseMonth||1),w:Number(t.releaseWeek||1)};
+      }
+    });
+  }
+  function findSong(id){return songs().find(function(t){return t&&String(t.id)===String(id);});}
+  function songIds(leg){if(!leg)return [];var raw=Array.isArray(leg.songId)?leg.songId:(leg.songId==null?[]:[leg.songId]);return raw.map(String);}
+  window.renderTourLegs=function(){
+    normalizePlayerWorks();var box=document.getElementById('tourLegsList');if(!box)return;
+    var legs=tours(),my=songs().filter(function(t){return t&&t.type==='track'&&t.isMe;}).sort(function(a,b){return Number(b.stmGlobal||b.stmGlobal_Week||0)-Number(a.stmGlobal||a.stmGlobal_Week||0);});
+    box.innerHTML=legs.map(function(leg,i){var ids=songIds(leg),selected=ids[0]||'',current=findSong(selected),opts=my.map(function(t){return '<option value="'+esc(t.id)+'" '+(String(t.id)===String(selected)?'selected':'')+'>'+esc(t.n||'未命名歌曲')+'</option>';}).join('');if(selected&&!current)opts='<option value="'+esc(selected)+'" selected>已保存歌曲（数据待修复）</option>'+opts;return '<div class="card tour-leg-card" style="padding:10px;margin-bottom:10px;"><b>第 '+(i+1)+' 场</b><div style="display:flex;gap:5px;margin-top:8px;"><input type="text" value="'+esc(leg.city||'')+'" placeholder="举办城市" onchange="updateLegData('+i+',\'city\',this.value)"><input type="number" value="'+Number(leg.m||1)+'" min="1" max="12" onchange="updateLegData('+i+',\'m\',this.value)"><input type="number" value="'+Number(leg.d||1)+'" min="1" max="31" onchange="updateLegData('+i+',\'d\',this.value)"></div><label style="display:block;margin-top:8px;">主打开场曲</label><select style="width:100%;" onchange="updateLegData('+i+',\'songId\',this.value)"><option value="">-- 选择开场曲 --</option>'+opts+'</select><div class="tour-song-name" style="font-size:11px;color:#667085;margin-top:5px;">'+(current?'当前歌曲：'+esc(current.n):selected?'当前歌曲：已保存 ID '+esc(selected):'尚未选择歌曲')+'</div></div>';}).join('')||'<p style="color:#888;">暂无巡演场次。</p>';
+  };
+  var oldUpdate=window.updateLegData;
+  window.updateLegData=function(index,key,value){if(typeof oldUpdate==='function')oldUpdate.apply(this,arguments);var leg=tours()[index];if(!leg)return;if(key==='songId')leg.songId=[String(value||'')];normalizePlayerWorks();window.renderTourLegs();if(typeof window.saveGame==='function')window.saveGame();};
+  var oldAward=window.openAwardSubmitUI;window.openAwardSubmitUI=function(){normalizePlayerWorks();return typeof oldAward==='function'?oldAward.apply(this,arguments):undefined;};
+  var oldLoad=window.loadGame;if(typeof oldLoad==='function')window.loadGame=function(){var result=oldLoad.apply(this,arguments),done=function(){normalizePlayerWorks();if(typeof window.renderTourLegs==='function')window.renderTourLegs();};if(result&&typeof result.then==='function')return result.then(function(v){done();return v;});done();return result;};
+  normalizePlayerWorks();
+})();
+</script>
+<script>
+// Final screen-award notification authority: connect acting awards to the mailbox and modal flow.
+(function installScreenAwardNoticeAuthority(){
+  function list(v){return Array.isArray(v)?v:[];}
+  function state(){
+    try{if(typeof ad!=='undefined'&&ad)return ad;}catch(e){}
+    return window.ad||null;
+  }
+  function clock(){try{if(typeof time!=='undefined'&&time)return time;}catch(e){}return window.time||{y:2026,m:1,w:1};}
+  function esc(v){return String(v==null?'':v).replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c];});}
+  function ensure(){var a=state();if(!a)return null;if(!a.screenAwardData||typeof a.screenAwardData!=='object')a.screenAwardData={registry:[],history:[],submissions:[]};if(!Array.isArray(a.screenAwardData.registry))a.screenAwardData.registry=[];if(!a.screenAwardNoticeState||typeof a.screenAwardNoticeState!=='object')a.screenAwardNoticeState={};return a;}
+  function eligibleCredits(a){var now=clock(),stamp=Number(now.y||2026)*12+Number(now.m||1),credits=list(a.screenCareer&&a.screenCareer.credits);return credits.filter(function(p){var y=Number(p.releaseYear||p.year||0),m=Number(p.releaseMonth||p.month||1);return y>0&&y*12+m<=stamp;});}
+  function notice(phase,awards,credits){
+    var a=ensure(),now=clock();if(!a||!awards.length||!credits.length)return false;
+    var key=[now.y,now.m,phase].join('_');if(a.screenAwardNoticeState[key])return false;a.screenAwardNoticeState[key]=true;
+    var title=phase==='submission'?'🎬 影视奖项报名开启':phase==='nomination'?'🎬 影视奖项提名公布':'🏆 影视奖项典礼结果';
+    var text=phase==='submission'?'本月影视奖项开放报名。你已上映的电影/电视剧可以进入影视奖项页面提交。':phase==='nomination'?'影视奖项提名阶段已开启，请进入影视奖项页面查看入围作品。':'影视奖项典礼本月举行，请进入影视奖项页面完成评选并查看结果。';
+    var names=awards.slice(0,4).map(function(x){return x.name||'影视奖项';}).join('、');
+    var mail={id:'screen_award_notice_'+key,title:title,sender:'影视奖项组委会',content:text+'\n本期奖项：'+names,screenAwardNotice:true,phase:phase,year:Number(now.y),month:Number(now.m)};
+    try{if(typeof currentMails!=='undefined'&&Array.isArray(currentMails)){currentMails=currentMails.filter(function(x){return x&&x.id!==mail.id;});currentMails.unshift(mail);}}catch(e){}
+    var modal=document.getElementById('mInfo'),titleBox=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent');
+    if(modal&&titleBox&&content){titleBox.innerText=title;content.innerHTML='<div class="card" style="line-height:1.8;"><b>'+esc(text)+'</b><br><span style="font-size:11px;color:#666;">本期包含：'+esc(names)+'</span><br><span style="font-size:11px;color:#666;">可用作品：'+credits.length+' 部</span></div><button onclick="openScreenAwards()">进入影视奖项</button><button class="sec" onclick="closeM(\'mInfo\')">稍后处理</button>';modal.classList.add('open');}
+    if(typeof saveGame==='function')saveGame();return true;
+  }
+  function check(){
+    var a=ensure(),now=clock();if(!a||!a.r)return;
+    var registry=list(a.screenAwardData.registry),credits=eligibleCredits(a),m=Number(now.m||1);
+    var submission=registry.filter(function(x){var awardMonth=Number(x.month||1);return ((awardMonth-2+12)%12)+1===m;});
+    var nomination=registry.filter(function(x){var awardMonth=Number(x.month||1);return ((awardMonth-1+12)%12)+1===m;});
+    var ceremony=registry.filter(function(x){return Number(x.month||1)===m;});
+    if(notice('submission',submission,credits))return;
+    if(notice('nomination',nomination,credits))return;
+    notice('ceremony',ceremony,credits);
+  }
+  window.checkScreenAwardNotices=check;
+  var oldAdv=window.advTime;
+  if(typeof oldAdv==='function')window.advTime=function(){var result=oldAdv.apply(this,arguments);setTimeout(check,20);return result;};
+  var oldStart=window.startGame;
+  if(typeof oldStart==='function')window.startGame=function(){var result=oldStart.apply(this,arguments);setTimeout(check,1200);return result;};
+  var oldLoad=window.loadGame;
+  if(typeof oldLoad==='function')window.loadGame=function(){var result=oldLoad.apply(this,arguments),done=function(){setTimeout(check,120);};if(result&&typeof result.then==='function')return result.then(function(v){done();return v;});done();return result;};
+  setTimeout(check,1500);
+})();
+</script>
 </html>

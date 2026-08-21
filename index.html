@@ -25700,24 +25700,6 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
     document.getElementById('mInfoContent').innerHTML='<div class="card" style="font-size:11px;line-height:1.7;"><b>团体市场</b><br>国际团体使用全球发行资源；地区团体拥有本地市场倾斜；地区与国际联推团体同时记录训练体系与国际发行。</div><h4>团体</h4>'+groups.map(function(g){return '<div class="card"><b>'+esc(g.name||'未命名团体')+'</b><br><span style="font-size:11px;color:#666;">'+groupType(g)+' · 主要地区 '+esc(regionName(g.homeRegion))+' · 训练体系 '+esc(regionName(g.trainingRegion))+' · 团粉 '+Number(g.fans||0).toLocaleString()+'</span></div>';}).join('')+'<h4>杂志</h4>'+mags.map(function(m){var mother=regionName(m.motherRegion),edition=regionName(m.editionRegion);return '<div class="card"><b>'+esc(m.n||'未命名杂志')+'</b><br><span style="font-size:11px;color:#666;">'+(m.editionKind==='regional'?'地区刊':'母版')+' · 母版 '+esc(mother)+' · '+esc(edition)+'版</span></div>';}).join('')+'<h4>品牌</h4>'+brands.map(function(b){return '<div class="card"><b>'+esc(b.n||'未命名品牌')+'</b><br><span style="font-size:11px;color:#666;">所属地区 '+esc(regionName(b.homeRegion))+' · '+(b.brandReach==='international'?'国际线':'地区线')+'</span></div>';}).join('');
     document.getElementById('mInfo').classList.add('open');
   };
-  window.openCustomChartStudio=function(){
-    if(!active())return alert('请先进入游戏。');
-    var rows=chartStore();
-    document.getElementById('mInfoTitle').innerText='自定义榜单';
-    document.getElementById('mInfoContent').innerHTML='<div class="card" style="font-size:11px;line-height:1.7;">新增后会直接安装为手机软件。当前支持音乐榜单，可选择国际或地区榜单。</div><label>软件名称</label><input id="customChartName" value="我的音乐榜"><label>榜单类型</label><select id="customChartType"><option value="music">音乐榜单</option></select><label>市场范围</label><select id="customChartScope" onchange="toggleCustomChartRegion()"><option value="global">国际榜单</option><option value="regional">地区榜单</option></select><div id="customChartRegionRow" style="display:none;"><label>所属地区</label><select id="customChartRegion">'+regionOptions('cn')+'</select></div><button onclick="createCustomMusicChart()">新增软件</button><h4>已安装的软件</h4>'+rows.map(function(c){return '<div class="card"><b>'+esc(c.name)+'</b><br><span style="font-size:11px;color:#666;">'+(c.scope==='regional'?esc(regionName(c.region))+'地区音乐榜':'国际音乐榜')+'</span><button class="sec" onclick="openCustomMusicChart(\''+esc(c.id)+'\')">打开</button></div>';}).join('');
-    document.getElementById('mInfo').classList.add('open');
-  };
-  window.toggleCustomChartRegion=function(){var row=document.getElementById('customChartRegionRow'),scope=(document.getElementById('customChartScope')||{}).value;if(row)row.style.display=scope==='regional'?'block':'none';};
-  window.createCustomMusicChart=function(){
-    if(!active())return;var name=((document.getElementById('customChartName')||{}).value||'').trim(),scope=(document.getElementById('customChartScope')||{}).value,region=(document.getElementById('customChartRegion')||{}).value;
-    if(!name)return alert('请输入软件名称。');var id='custom_chart_'+Date.now(),chart={id:id,name:name,type:'music',scope:scope==='regional'?'regional':'global',region:scope==='regional'&&window.REGION_SYSTEM&&REGION_SYSTEM[region]?region:'global'};chartStore().push(chart);appStore().push({id:id,type:'musicChart'});mountRegionalPhoneApps();if(typeof saveGame==='function')saveGame();alert('“'+name+'”已安装到手机。');openCustomChartStudio();
-  };
-  window.openCustomMusicChart=function(id){
-    if(!active())return;var chart=chartStore().find(function(x){return String(x.id)===String(id);});if(!chart)return alert('未找到该自定义榜单。');if(typeof window.refreshSongRanks==='function')window.refreshSongRanks();var rows=(trackPool||[]).filter(function(t){return t&&t.type==='track';}).map(function(t){return {track:t,score:marketScore(t,chart.scope==='regional'?chart.region:'global')};}).filter(function(x){return x.score>0;}).sort(function(a,b){return b.score-a.score||String(a.track.id||'').localeCompare(String(b.track.id||''));}).slice(0,100);
-    document.getElementById('mInfoTitle').innerText=chart.name;
-    document.getElementById('mInfoContent').innerHTML='<div class="card" style="font-size:11px;color:#666;">'+(chart.scope==='regional'?esc(regionName(chart.region))+'地区市场，地区团体与本土资源会在该市场获得更高曝光。':'国际市场，使用全球周流媒排序。')+'</div>'+rows.map(function(row,i){var t=row.track;return '<div class="card"><b>#'+(i+1)+' '+esc(t.n||'未命名歌曲')+'</b><br><span style="font-size:11px;color:#666;">'+esc(t.artist||'')+' · '+row.score.toLocaleString()+' 市场流媒</span><button class="sec" onclick="viewSongStats(\''+esc(t.id)+'\')">详情</button></div>';}).join('')||'<p style="color:#888;">暂无可计入该榜单的歌曲。</p>';
-    document.getElementById('mInfo').classList.add('open');
-  };
   function mountRegionalPhoneApps(){
     if(!active())return;addIcon('appRegionalMarket','地区市场','#d45178',function(){window.openRegionalMarketApp();});addIcon('appCustomCharts','自定义榜单','#2867b2',function(){window.openCustomChartStudio();});chartStore().forEach(function(chart){addIcon('app_'+chart.id,chart.name,'#5e60ce',function(){window.openCustomMusicChart(chart.id);});});
   }
@@ -26390,6 +26372,76 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   var priorBatchGenerate=window.batchGenNpc;
   window.batchGenNpc=function(){var result=priorBatchGenerate&&priorBatchGenerate.apply(this,arguments);setTimeout(function(){try{window.worldArtists=worldArtists;}catch(e){}window.renderNpcList();},0);return result;};
   setTimeout(function(){try{if(typeof worldArtists!=='undefined')window.worldArtists=worldArtists;}catch(e){}if(typeof window.renderNpcList==='function')window.renderNpcList();},1000);
+})();
+</script>
+<style>
+.chart-brandbar{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;background:#171717;color:#fff;padding:18px 18px 16px;border-radius:10px 10px 0 0;margin:-2px -2px 0}.chart-brandbar h2{margin:4px 0 2px;color:#fff;font-size:24px;letter-spacing:0}.chart-kicker{font-size:10px;letter-spacing:1.5px;color:#1ed760;font-weight:700}.chart-meta{font-size:11px;color:#b8b8b8}.chart-delete-btn{background:#d94a4a!important;color:#fff!important;border:0!important;padding:8px 11px;border-radius:5px;cursor:pointer}.chart-table-head,.chart-row{display:grid;grid-template-columns:34px minmax(130px,1.6fr) minmax(90px,1fr) 92px 42px;gap:10px;align-items:center}.chart-table-head{padding:9px 12px;background:#f1f1f1;color:#777;font-size:10px;text-transform:uppercase}.chart-row{padding:10px 12px;border-bottom:1px solid #e8e8e8;background:#fff}.chart-row:hover{background:#f5fbf7}.chart-rank{font-size:16px;color:#333}.chart-song b,.chart-artist{font-size:12px}.chart-song small,.chart-score small{display:block;font-size:10px;color:#888;margin-top:2px}.chart-score{font-size:12px;text-align:right;font-variant-numeric:tabular-nums}.chart-more,.chart-remove-btn{font-size:10px!important;padding:5px 6px!important;border:1px solid #d8d8d8!important;background:#fff!important;color:#333!important;border-radius:4px!important}.chart-empty{padding:22px;text-align:center;color:#888}.spotify-detail-head{display:flex;align-items:center;gap:14px;background:#171717;color:#fff;padding:16px;border-radius:10px;margin-bottom:10px}.spotify-detail-head h2{margin:0 0 4px;color:#fff}.spotify-detail-head span{font-size:11px;color:#b8b8b8}.spotify-avatar{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:#1ed760;color:#071b0d;font-size:24px;font-weight:800}.member-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:10px}.member-detail-grid small,.member-detail-grid b{display:block}.member-detail-grid small{font-size:10px;color:#888}.member-detail-grid b{font-size:13px;margin-top:3px}@media(max-width:560px){.chart-brandbar h2{font-size:20px}.chart-table-head,.chart-row{grid-template-columns:26px minmax(100px,1.5fr) minmax(72px,1fr) 70px 36px;gap:6px;padding-left:8px;padding-right:8px}.chart-artist{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+</style>
+<script>
+// Final UI authority: group member details and polished custom-chart management.
+(function installFinalDirectoryAndChartUI(){
+  function arr(v){return Array.isArray(v)?v:[];}
+  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function groups(){return arr(window.ad&&ad.entertainmentGroups);}
+  function memberFor(id){
+    id=String(id||'');
+    for(var gi=0;gi<groups().length;gi++){
+      var g=groups()[gi], members=arr(g.members||g.memberList||g.memberIds);
+      for(var mi=0;mi<members.length;mi++){
+        var m=members[mi], key=m&&typeof m==='object'&&m.id!=null?String(m.id):('member_'+mi);
+        if(key===id || ('group_'+g.id+'_'+mi)===id) return {member:m,group:g,index:mi};
+        if(typeof m==='string'&&String(m)===id){var a=arr(window.worldArtists).find(function(x){return String(x.id)===id||x.n===m;});if(a)return {member:a,group:g,index:mi};}
+      }
+    }
+    return null;
+  }
+  function memberDetail(id){
+    var hit=memberFor(id);if(!hit)return false;
+    var m=hit.member||{},name=m.n||m.name||'未命名成员',parent=hit.group;
+    var box=document.getElementById('mInfoContent'),title=document.getElementById('mInfoTitle');if(!box||!title)return false;
+    title.innerText='成员详情 · '+name;
+    box.innerHTML='<div class="spotify-detail-head"><div class="spotify-avatar">'+esc(name.slice(0,1))+'</div><div><h2>'+esc(name)+'</h2><span>'+esc(m.career||'团体成员')+' · '+esc(parent.name||'未命名团体')+'</span></div></div>'+
+      '<div class="card member-detail-grid"><div><small>性别</small><b>'+esc(m.gender||'未设置')+'</b></div><div><small>年龄</small><b>'+esc(m.age==null?'未设置':m.age+' 岁')+'</b></div><div><small>国籍</small><b>'+esc(m.nationality||m.country||'未设置')+'</b></div><div><small>粉丝</small><b>'+Number(m.fans||0).toLocaleString()+'</b></div></div>'+
+      '<button class="sec" onclick="openNpcDetail(\'group_'+esc(parent.id)+'\')">返回团体详情</button>';
+    document.getElementById('mInfo').classList.add('open');return true;
+  }
+  var oldOpen=window.openNpcDetail;
+  window.openNpcDetail=function(id){return memberDetail(id)|| (typeof oldOpen==='function'?oldOpen.apply(this,arguments):undefined);};
+
+  function chartStore(){if(!window.ad)return [];if(!Array.isArray(ad.customMusicCharts))ad.customMusicCharts=[];return ad.customMusicCharts;}
+  function appStore(){if(!window.ad)return [];if(!Array.isArray(ad.customPhoneApps))ad.customPhoneApps=[];return ad.customPhoneApps;}
+  function removeChart(id){
+    var chart=chartStore().find(function(c){return String(c.id)===String(id);});if(!chart)return;
+    if(!window.confirm('确定删除自制软件“'+(chart.name||'未命名软件')+'”吗？此操作会同时移除手机图标。'))return;
+    ad.customMusicCharts=chartStore().filter(function(c){return String(c.id)!==String(id);});
+    ad.customPhoneApps=appStore().filter(function(a){return String(a.id)!==String(id);});
+    var icon=document.getElementById('app_'+id);if(icon)icon.remove();
+    if(typeof window.saveGame==='function')window.saveGame();
+    if(typeof window.openCustomChartStudio==='function')window.openCustomChartStudio();
+  }
+  window.deleteCustomMusicChart=removeChart;
+  function score(t,chart){
+    var weekly=Math.max(0,Number(t.stmGlobal_Week||0),Number(t.stmGlobal_Day||0)*7);
+    if(chart.scope!=='regional')return weekly;
+    var direct=Number((t.amRegions||{})[String(chart.region||'').toUpperCase()]||0)*7;
+    var share=Math.max(0.01,Math.min(1,Number(chart.sharePercent||15)/100));
+    return Math.floor(Math.min(weekly*share,direct||weekly*share*.75));
+  }
+  function openChart(id){
+    if(!(window.ad&&ad.r))return alert('请先进入游戏。');
+    var chart=chartStore().find(function(c){return String(c.id)===String(id);});if(!chart)return alert('未找到该自制软件。');
+    var rows=arr(window.trackPool).filter(function(t){return t&&t.type==='track';}).map(function(t){return {t:t,s:score(t,chart)};}).filter(function(x){return x.s>0;}).sort(function(a,b){return b.s-a.s;}).slice(0,100);
+    var body='<div class="chart-brandbar"><div><span class="chart-kicker">'+(chart.scope==='regional'?'REGIONAL CHART':'GLOBAL CHART')+'</span><h2>'+esc(chart.name||'自制音乐榜')+'</h2><span class="chart-meta">实时排名 · '+(chart.scope==='regional'?'地区市场占比约 '+Number(chart.sharePercent||15)+'%':'全球压缩大盘')+'</span></div><button class="chart-delete-btn" onclick="deleteCustomMusicChart(\''+esc(id)+'\')">删除软件</button></div><div class="chart-table-head"><span>#</span><span>歌曲</span><span>艺人</span><span>数据</span></div>';
+    body+=rows.map(function(row,i){var t=row.t;return '<div class="chart-row"><strong class="chart-rank">'+(i+1)+'</strong><div class="chart-song"><b>'+esc(t.n||'未命名歌曲')+'</b><small>'+esc(t.album||t.albumName||'单曲')+'</small></div><div class="chart-artist">'+esc(t.artist||'未知艺人')+'</div><div class="chart-score">'+row.s.toLocaleString()+'<small>流媒</small></div><button class="chart-more" onclick="viewSongStats(\''+esc(t.id)+'\')">详情</button></div>';}).join('');
+    document.getElementById('mInfoTitle').innerText=chart.name||'自制音乐榜';document.getElementById('mInfoContent').innerHTML=body||'<p class="chart-empty">暂无可计入该榜单的歌曲。</p>';document.getElementById('mInfo').classList.add('open');
+  }
+  window.openCustomMusicChart=openChart;
+  var oldStudio=window.openCustomChartStudio;
+  window.openCustomChartStudio=function(){
+    if(typeof oldStudio==='function')oldStudio.apply(this,arguments);else return;
+    var content=document.getElementById('mInfoContent');if(!content)return;
+    setTimeout(function(){content.querySelectorAll('.card').forEach(function(card){var button=card.querySelector('button[onclick*="openCustomMusicChart"]');if(!button||card.querySelector('.chart-remove-btn'))return;var id=(button.getAttribute('onclick').match(/openCustomMusicChart\('([^']+)/)||[])[1];if(!id)return;var del=document.createElement('button');del.className='chart-remove-btn';del.textContent='删除';del.onclick=function(){removeChart(id);};card.appendChild(del);});},0);
+  };
 })();
 </script>
 </html>

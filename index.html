@@ -24984,7 +24984,8 @@ var _screenComplete=window.completeCurrentScreenProduction;window.completeCurren
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
 (function installCloudDeviceLogin(){
     'use strict';
-    var AUTH_API='https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth';
+    var AUTH_APIS=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth','https://star-pro-device-auth.3800069889.workers.dev'];
+    var AUTH_API=AUTH_APIS[0];
     var DEVICE_KEY='starPro_device_id';
     var VERIFIED_KEY='starPro_device_verified';
     var loginBusy=false;
@@ -25018,16 +25019,23 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
     }
     async function request(path,body){
         var lastError;
-        for(var attempt=0;attempt<2;attempt++){
-            var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},30000);
-            try{
-                var response=await fetch(AUTH_API+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),cache:'no-store',signal:controller.signal});
-                var data={};try{data=await response.json();}catch(error){}
-                return {ok:response.ok&&data.ok,data:data,status:response.status};
-            }catch(error){
-                lastError=error;
-                if(attempt===0)await new Promise(function(resolve){setTimeout(resolve,1200);});
-            }finally{clearTimeout(timer);}
+        for(var endpoint=0;endpoint<AUTH_APIS.length;endpoint++){
+            for(var attempt=0;attempt<2;attempt++){
+                var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},20000);
+                try{
+                    // text/plain is a CORS-safelisted content type. The function still
+                    // parses the body as JSON, but browsers no longer send a fragile
+                    // OPTIONS preflight before every login/rebind request.
+                    var nativeFetch=window.__starProNativeFetch||originalFetch||window.fetch;
+                    var response=await nativeFetch(AUTH_APIS[endpoint]+path,{method:'POST',mode:'cors',credentials:'omit',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify(body),cache:'no-store',signal:controller.signal});
+                    var data={};try{data=await response.json();}catch(error){}
+                    if(response.status>=500&&attempt===0){await new Promise(function(resolve){setTimeout(resolve,900);});continue;}
+                    if(response.ok||response.status<500)return {ok:response.ok&&data.ok,data:data,status:response.status};
+                }catch(error){
+                    lastError=error;
+                    if(attempt===0)await new Promise(function(resolve){setTimeout(resolve,900);});
+                }finally{clearTimeout(timer);}
+            }
         }
         throw lastError||new Error('LOGIN_NETWORK_FAILED');
     }

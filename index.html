@@ -1318,6 +1318,7 @@ setTimeout(function installFinalUserRequestedFixes(){
     function awardEntityGenres(item){var raw=item&&(item.gnr||item.g||item.genres)||[];return Array.isArray(raw)?raw.map(String):String(raw).split(/[,/、|]/).map(function(x){return x.trim();}).filter(Boolean);}
     function awardItemEligible(item,cat){
         if(!item||!cat)return false;
+        if(cat.targetForm==="solo"&&(item.isGroupWork||item.groupId||item.artistType==="group"))return false;
         if(cat.targetType==="group"&&!item.isGroupWork)return false;
         if(cat.targetGenre&&cat.targetGenre!=="ALL"&&awardEntityGenres(item).indexOf(String(cat.targetGenre))<0)return false;
         if(cat.targetForm==="solo"&&item.isCollab)return false;
@@ -1329,6 +1330,27 @@ setTimeout(function installFinalUserRequestedFixes(){
         if(cat.targetType==="artist")return id==="player_self";
         if(cat.targetType==="cover")return /^album:|^track:/.test(String(id||""));
         var item=findTrack(id);return awardItemEligible(item,cat);
+    }
+    function normalizeAwardCandidate(item){
+        if(!item||typeof item!=="object")return null;
+        var p=ad||{},name=String(p.s||"").trim();
+        if(item.type==="song")item.type="track";
+        var owned=!!item.isMe||item.playerOwned===true||item.writtenByPlayer===true||String(item.artist||"").trim()===name||String(item.artistName||"").trim()===name||String(item.owner||"").trim()===name;
+        if(owned){
+            item.isMe=true;item.playerOwned=true;
+            if(!item.artist)item.artist=name;
+            if(!item.artistName)item.artistName=item.artist||name;
+            var y=Number(item.releaseYear||item.t_y||(item.releaseDate&&item.releaseDate.y)||time.y||2026),m=Number(item.releaseMonth||item.t_m||(item.releaseDate&&item.releaseDate.m)||time.m||1),w=Number(item.releaseWeek||item.t_w||(item.releaseDate&&item.releaseDate.w)||time.w||1);
+            item.releaseYear=y;item.t_y=y;item.releaseMonth=m;item.t_m=m;item.releaseWeek=w;item.t_w=w;
+            if(!item.releaseDate)item.releaseDate={y:y,m:m,w:w};
+        }
+        return item;
+    }
+    function awardPlayerCandidates(){
+        var canonical=typeof window.getAllAwardPlayerWorks==="function"?window.getAllAwardPlayerWorks():[];
+        if(Array.isArray(canonical)&&canonical.length)return canonical.map(normalizeAwardCandidate).filter(Boolean);
+        var records=Array.isArray(myWorks)?myWorks:[],ids={},names={};records.forEach(function(x){if(x&&x.id)ids[String(x.id)]=true;if(x&&x.n)names[String(x.n).replace(/\s+/g,"").toLowerCase()]=true;});
+        return A(trackPool).filter(function(item){if(!item)return false;var n=String(item.n||"").replace(/\s+/g,"").toLowerCase();return item.isMe||item.playerOwned===true||ids[String(item.id)]||names[n]||String(item.artist||"")===String(ad.s||"");}).map(normalizeAwardCandidate).filter(Boolean);
     }
     window.getCurrentAwardStageInfo = function(){
         var curM = time.m, curY = time.y;
@@ -1345,8 +1367,9 @@ setTimeout(function installFinalUserRequestedFixes(){
         var info = getCurrentAwardStageInfo();
         var awds = info.submit.length ? info.submit : A(awardRegistry);
         if(awardId) awds = A(awardRegistry).filter(function(a){return a.id===awardId;});
-        var tracks = A(trackPool).filter(function(t){return t && t.isMe && t.type==="track";}).slice().sort(function(a,b){return (b._entityCreatedAt||0)-(a._entityCreatedAt||0);});
-        var albums = A(trackPool).filter(function(t){return t && t.isMe && t.type==="album";}).slice().sort(function(a,b){return (b._entityCreatedAt||0)-(a._entityCreatedAt||0);});
+        var playerWorks=awardPlayerCandidates();
+        var tracks = playerWorks.filter(function(t){return t && t.type==="track";}).slice().sort(function(a,b){return (b._entityCreatedAt||b.releaseYear||0)-(a._entityCreatedAt||a.releaseYear||0);});
+        var albums = playerWorks.filter(function(t){return t && t.type==="album";}).slice().sort(function(a,b){return (b._entityCreatedAt||b.releaseYear||0)-(a._entityCreatedAt||a.releaseYear||0);});
         var html = `<div class="card" style="font-size:12px;line-height:1.7;background:#f0f9ff;border-color:#7dd3fc;"><b>报名规则</b><br>每个分支奖项独立申报，不限制同一作品参与其他分支。歌曲类允许同一类别申报多首，但同一艺人在同类别申报越多，分票越明显；主流厂牌通常只投最优的 2–3 首。</div>`;
         html += awds.map(function(awd,i){
             var year=awardSubmitYear(awd,time.y,time.m),sub=awardSubmissionFor(awd,year),deadline=awardDeadlineState(awd),cats=A(awd.categories);if(!cats.length)cats=[{id:"main",name:"综合大奖",targetType:"track"}];
@@ -1373,15 +1396,22 @@ setTimeout(function installFinalUserRequestedFixes(){
         var modal=$("mInfo"),box=modal&&modal.querySelector(".modal-box"),content=$("mInfoContent");
         if(!box||!content)return;
         modal.classList.add("award-transparent-modal");
-        box.style.background="rgba(8,10,14,.82)";
-        box.style.color="#f8fafc";
-        box.style.border="1px solid rgba(255,255,255,.18)";
+        modal.setAttribute("data-award-modal","1");
+        box.style.background="rgba(0,0,0,.78)";
+        box.style.color="#fff";
+        box.style.border="1px solid rgba(255,255,255,.24)";
         box.style.boxShadow="0 20px 70px rgba(0,0,0,.42)";
-        content.style.color="#f8fafc";
+        content.style.color="#fff";
         content.querySelectorAll(".card").forEach(function(card){
-            card.style.background="rgba(255,255,255,.08)";
-            card.style.borderColor="rgba(255,255,255,.16)";
-            card.style.color="#f8fafc";
+            card.style.background="rgba(0,0,0,.34)";
+            card.style.borderColor="rgba(255,255,255,.22)";
+            card.style.color="#fff";
+        });
+        content.querySelectorAll("button").forEach(function(button){
+            button.setAttribute("data-award-action","1");
+            button.style.background="#facc15";
+            button.style.color="#111827";
+            button.style.borderColor="#fde047";
         });
     }
     window.viewNominationsUI = function(awardId){
@@ -2649,6 +2679,63 @@ input,select,textarea,.sub-tab,.g-tag,.log,.prog-wrap {
 [style*="color:#c8a440"],[style*="color: #c8a440"],
 [style*="color:#a67c00"],[style*="color: #a67c00"] {
   color:var(--baby-yellow-text) !important;
+}
+
+/* Award views use a transparent black surface. Keep the contrast intentional:
+   body copy is white and actions/highlights are bright yellow, never grey or
+   dark gold. The data attribute is applied by the award modal entry points. */
+[data-award-modal="1"] .modal-box,
+.award-transparent-modal .modal-box,
+#mAwardNominationNotice .modal-box {
+  background:rgba(0,0,0,.78) !important;
+  color:#fff !important;
+  border-color:rgba(255,255,255,.24) !important;
+}
+[data-award-modal="1"] .modal-box .card,
+.award-transparent-modal .modal-box .card,
+#mAwardNominationNotice .modal-box .card,
+.awardSubmissionCard,
+.awardBranchSubmission {
+  background:rgba(0,0,0,.34) !important;
+  color:#fff !important;
+  border-color:rgba(255,255,255,.22) !important;
+}
+[data-award-modal="1"] .modal-box p,
+[data-award-modal="1"] .modal-box span,
+[data-award-modal="1"] .modal-box b,
+[data-award-modal="1"] .modal-box h3,
+[data-award-modal="1"] .modal-box h4,
+.awardSubmissionCard p,
+.awardSubmissionCard span,
+.awardSubmissionCard b,
+.awardSubmissionCard h3,
+.awardSubmissionCard h4,
+.awardBranchSubmission p,
+.awardBranchSubmission span,
+.awardBranchSubmission b,
+.awardBranchSubmission h3,
+.awardBranchSubmission h4,
+#mAwardNominationNotice .modal-box,
+#mAwardNominationNotice .modal-box h3,
+#mAwardNominationNotice .modal-box div {
+  color:#fff !important;
+}
+[data-award-modal="1"] .modal-box button,
+.awardSubmissionCard button,
+.awardBranchSubmission button,
+#mAwardNominationNotice .modal-box button,
+button[data-award-action="1"] {
+  background:#facc15 !important;
+  color:#111827 !important;
+  border-color:#fde047 !important;
+  box-shadow:0 0 0 1px rgba(250,204,21,.28),0 3px 12px rgba(250,204,21,.18);
+}
+[data-award-modal="1"] .modal-box button:hover,
+.awardSubmissionCard button:hover,
+.awardBranchSubmission button:hover,
+#mAwardNominationNotice .modal-box button:hover,
+button[data-award-action="1"]:hover {
+  background:#fde047 !important;
 }
 
 .ui-theme-swatches { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 14px; }
@@ -23636,7 +23723,10 @@ document.addEventListener("DOMContentLoaded", function(){
             var requested=Number(cap),limit=isFinite(requested)&&requested>0?Math.max(1,requested):500;
             var clean=Array.from(values||[]).map(function(value){value=Number(value);return isFinite(value)&&value>0?value:0;});
             var order=clean.map(function(value,index){return {value:value,index:index};}).sort(function(a,b){return b.value-a.value;});
-            var compressed=marketJitterValues(rankStableMarketCompression(order.map(function(item){return item.value;}),limit),'billboard:'+String(typeof finalDateKey==='function'?finalDateKey():'current')),result=new Array(clean.length);
+            var raw=order.map(function(item){return item.value;}),top=raw.reduce(function(max,value){return Math.max(max,value);},0),compressed;
+            if(top<=limit)compressed=raw.map(function(value){return Math.round(value);});
+            else { var scale=limit/top; compressed=raw.map(function(value){return Math.max(0,Math.round(value*scale));}); }
+            var result=new Array(clean.length);
             order.forEach(function(item,rank){result[item.index]=compressed[rank];});
             return result;
         }
@@ -24680,13 +24770,13 @@ function bootScreenAndGroupWorld(){
     window.savePlayerGroupRoles=function(){var group=playerGroup(),me=playerMember(group),roles=Array.from(document.querySelectorAll('.playerGroupRole:checked')).map(function(x){return x.value;});if(!roles.length)return alert('至少保留一个定位。');if(me.roleChangedAt&&me.roleChangedAt.year===time.y&&me.roleChangedAt.month===time.m){ad.publicFavor=Math.max(0,Number(ad.publicFavor||20)-2);group.cohesion=Math.max(0,group.cohesion-2);}me.roles=roles;me.roleChangedAt=currentStamp();save();openGroupHub();};
     function groupHeat(group,streams,social,search,memberIds,eventMod){var members=memberIds?group.members.filter(function(m){return memberIds.indexOf(m.id)>=0;}):group.members,count=Math.max(1,members.length),star=members.reduce(function(s,m){return s+Math.max(.5,Math.min(2,Math.log10(Number(m.fans||0)+1)/4));},0)/count,mod=1/Math.sqrt(count),days=1,d=decay(days,.007,.38);return clampHeat(Math.sqrt(Math.max(0,streams/1000000))*Math.pow(social,.35)*Math.pow(search,.35)*star*mod*1*d*Number(eventMod||1)*12);}
     function groupReleaseStreams(group,promotionPlan){var members=Array.isArray(group&&group.members)?group.members:[],memberCount=Math.max(1,members.length),totalFans=Math.max(0,Number(group&&group.fans||0),members.reduce(function(sum,m){return sum+Math.max(0,Number(m&&m.fans||0));},0)),company=ad&&ad.companyContracts&&ad.companyContracts.group,companyGrade=Math.max(.5,Math.min(3,Number(company&&company.grade||1))),shows=Math.max(1,Number(promotionPlan&&promotionPlan.approvedShows||1)),cohesion=Math.max(.35,Math.min(1,Number(group&&group.cohesion||55)/100));return Math.max(2000,Math.floor(totalFans*(.012+Math.random()*.052)*companyGrade*(1+(shows-1)*.035)*cohesion/Math.sqrt(memberCount)));}
-    function ensureGroupPromotionPlan(group){var d=group&&group.groupDraft;if(!d)return null;var p=d.promotionPlan;if(!p||typeof p!=='object'){var company=ad.companyContracts&&ad.companyContracts.group,grade=Number(company&&company.grade||1),base=Math.max(1,Math.min(3,1+Math.floor(Math.random()*3)));p=d.promotionPlan={baseShows:base,approvedShows:base,maxShows:6,requests:[],status:'pending',companyGrade:grade};}if(!Array.isArray(p.requests))p.requests=[];p.approvedShows=Math.max(1,Math.min(Number(p.maxShows||6),Number(p.approvedShows||p.baseShows||1)));return p;}
-    window.openGroupPromotionNegotiation=function(){var group=playerGroup(),p=ensureGroupPromotionPlan(group);if(!p)return;var title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo'),canAdd=p.approvedShows<p.maxShows&&!p.requests.some(function(x){return x.action==='add'&&x.accepted;}),canCancel=p.approvedShows>1&&!p.requests.some(function(x){return x.action==='cancel'&&x.accepted;});title.innerText=group.name+' 公司打歌协商';content.innerHTML='<div class="card" style="font-size:12px;line-height:1.7;">公司当前计划：<b>'+p.approvedShows+' 场</b>（基础 '+p.baseShows+' 场）。追加或撤销都要经过公司审批，结果会写入本次回归。</div>'+(canAdd?'<button onclick="negotiateGroupPromotion(\'add\')">要求追加 1 场打歌</button>':'<button disabled>追加请求已使用</button>')+(canCancel?'<button class="red" onclick="negotiateGroupPromotion(\'cancel\')">要求撤销 1 场打歌</button>':'<button class="red" disabled>当前不能再撤销</button>')+'<div style="font-size:11px;color:#777;margin-top:8px;">'+(p.requests.length?p.requests.map(function(r){return (r.action==='add'?'追加':'撤销')+'：'+(r.accepted?'公司同意':'公司拒绝')+'（'+r.chance+'%）';}).join('<br>'):'尚未提出请求。')+'</div>';modal.classList.add('open');};
-    window.negotiateGroupPromotion=function(action){var group=playerGroup(),p=ensureGroupPromotionPlan(group);if(!p||['add','cancel'].indexOf(action)<0)return;var already=p.requests.some(function(x){return x.action===action;});if(already)return alert('同一类型的打歌请求本次回归只能提出一次。');if(action==='add'&&p.approvedShows>=p.maxShows)return alert('公司计划已达到本次回归的打歌上限。');if(action==='cancel'&&p.approvedShows<=1)return alert('本次回归至少保留 1 场打歌。');var company=ad.companyContracts&&ad.companyContracts.group,grade=Number(company&&company.grade||p.companyGrade||1),creative=Number(ad.sk&&ad.sk.w||50),heat=Number(group.heat||0),chance=Math.round(Math.max(15,Math.min(90,48+grade*10+creative/35+Math.min(12,heat/2000)+(action==='add'?4:-2))));var accepted=Math.random()<chance/100;p.requests.push({action:action,accepted:accepted,chance:chance,stamp:currentStamp()});if(accepted)p.approvedShows+=action==='add'?1:-1;p.status='negotiated';save();alert(accepted?'公司同意了你的'+(action==='add'?'追加':'撤销')+'打歌请求。':'公司拒绝了你的'+(action==='add'?'追加':'撤销')+'打歌请求。');openGroupRelease();};
+    function ensureGroupPromotionPlan(group){var d=group&&group.groupDraft;if(!d)return null;var p=d.promotionPlan;if(!p||typeof p!=='object'){var company=ad.companyContracts&&ad.companyContracts.group,grade=Number(company&&company.grade||1),base=Math.max(1,Math.min(3,1+Math.floor(Math.random()*3)));p=d.promotionPlan={baseShows:base,approvedShows:base,maxShows:6,requests:[],status:'pending',companyGrade:grade};}if(!Array.isArray(p.requests))p.requests=[];p.baseShows=Math.max(1,Number(p.baseShows||p.approvedShows||1));p.maxShows=Math.max(p.baseShows,Number(p.maxShows||6));p.approvedShows=Math.max(1,Math.min(p.maxShows,Number(p.approvedShows||p.baseShows)));p.totalWeeks=p.approvedShows;p.remainingWeeks=Math.max(0,Number(p.remainingWeeks==null?p.approvedShows:p.remainingWeeks));return p;}
+    window.openGroupPromotionNegotiation=function(){var group=playerGroup(),p=ensureGroupPromotionPlan(group);if(!p)return;var title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo'),canAdd=p.approvedShows<p.maxShows,canCancel=p.approvedShows>1;title.innerText=group.name+' 公司打歌协商';content.innerHTML='<div class="card" style="font-size:12px;line-height:1.7;">公司当前计划：<b>'+p.approvedShows+' 周</b>（基础 '+p.baseShows+' 周）。打歌按周结算；你可以反复提出追加或撤销建议，公司每次独立审批。</div>'+(canAdd?'<button onclick="negotiateGroupPromotion(\'add\')">要求追加 1 周打歌</button>':'<button disabled>已达到最多 6 周</button>')+(canCancel?'<button class="red" onclick="negotiateGroupPromotion(\'cancel\')">要求撤销 1 周打歌</button>':'<button class="red" disabled>至少保留 1 周</button>')+'<div style="font-size:11px;color:#777;margin-top:8px;">'+(p.requests.length?p.requests.map(function(r){return (r.action==='add'?'追加 1 周':'撤销 1 周')+'：'+(r.accepted?'公司同意':'公司拒绝')+'（'+r.chance+'%）';}).join('<br>'):'尚未提出请求。')+'</div>';modal.classList.add('open');};
+  window.negotiateGroupPromotion=function(action){var group=playerGroup(),p=ensureGroupPromotionPlan(group);if(!p||['add','cancel'].indexOf(action)<0)return;if(action==='add'&&p.approvedShows>=p.maxShows)return alert('公司计划已达到本次回归的打歌上限。');if(action==='cancel'&&p.approvedShows<=1)return alert('本次回归至少保留 1 周打歌。');var company=ad.companyContracts&&ad.companyContracts.group,grade=Number(company&&company.grade||p.companyGrade||1),creative=Number(ad.sk&&ad.sk.w||50),heat=Number(group.heat||0),cp=group.groupDraft&&group.groupDraft.companyProposal||{},confidence=Number(cp.confidence==null?100:cp.confidence),management=Number(cp.management==null?100:cp.management),chance=Math.round(Math.max(8,Math.min(92,40+grade*10+creative/35+Math.min(12,heat/2000)+confidence*.12+management*.08+(action==='add'?4:-2))));var accepted=Math.random()<chance/100;p.requests.push({action:action,accepted:accepted,chance:chance,stamp:currentStamp()});if(accepted)p.approvedShows+=action==='add'?1:-1;else{cp.confidence=Math.max(0,confidence-(Number(group.fans||0)<100000?8:3));cp.management=Math.max(0,management-(Number(group.fans||0)>1000000?8:3));}p.status='negotiated';save();alert(accepted?'公司同意了你的'+(action==='add'?'追加':'撤销')+'打歌周数请求。':'公司拒绝了你的'+(action==='add'?'追加':'撤销')+'打歌周数请求；'+(Number(group.fans||0)>1000000?'公司管理度下降。':'你的建议可信度下降。'));openGroupRelease();};
     window.openGroupRelease=function(){var group=playerGroup();if(!group)return;var key=time.y+'_'+time.m;if(group.lastComebackKey===key)return alert('本月已经进行过团体大型回归，需要等待冷却。');var d=group.groupDraft||{},p=ensureGroupPromotionPlan(group);document.getElementById('mInfoTitle').innerText=group.name+' 团体回归';document.getElementById('mInfoContent').innerHTML='<label>团体单曲名称</label><input id="groupSongName" value="'+esc(d.name||'')+'"><label>曲风 / 概念</label><input id="groupSongGenre" value="'+esc(d.genre||group.concept||'流行')+'"><label>歌词与镜头分配</label><select id="groupResourcePlan"><option value="equal">平均分配</option><option value="popular">人气成员优先</option><option value="player">重点突出我</option></select><button class="sec" onclick="prepareGroupComeback()">筹备歌曲</button>'+(d.prepared?'<button class="sec" onclick="openGroupPromotionNegotiation()">公司打歌计划（'+p.approvedShows+' 场）</button>':'')+'<button class="sec" onclick="shootGroupMV()" '+(!d.prepared?'disabled':'')+'>拍摄 MV</button><button onclick="releaseGroupSingle()" '+(!d.mv?'disabled':'')+'>发布团体单曲</button>';document.getElementById('mInfo').classList.add('open');};
     window.prepareGroupComeback=function(){var group=playerGroup();if(!group)return;var name=((document.getElementById('groupSongName')||{}).value||'').trim(),genre=((document.getElementById('groupSongGenre')||{}).value||group.concept||'流行').trim();if(!name)return alert('请输入团体单曲名称。');group.groupDraft={prepared:true,name:name,genre:genre,plan:(document.getElementById('groupResourcePlan')||{}).value||'equal'};ensureGroupPromotionPlan(group);save();alert('歌曲《'+name+'》筹备完成，公司已给出初始打歌计划。');openGroupRelease();};
     window.shootGroupMV=function(){var group=playerGroup();if(!group||!group.groupDraft||!group.groupDraft.prepared)return alert('请先筹备团体歌曲。');group.groupDraft.mv=true;group.cohesion=Math.max(1,Number(group.cohesion||55)-1);save();alert('《'+group.groupDraft.name+'》MV 拍摄完成，可以正式发布。');openGroupRelease();};
-    window.releaseGroupSingle=function(){var group=playerGroup(),d=group&&group.groupDraft;if(!group||!d||!d.mv)return alert('请先完成歌曲筹备并拍摄 MV。');var promotionPlan=ensureGroupPromotionPlan(group),name=d.name,genre=d.genre,plan=d.plan||'equal',social=rand(200,1000),search=rand(180,1000),event=1+(Math.max(0,Number(promotionPlan.approvedShows||1)-1)*.04);if(plan==='player'){group.cohesion-=8;Object.keys(groupRelations(group)).forEach(function(k){group.relations.player[k]-=8;});event*=1.08;}else if(plan==='popular'){group.cohesion-=3;}var streams=groupReleaseStreams(group,promotionPlan),heat=groupHeat(group,streams,social,search,null,event),track=typeof createEntity==='function'?createEntity(name,group.name,true,'track',[genre],group.fans,Number(ad.sk.w||100),Number(ad.sk.v||100),time.y,time.m,time.w):{id:id('grouptrack'),n:name,artist:group.name,isMe:true,type:'track',gnr:[genre],stmGlobal:streams};track.groupId=group.id;track.isGroupWork=true;track.memberCount=group.members.length;track.heatIndex=heat;track.groupMod=1/Math.sqrt(group.members.length);track.promotionShows=promotionPlan.approvedShows;track.promotionPlan=JSON.parse(JSON.stringify(promotionPlan));track.stmGlobal=streams;track.stmGlobal_Day=Math.floor(streams/7);track.stmGlobal_Week=track.stmGlobal_Day*7;trackPool.push(track);group.lastComebackKey=time.y+'_'+time.m;group.phase=group.phase==='筹备期'?'出道爆发期':'平稳发展期';group.heat=heat;group.fans+=Math.floor(heat*50);group.groupDraft=null;save();if(typeof updatePeakRanks==='function')updatePeakRanks();alert(group.name+' 正式发布《'+track.n+'》，首日全球流媒 '+streams.toLocaleString()+' · 全网热度 '+heat.toLocaleString()+'（'+heatLabel(heat)+'），公司安排 '+track.promotionShows+' 场打歌。');openGroupHub();};
+    window.releaseGroupSingle=function(){var group=playerGroup(),d=group&&group.groupDraft;if(!group||!d||!d.mv)return alert('请先完成歌曲筹备并拍摄 MV。');var promotionPlan=ensureGroupPromotionPlan(group),name=d.name,genre=d.genre,plan=d.plan||'equal',social=rand(200,1000),search=rand(180,1000),event=1+(Math.max(0,Number(promotionPlan.approvedShows||1)-1)*.04);if(plan==='player'){group.cohesion-=8;Object.keys(groupRelations(group)).forEach(function(k){group.relations.player[k]-=8;});event*=1.08;}else if(plan==='popular'){group.cohesion-=3;}var streams=groupReleaseStreams(group,promotionPlan),heat=groupHeat(group,streams,social,search,null,event),track=typeof createEntity==='function'?createEntity(name,group.name,true,'track',[genre],group.fans,Number(ad.sk.w||100),Number(ad.sk.v||100),time.y,time.m,time.w):{id:id('grouptrack'),n:name,artist:group.name,isMe:true,type:'track',gnr:[genre],stmGlobal:streams};promotionPlan.totalWeeks=promotionPlan.approvedShows;promotionPlan.remainingWeeks=promotionPlan.approvedShows;promotionPlan.startedAt=[time.y,time.m,time.w].join('_');track.groupId=group.id;track.isGroupWork=true;track.memberCount=group.members.length;track.heatIndex=heat;track.groupMod=1/Math.sqrt(group.members.length);track.promotionShows=promotionPlan.approvedShows;track.promotionPlan=JSON.parse(JSON.stringify(promotionPlan));track.promoPlan={totalWeeks:promotionPlan.approvedShows,remainingWeeks:promotionPlan.approvedShows,showName:group.name+' 团体打歌',startedAt:[time.y,time.m,time.w].join('_')};track.stmGlobal=streams;track.stmGlobal_Day=Math.floor(streams/7);track.stmGlobal_Week=track.stmGlobal_Day*7;trackPool.push(track);group.lastComebackKey=time.y+'_'+time.m;group.phase=group.phase==='筹备期'?'出道爆发期':'平稳发展期';group.heat=heat;group.fans+=Math.floor(heat*50);group.groupDraft=null;save();if(typeof updatePeakRanks==='function')updatePeakRanks();alert(group.name+' 正式发布《'+track.n+'》，首日全球流媒 '+streams.toLocaleString()+' · 全网热度 '+heat.toLocaleString()+'（'+heatLabel(heat)+'），公司安排 '+track.promotionShows+' 周打歌。');openGroupHub();};
     function processAutonomousCareers(){ensureWorld();ad.screenActors.forEach(function(a){if(Math.random()<.003){a.titleIndex=Math.max(0,Math.min(6,a.titleIndex+(Math.random()<.65?1:-1)));a.title=SCREEN_TITLES[a.titleIndex];}if(Math.random()<.002&&a.finance<0)a.dignity=Math.max(5,a.dignity-2);});ad.entertainmentGroups.forEach(function(g){if(!g.active)return;Object.keys(g.relations||{}).forEach(function(a){Object.keys(g.relations[a]||{}).forEach(function(b){if(Math.random()<.01)g.relations[a][b]=Math.max(0,g.relations[a][b]-rand(1,5));});});if(g.cohesion<20&&Math.random()<.03){g.phase='分化期';if(Math.random()<.3)g.active=false;}if(g.npc&&Math.random()<.004){var actor=pick(ad.screenActors);if(actor&&!g.members.some(function(m){return m.actorId===actor.id;}))g.members.push({id:'npc_'+actor.id,n:actor.n,fans:actor.fans,roles:['外援'],solo:true,actorId:actor.id,outsider:true});}});var p=ad.screenCareer.currentProduction;if(p&&p.status==='拍摄中'){p.remainingWeeks=Math.max(0,p.remainingWeeks-1);if(!p.remainingWeeks)completeScreenProduction();}refreshAnnouncements(false);}
     function mountScreenAwards(){var hall=document.getElementById('mapAwards');if(!hall||document.getElementById('screenAwardEntry'))return;var panel=document.createElement('div');panel.id='screenAwardEntry';panel.className='card';panel.innerHTML='<h4>影视奖项体系</h4><p style="font-size:11px;color:#777;">四个电影奖与四个电视剧奖，使用独立影视作品池；支持自定义与增加奖项。</p><button onclick="openScreenAwards()">进入影视奖项</button>';hall.appendChild(panel);}
     window.openScreenAwards=function(){ensureWorld();document.getElementById('mInfoTitle').innerText='电影与电视剧奖项';document.getElementById('mInfoContent').innerHTML='<button class="sec" onclick="openCustomScreenAward()">增加自定义影视奖项</button>'+ad.screenAwardData.registry.map(function(a){return '<div class="card"><b>'+esc(a.name)+'</b> · '+(a.medium==='film'?'电影':'电视剧')+'<br><span style="font-size:11px;">'+esc(a.categories.join('、'))+'</span><button onclick="submitScreenAward(\''+a.id+'\')">报名作品</button></div>';}).join('')+'<h4>获奖历史</h4>'+(ad.screenAwardData.history.map(function(x){return '<div>'+esc(x.year+' '+x.award+' - '+x.category+'《'+x.project+'》')+'</div>';}).join('')||'暂无');document.getElementById('mInfo').classList.add('open');};
@@ -25876,7 +25966,9 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
     var d=group.groupDraft&&typeof group.groupDraft==='object'?group.groupDraft:{};
     if(!d.companyProposal){
       var month=Number(time&&time.m||1),year=Number(time&&time.y||2026);
-      d.companyProposal={name:(group.name||'团体')+' · '+year+'年'+month+'月回归',genre:group.concept||'流行',plan:'equal',issuedAt:[year,month].join('-')};
+      var writers=['公司制作组','外部金牌制作人','团体成员创作组','地区合作制作人'];
+      var tracks=[];for(var i=0;i<Math.max(4,Math.min(8,Number(group.members&&group.members.length||4)+1));i++)tracks.push({id:'gd_'+Date.now()+'_'+i,name:(group.name||'团体')+' 回归曲 '+(i+1),genre:group.concept||'流行',writers:[writers[i%writers.length]],companyPick:i===0,mainCandidate:i===0});
+      d.companyProposal={name:tracks[0].name,genre:tracks[0].genre,plan:'equal',issuedAt:[year,month].join('-'),tracks:tracks,submittedSongs:[],mainRequests:[],confidence:100,management:100,price:Math.max(1,Math.min(19,Math.round(5+Number(ad&&ad.Geffect||1)*2+Math.random()*4)))};
       group.groupDraft=d;
     }
     return d;
@@ -25890,12 +25982,21 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   window.openGroupRelease=function(){
     var group=playerGroup();if(!group)return;
     var key=Number(time.y)+'_'+Number(time.m);if(group.lastComebackKey===key)return alert('本月已经进行过团体大型回归，需要等待冷却。');
-    var d=proposalFor(group),p=d.promotionPlan||{};
-    var body='<div class="card" style="font-size:12px;line-height:1.7;"><b>公司回归企划</b><br>公司将决定本次回归歌曲、概念和打歌资源，玩家不能直接替换为自定义回归。<br><b>歌曲：</b>'+escText(d.companyProposal.name)+'<br><b>曲风：</b>'+escText(d.companyProposal.genre)+'<br><b>初始打歌：</b>'+Number(p.baseShows||1)+' 场</div>';
+    var d=proposalFor(group),p=d.promotionPlan||{},cp=d.companyProposal||{},tracks=arr(cp.tracks);
+    var trackRows=tracks.map(function(x,i){return '<div style="padding:6px 0;border-bottom:1px solid #eee;"><b>'+escText(x.name)+'</b> <span style="font-size:10px;color:#888;">'+escText(x.genre||'流行')+'</span><br><span style="font-size:11px;color:#666;">写手：'+arr(x.writers).map(escText).join('、')+(x.companyPick?' · 公司首选':'')+'</span><br><button class="sec inline" onclick="submitGroupSong('+i+')">上交我的歌曲</button><button class="sec inline" onclick="requestGroupMain('+i+')">申请主打</button></div>';}).join('');
+    var body='<div class="card" style="font-size:12px;line-height:1.7;"><b>公司回归专辑企划</b><br>公司安排本次专辑曲目、定价与初始主打，成员可以反复提出建议，但公司会根据可信度、管理度、属性和名气判断。<br><b>可信度：</b>'+Math.round(Number(cp.confidence==null?100:cp.confidence))+'　<b>公司管理度：</b>'+Math.round(Number(cp.management==null?100:cp.management))+'<br><b>公司定价：</b>$'+Number(cp.price||5).toFixed(2)+' / 张　<b>初始打歌：</b>'+Number(p.baseShows||1)+' 周</div>'+trackRows;
     if(!d.prepared)body+='<button onclick="acceptCompanyComebackPlan()">接受公司回归企划并进入录音</button>';
-    else body+='<button class="sec" onclick="openGroupPromotionNegotiation()">查看公司打歌计划（'+Number(p.approvedShows||p.baseShows||1)+' 场）</button><button class="sec" onclick="shootGroupMV()">拍摄 MV</button><button onclick="releaseGroupSingle()" '+(!d.mv?'disabled':'')+'>发布团体单曲</button>';
+    else body+='<button class="sec" onclick="openGroupPromotionNegotiation()">查看公司打歌计划（'+Number(p.approvedShows||p.baseShows||1)+' 周）</button><button class="sec" onclick="shootGroupMV()">拍摄 MV</button><button onclick="releaseGroupSingle()" '+(!d.mv?'disabled':'')+'>发布团体专辑</button>';
     document.getElementById('mInfoTitle').innerText=group.name+' 团体回归';document.getElementById('mInfoContent').innerHTML=body;document.getElementById('mInfo').classList.add('open');
   };
+  window.submitGroupSong=function(index){var group=playerGroup(),d=group&&proposalFor(group),cp=d&&d.companyProposal;if(!cp)return;var song=prompt('上交你自己的歌曲名称（取消则不提交）：','我的自作曲');if(song===null||!song.trim())return;var attr=Number(ad&&ad.sk&&ad.sk.w||50),fame=Math.min(100,Number(ad&&ad.st&&ad.st.f||0)/1000000+Number(group.heat||0)/10000),chance=Math.max(10,Math.min(92,25+attr*.06+fame*.45));var ok=Math.random()<chance/100;cp.submittedSongs.push({name:song.trim(),writers:[ad.s+'（作词/作曲）'],accepted:ok,chance:Math.round(chance),stamp:[time.y,time.m,time.w].join('-')});cp.confidence=Math.max(0,Math.min(100,Number(cp.confidence||100)+(ok?3:-Math.max(2,8-fame*.03))));if(ok&&cp.tracks[index]){cp.tracks[index].name=song.trim();cp.tracks[index].writers=[ad.s+'（作词/作曲）'];cp.tracks[index].companyPick=false;}save();alert(ok?'公司接受了你的歌曲，已纳入本次回归专辑。':'公司暂时拒绝了你的歌曲，继续提交会影响可信度。');openGroupRelease();};
+  window.requestGroupMain=function(index){var group=playerGroup(),d=group&&proposalFor(group),cp=d&&d.companyProposal,track=cp&&cp.tracks&&cp.tracks[index];if(!track)return;var attr=Number(ad&&ad.sk&&ad.sk.w||50),fame=Math.min(100,Number(ad&&ad.st&&ad.st.f||0)/1000000),chance=Math.max(8,Math.min(90,28+attr*.05+fame*.5+Number(cp.confidence||50)*.2));var ok=Math.random()<chance/100;cp.mainRequests.push({trackId:track.id,accepted:ok,chance:Math.round(chance),stamp:[time.y,time.m,time.w].join('-')});cp.confidence=Math.max(0,Math.min(100,Number(cp.confidence||100)+(ok?4:-Math.max(2,7-fame*.02))));if(ok){cp.tracks.forEach(function(x){x.mainCandidate=false;});track.mainCandidate=true;d.name=track.name;}save();alert(ok?'公司同意将《'+track.name+'》列为主打曲。':'公司拒绝了这次主打申请，但你可以之后再次建议。');openGroupRelease();};
+  window.acceptCompanyGroupAssignment=function(groupId){var group=(ad.entertainmentGroups||[]).find(function(x){return String(x.id)===String(groupId);});if(!group)return;ad.groupCareer.activeGroupId=group.id;ad.groupCareer.soloStatus=group.contract==='groupFirst'?'paused':'parallel';group.assignmentAccepted=true;save();alert('你已接受公司的组团安排：'+group.name+'。');openGroupHub();};
+  window.rejectCompanyGroupAssignment=function(groupId){var group=(ad.entertainmentGroups||[]).find(function(x){return String(x.id)===String(groupId);});if(!group)return;group.assignmentRejected=true;group.assignmentRejectedAt=[time.y,time.m].join('-');ad.groupCareer.assignmentCredibility=Math.max(0,Number(ad.groupCareer.assignmentCredibility==null?100:ad.groupCareer.assignmentCredibility)-5);save();alert('你拒绝了公司的组团安排。近期反复拒绝会降低公司对你的组团可信度。');openGroupHub();};
+  var groupHubWithAssignment=window.openGroupHub;
+  window.openGroupHub=function(){var result=typeof groupHubWithAssignment==='function'?groupHubWithAssignment.apply(this,arguments):undefined;if(!ad||!ad.groupCareer)return result;var box=document.getElementById('mInfoContent');if(!box)return result;if(!ad.groupCareer.activeGroupId&&ad.co&&ad.co!=='独立'&&!Array.isArray(ad.groupCareer.assignmentOffered)){ad.groupCareer.assignmentOffered=[];var candidate=(ad.entertainmentGroups||[]).find(function(g){return g&&g.active&&!g.assignmentRejected&&!g.assignmentAccepted&&!g.npc;});if(candidate){candidate.companyAssigned=true;ad.groupCareer.assignmentOffered.push(candidate.id);save();}}var candidate=(ad.entertainmentGroups||[]).find(function(g){return g&&g.active&&!g.assignmentRejected&&!g.assignmentAccepted&&g.companyAssigned;});if(candidate&&!box.querySelector('[data-company-group-assignment]')){var card=document.createElement('div');card.dataset.companyGroupAssignment='1';card.className='card';card.style.cssText='font-size:12px;line-height:1.7;border-color:#c8a440;';card.innerHTML='<b>公司组团安排</b><br>公司根据你的合约、属性和市场定位，为你匹配了团体：'+escText(candidate.name)+'。你可以接受，也可以拒绝；反复拒绝会降低组团可信度。<br><button onclick="acceptCompanyGroupAssignment(\''+escText(candidate.id)+'\')">接受组团</button><button class="red" onclick="rejectCompanyGroupAssignment(\''+escText(candidate.id)+'\')">拒绝组团</button>';box.insertBefore(card,box.firstChild);}return result;};
+  var baseCompanyGroupRelease=window.releaseGroupSingle;
+  window.releaseGroupSingle=function(){var group=playerGroup(),d=group&&proposalFor(group),result=typeof baseCompanyGroupRelease==='function'?baseCompanyGroupRelease.apply(this,arguments):undefined;if(group&&d&&d.companyProposal){var price=Math.max(1,Number(d.companyProposal.price||5));(trackPool||[]).filter(function(t){return t&&t.isGroupWork&&String(t.groupId)===String(group.id)&&!t.groupAlbumPrice;}).forEach(function(t){t.price=price;t.groupAlbumPrice=price;t.albumPriceSource='公司定价';t.groupAlbumTracks=arr(d.companyProposal.tracks).map(function(x){return {name:x.name,writers:arr(x.writers),mainCandidate:!!x.mainCandidate};});});save();}return result;};
   var finalCompanyGroupRelease=window.openGroupRelease;
   window.openRegionalMarketApp=function(){
     if(typeof window.normalizeRegionalFashionData==='function')window.normalizeRegionalFashionData();
@@ -26648,9 +26749,10 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   function norm(v){return String(v==null?'':v).replace(/\s+/g,'').replace(/[《》【】\[\]]/g,'').replace(/(单曲|专辑)$/,'').toLowerCase();}
   function currentTime(){try{if(typeof time!=='undefined'&&time)return time;}catch(e){}return window.time||{y:2026,m:1,w:1};}
   function belongsToPlayer(item,recordNames,recordIds){
-    var p=player(),name=String(p.s||'');
+    var p=player(),name=String(p.s||'').trim(),normName=norm(name);
     if(!item)return false;
-    return !!item.isMe||item.playerOwned===true||item.writtenByPlayer===true||String(item.artist||'')===name||String(item.artistName||'')===name||String(item.owner||'')===name||recordIds[String(item.id)]||recordNames[norm(item.n)];
+    if(item.type==='song')item.type='track';
+    return !!item.isMe||item.playerOwned===true||item.writtenByPlayer===true||norm(item.artist)===normName||norm(item.artistName)===normName||norm(item.owner)===normName||recordIds[String(item.id)]||recordNames[norm(item.n)];
   }
   function stamp(item,index){
     var y=Number(item.releaseYear||item.t_y||(item.releaseDate&&item.releaseDate.y)||0),m=Number(item.releaseMonth||item.t_m||(item.releaseDate&&item.releaseDate.m)||0),w=Number(item.releaseWeek||item.t_w||(item.releaseDate&&item.releaseDate.w)||0),created=Number(item._entityCreatedAt||item.createdAt||0);
@@ -26660,12 +26762,13 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   function canUse(item,cat){
     if(!item||!cat)return false;
     if(cat.targetType==='artist')return true;
+    if(cat.targetType==='group'&&!(item.isGroupWork||item.groupId||item.artistType==='group'))return false;
     if(cat.targetType==='album'&&kind(item)!=='album')return false;
     if((cat.targetType==='track'||cat.targetType==='mv')&&kind(item)!=='track')return false;
     if(cat.targetType==='mv'&&!((Number(item.mvN)||0)>0||item.hasLyricMV||item.hasRealMV))return false;
     var g=item.gnr||item.g||item.genres||[],genres=Array.isArray(g)?g.map(String):String(g).split(/[,/、|]/);
     if(cat.targetGenre&&cat.targetGenre!=='ALL'&&genres.indexOf(String(cat.targetGenre))<0)return false;
-    if(cat.targetForm==='solo'&&item.isCollab)return false;
+    if(cat.targetForm==='solo'&&(item.isCollab||item.isGroupWork||item.groupId||item.artistType==='group'))return false;
     if(cat.targetForm==='collab'&&!item.isCollab)return false;
     if(cat.targetSongType&&cat.targetSongType!=='ALL'&&item.sType!==cat.targetSongType)return false;
     return true;
@@ -26674,7 +26777,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
     var recordIds={},recordNames={},seen={},out=[];works().forEach(function(x){if(!x)return;if(x.id)recordIds[String(x.id)]=true;if(x.n)recordNames[norm(x.n)]=true;});
     pool().concat(albums()).forEach(function(item,index){
       if(!item||!item.id||!belongsToPlayer(item,recordNames,recordIds))return;
-      if(seen[String(item.id)])return;seen[String(item.id)]=true;item.isMe=true;item.artist=item.artist||String(player().s||'');item.artistName=item.artistName||item.artist;
+      if(seen[String(item.id)])return;seen[String(item.id)]=true;item.isMe=true;item.playerOwned=true;item.artist=item.artist||String(player().s||'');item.artistName=item.artistName||item.artist;
       if(!item.releaseYear)item.releaseYear=Number(item.t_y||currentTime().y);if(!item.t_y)item.t_y=item.releaseYear;
       if(!item.releaseMonth)item.releaseMonth=Number(item.t_m||currentTime().m);if(!item.releaseWeek)item.releaseWeek=Number(item.t_w||currentTime().w);
       out.push({item:item,index:index,stamp:stamp(item,index)});
@@ -27067,8 +27170,27 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
     });
   }
   function applyOverlay(modal,content){
-    if(modal){var box=modal.querySelector('.modal-box');if(box){box.style.background='rgba(0,0,0,.72)';box.style.backdropFilter='blur(5px)';box.style.color='#f8fafc';}}
-    if(content){content.style.background='transparent';content.style.color='#f8fafc';markPlayerRelated(content);}
+    if(modal){
+      modal.setAttribute('data-award-modal','1');
+      var box=modal.querySelector('.modal-box');
+      if(box){
+        box.style.background='rgba(0,0,0,.78)';
+        box.style.backdropFilter='blur(5px)';
+        box.style.color='#fff';
+        box.style.borderColor='rgba(255,255,255,.24)';
+      }
+    }
+    if(content){
+      content.style.background='transparent';
+      content.style.color='#fff';
+      content.querySelectorAll('button').forEach(function(button){
+        button.setAttribute('data-award-action','1');
+        button.style.background='#facc15';
+        button.style.color='#111827';
+        button.style.borderColor='#fde047';
+      });
+      markPlayerRelated(content);
+    }
   }
   var priorNomination=window.viewNominationsUI;
   window.viewNominationsUI=function(){

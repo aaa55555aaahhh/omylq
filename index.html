@@ -26543,6 +26543,56 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   normalizeAwardEligibility();updateNewcomerLedger();
 })();
 </script>
+<script>
+// Final Billboard composition authority. Legacy chart formulas may remain for
+// compatibility, but all displayed Hot 100 parts use this single calculation.
+(function installFinalBillboardCompositionAuthority(){
+  if(window.__finalBillboardCompositionAuthorityInstalled)return;
+  window.__finalBillboardCompositionAuthorityInstalled=true;
+  function num(v){v=Number(v);return Number.isFinite(v)&&v>0?v:0;}
+  function salesUnits(t){
+    var explicit=Math.max(0,num(t&&t.salesWeek),num(t&&t.weeklySales),num(t&&t.pureSalesWeek),num(t&&t.physicalSalesWeek),num(t&&t.directSalesWeek));
+    if(explicit>0)return explicit;
+    var total=num(t&&t.slTotal),age=Math.max(1,num(t&&t.weeks));
+    return Math.min(5000,Math.floor(total/(age*20)));
+  }
+  function composition(t){
+    t=t||{};
+    var globalWeek=Math.max(num(t.stmGlobal_Week),num(t.stmGlobal));
+    var usWeek=num(t.stmUS_Week)||globalWeek*.35;
+    var stream=Math.max(0,usWeek/125);
+    var sales=Math.max(0,salesUnits(t)*10);
+    var radioAudience=num(t.radioAud);
+    // Older saves have no radio field. Derive a modest baseline instead of 0,
+    // while preserving explicit radio values and payola increments.
+    if(radioAudience<=0&&usWeek>0)radioAudience=Math.max(.05,Math.min(3,usWeek/4000000*(num(t.Spub)||50)/50));
+    var radio=Math.max(0,radioAudience*3);
+    var total=stream+sales+radio;
+    return {stream:stream,sales:sales,radio:radio,total:total,usWeek:usWeek,salesUnits:salesUnits(t),radioAudience:radioAudience};
+  }
+  function parts(t){
+    var x=composition(t),raw=x.total>0?[x.stream/x.total*100,x.sales/x.total*100,x.radio/x.total*100]:[0,0,0];
+    var p=raw.map(function(v){return Math.round(v*10)/10;}),remainder=Math.round((100-p[0]-p[1]-p[2])*10)/10;
+    if(x.total>0){var largest=raw.indexOf(Math.max.apply(null,raw));p[largest]=Math.max(0,Math.round((p[largest]+remainder)*10)/10);}
+    // A visible nonzero source must never be rendered as 0.0% due to rounding.
+    [x.stream,x.sales,x.radio].forEach(function(value,i){if(value>0&&p[i]===0){p[i]=.1;var j=p.indexOf(Math.max.apply(null,p));if(j===i)j=(i+1)%3;p[j]=Math.max(0,Math.round((p[j]-.1)*10)/10);}});
+    var sum=Math.round((p[0]+p[1]+p[2])*10)/10;if(sum!==100&&x.total>0){var j=raw.indexOf(Math.max.apply(null,raw));p[j]=Math.max(0,Math.round((p[j]+100-sum)*10)/10);}
+    return {stream:x.stream,sales:x.sales,radio:x.radio,total:x.total,pctStm:p[0],pctSales:p[1],pctRadio:p[2],salesUnits:x.salesUnits,radioAudience:x.radioAudience};
+  }
+  window.calculateFinalBillboardComposition=composition;
+  window.getBillboardParts=function(t){var x=parts(t);return {stream:x.stream,sales:x.sales,radio:x.radio,total:x.total,pctStm:x.pctStm,pctSales:x.pctSales,pctRadio:x.pctRadio};};
+  function apply(t){var x=parts(t);t.hot100PaidEquivalent=x.stream*.7;t.hot100FreeEquivalent=x.stream*.3;t.hot100SalesEquivalent=x.sales;t.hot100RadioEquivalent=x.radio;t.hot100ConsumptionTotal=x.total;t._pctStm=x.pctStm;t._pctSales=x.pctSales;t._pctRadio=x.pctRadio;t._bbPtsExact=Math.max(0,Math.round(x.total));t._chartPts=t._bbPtsExact;t._chartStr=t._bbPtsExact.toLocaleString()+' Pts';}
+  window.refreshFinalBillboardParts=function(){
+    var list=[];try{list=Array.isArray(trackPool)?trackPool:[];}catch(e){list=Array.isArray(window.trackPool)?window.trackPool:[];}
+    list.filter(function(t){return t&&t.type==='track';}).forEach(apply);return list;
+  };
+  var oldRender=window.renderChart;
+  window.renderChart=function(){var r=typeof oldRender==='function'?oldRender.apply(this,arguments):undefined;window.refreshFinalBillboardParts();if(typeof curChartPlatform==='undefined'||curChartPlatform==='BB')setTimeout(function(){window.refreshFinalBillboardParts();},0);return r;};
+  var oldAdv=window.advTime;
+  window.advTime=function(){var r=typeof oldAdv==='function'?oldAdv.apply(this,arguments):undefined;window.refreshFinalBillboardParts();return r;};
+  window.refreshFinalBillboardParts();
+})();
+</script>
 </body>
 <script>
 // Portable JSON save transfer: works in normal browsers and file:// pages.
@@ -27015,6 +27065,80 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   var oldRender=window.renderCompanyHub;if(typeof oldRender==='function')window.renderCompanyHub=function(){var r=oldRender.apply(this,arguments);setTimeout(addOfficeButton,0);return r;};
   var oldEnsure=window.ensureCompanyState;if(typeof oldEnsure==='function')window.ensureCompanyState=function(){var r=oldEnsure.apply(this,arguments);ensure();return r;};
   setTimeout(function(){ensure();addOfficeButton();},500);
+})();
+</script>
+<script>
+// Absolute last Billboard authority: must run after every legacy override.
+(function(){
+  function n(v){v=Number(v);return Number.isFinite(v)&&v>0?v:0;}
+  function pool(){try{return Array.isArray(trackPool)?trackPool:(Array.isArray(window.trackPool)?window.trackPool:[]);}catch(e){return Array.isArray(window.trackPool)?window.trackPool:[];}}
+  function composition(t){
+    var us=n(t&&t.stmUS_Week)||n(t&&t.stmGlobal_Week)*.35;
+    var explicit=Math.max(n(t&&t.salesWeek),n(t&&t.weeklySales),n(t&&t.pureSalesWeek),n(t&&t.physicalSalesWeek),n(t&&t.directSalesWeek));
+    var units=explicit||Math.min(5000,Math.floor(n(t&&t.slTotal)/(Math.max(1,n(t&&t.weeks))*20)));
+    var radio=n(t&&t.radioAud)||Math.max(.05,Math.min(3,us/4000000*(n(t&&t.Spub)||50)/50));
+    // Billboard convention: one million radio audience contributes about 333
+    // points; the old layer used 3 and made radio effectively invisible.
+    var stream=us/125,sales=units*10,radioPts=radio*333,total=stream+sales+radioPts;
+    var raw=total?[stream/total*100,sales/total*100,radioPts/total*100]:[0,0,0],p=raw.map(function(x){return Math.round(x*10)/10;}),sum=p[0]+p[1]+p[2],i=raw.indexOf(Math.max.apply(null,raw));
+    if(total)p[i]=Math.round((p[i]+100-sum)*10)/10;
+    if(total&&radioPts>0&&p[2]===0){p[2]=.1;p[0]=Math.max(0,Math.round((p[0]-.1)*10)/10);}
+    return {stream:stream,sales:sales,radio:radioPts,total:total,pctStm:p[0],pctSales:p[1],pctRadio:p[2],salesUnits:units,radioAudience:radio};
+  }
+  function apply(t){var x=composition(t);t._pctStm=x.pctStm;t._pctSales=x.pctSales;t._pctRadio=x.pctRadio;t.hot100PaidEquivalent=x.stream*.7;t.hot100FreeEquivalent=x.stream*.3;t.hot100SalesEquivalent=x.sales;t.hot100RadioEquivalent=x.radio;t.hot100ConsumptionTotal=x.total;t._bbPtsExact=Math.round(x.total);t._chartPts=t._bbPtsExact;t._chartStr=t._bbPtsExact.toLocaleString()+' Pts';return x;}
+  var finalParts=function(t){var x=apply(t||{});return {stream:x.stream,sales:x.sales,radio:x.radio,total:x.total,pctStm:x.pctStm,pctSales:x.pctSales,pctRadio:x.pctRadio};};
+  window.getBillboardParts=finalParts;
+  try{Object.defineProperty(window,'getBillboardParts',{configurable:false,get:function(){return finalParts;},set:function(){}});}catch(e){}
+  window.calculateFinalBillboardComposition=composition;
+  window.refreshFinalBillboardParts=function(){pool().filter(function(t){return t&&t.type==='track';}).forEach(apply);};
+  window.refreshFinalBillboardParts();
+})();
+</script>
+<script>
+// Unified feature authority: migrate legacy state and route company, fashion,
+// and award actions through one stable runtime layer.
+(function installUnifiedFeatureAuthority(){
+  if(window.__unifiedFeatureAuthorityInstalled)return;
+  window.__unifiedFeatureAuthorityInstalled=true;
+  function player(){try{if(typeof ad!=='undefined'&&ad)return ad;}catch(e){}return window.ad||{};}
+  function arr(v){return Array.isArray(v)?v:[];}
+  function save(){if(typeof window.saveGameImmediate==='function')window.saveGameImmediate();else if(typeof window.saveGame==='function')window.saveGame();}
+  function clock(){try{if(typeof time!=='undefined'&&time)return time;}catch(e){}return window.time||{y:2026,m:1,w:1};}
+  function migrate(){
+    var p=player();if(!p)return;
+    if(!p.companyRoutes||typeof p.companyRoutes!=='object')p.companyRoutes={};
+    if(!Array.isArray(p.ownedCompanies))p.ownedCompanies=[];
+    if(!p.companyFeatureState||typeof p.companyFeatureState!=='object')p.companyFeatureState={};
+    ['record','acting','group'].forEach(function(type){var route=p.companyRoutes[type]||{};p.companyRoutes[type]=route;route.route=route.route||'stay_original';route.history=arr(route.history);route.events=arr(route.events);});
+    if(!p.fashionOffice||typeof p.fashionOffice!=='object')p.fashionOffice={talks:[],offers:[],titleRequests:[],coutureLoans:[]};
+    ['talks','offers','titleRequests','coutureLoans'].forEach(function(k){p.fashionOffice[k]=arr(p.fashionOffice[k]);});
+    if(!p.awardData||typeof p.awardData!=='object')p.awardData={};
+    ['submissions','nominations','finished'].forEach(function(k){if(!p.awardData[k]||typeof p.awardData[k]!=='object')p.awardData[k]={};});
+    if(!p.awardData.compatibilityVersion)p.awardData.compatibilityVersion=2;
+    return p;
+  }
+  window.migrateUnifiedFeatureState=migrate;
+  window.openUnifiedCompanyCenter=function(){
+    var p=migrate(),title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo');if(!p||!title||!content||!modal)return;
+    var names={record:'唱片公司',acting:'经纪/演艺公司',group:'团体公司'},routes={stay_original:'留在原公司',full_company:'全资完整娱乐公司',parent_label:'母公司内厂牌',independent_label:'独立厂牌',joint_label:'合资厂牌',independent_artist:'纯独立音乐人'};
+    content.innerHTML='<div class="card" style="font-size:12px;line-height:1.8;"><b>公司与厂牌控制中心</b><br>旧合约、厂牌路线、创建公司和董事长谈判统一从这里进入。</div>'+['record','acting','group'].map(function(type){var r=p.companyRoutes[type];return '<div class="card"><b>'+names[type]+'</b><br><span style="font-size:11px;color:#666;">当前路线：'+(routes[r.route]||r.route)+' · 事件记录 '+r.events.length+' 条</span><button class="sec" onclick="openChairmanOffice(\''+type+'\')">董事长办公室</button></div>';}).join('')+'<button onclick="openCreateCompany()">创建我的公司</button>';
+    title.innerText='公司控制中心';modal.classList.add('open');
+  };
+  window.openFashionEditorOffice=function(){
+    var p=migrate(),title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo');if(!p||!title||!content||!modal)return;
+    function request(kind,label){var note=prompt('请输入要向主编/品牌方提出的请求：',label);if(note===null)return;p.fashionOffice.talks.push({kind:kind,text:note,year:clock().y,month:clock().m});var ok=Math.random()<Math.min(.92,.25+Number(p.fashionRelationship||50)/150);if(ok){p.fashionOffice.offers.push({kind:kind,text:note,year:clock().y,month:clock().m,status:'accepted'});save();alert('对方接受了请求：'+note);}else{save();alert('对方暂时没有接受：'+note);}}
+    content.innerHTML='<div class="card" style="font-size:12px;line-height:1.8;"><b>主编办公室</b><br>这里可以直接谈 Title、广告、地区广告、高定借用和杂志拍摄，不再依赖随机偶遇。</div><button onclick="openFashionEditorOfficeAction(\'title\',\'升级我的 Title\')">谈 Title</button><button class="sec" onclick="openFashionEditorOfficeAction(\'ad\',\'争取一支广告\')">谈广告</button><button class="sec" onclick="openFashionEditorOfficeAction(\'regionalAd\',\'争取地区广告\')">谈地区广告</button><button class="sec" onclick="openFashionEditorOfficeAction(\'couture\',\'申请借一套高定\')">谈高定</button><div class="card" style="font-size:11px;color:#666;">历史谈判：'+p.fashionOffice.talks.length+' 次 · 已获得资源：'+p.fashionOffice.offers.length+' 项</div>';
+    window.openFashionEditorOfficeAction=request;title.innerText='时尚资源办公室';modal.classList.add('open');
+  };
+  function mount(){
+    migrate();
+    var company=document.getElementById('companyHubContent');if(company&&!company.querySelector('[data-unified-company]')){var b=document.createElement('button');b.className='sec';b.dataset.unifiedCompany='1';b.textContent='公司控制中心';b.onclick=window.openUnifiedCompanyCenter;company.insertBefore(b,company.firstChild);}
+    var fashion=document.getElementById('mapFashion');if(fashion&&!fashion.querySelector('[data-fashion-office]')){var b2=document.createElement('button');b2.className='sec';b2.dataset.fashionOffice='1';b2.textContent='主编办公室';b2.onclick=window.openFashionEditorOffice;fashion.insertBefore(b2,fashion.firstChild);}
+  }
+  var oldStart=window.startGame;if(typeof oldStart==='function')window.startGame=function(){var r=oldStart.apply(this,arguments);setTimeout(mount,80);return r;};
+  var oldLoad=window.loadGame;if(typeof oldLoad==='function')window.loadGame=function(){var r=oldLoad.apply(this,arguments),done=function(){migrate();setTimeout(mount,80);};if(r&&typeof r.then==='function')return r.then(function(v){done();return v;});done();return r;};
+  var oldAdv=window.advTime;if(typeof oldAdv==='function')window.advTime=function(){var r=oldAdv.apply(this,arguments);migrate();return r;};
+  setInterval(mount,1200);migrate();
 })();
 </script>
 </html>

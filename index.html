@@ -1357,6 +1357,7 @@ setTimeout(function installFinalUserRequestedFixes(){
         }).join("");
         $("mInfoTitle").innerText = "📢 报名奖项";
         $("mInfoContent").innerHTML = html;
+        applyAwardModalTheme();
         $("mInfo").classList.add("open");
     };
     window.saveAwardBranchSubmission=function(awdId,catId,year,button){
@@ -1368,6 +1369,21 @@ setTimeout(function installFinalUserRequestedFixes(){
     window.saveFinalAwardSubmission=function(awdId,year,button){var branch=button&&button.closest(".awardBranchSubmission");if(branch)return saveAwardBranchSubmission(awdId,branch.dataset.cat,year,button);};
     window.__finalAwardSubmitUI=window.openAwardSubmitUI;
     window.__finalAwardBranchSave=window.saveAwardBranchSubmission;
+    function applyAwardModalTheme(){
+        var modal=$("mInfo"),box=modal&&modal.querySelector(".modal-box"),content=$("mInfoContent");
+        if(!box||!content)return;
+        modal.classList.add("award-transparent-modal");
+        box.style.background="rgba(8,10,14,.82)";
+        box.style.color="#f8fafc";
+        box.style.border="1px solid rgba(255,255,255,.18)";
+        box.style.boxShadow="0 20px 70px rgba(0,0,0,.42)";
+        content.style.color="#f8fafc";
+        content.querySelectorAll(".card").forEach(function(card){
+            card.style.background="rgba(255,255,255,.08)";
+            card.style.borderColor="rgba(255,255,255,.16)";
+            card.style.color="#f8fafc";
+        });
+    }
     window.viewNominationsUI = function(awardId){
         if (typeof window.reconcileAwardSubmissionEligibility === 'function') window.reconcileAwardSubmissionEligibility();
         ensureAwardDataFinal();
@@ -1384,6 +1400,7 @@ setTimeout(function installFinalUserRequestedFixes(){
         }).join("");
         $("mInfoTitle").innerText = "📜 查看提名奖项";
         $("mInfoContent").innerHTML = html || "暂无提名。";
+        applyAwardModalTheme();
         $("mInfo").classList.add("open");
     };
     window.viewAwardHistoryUI = function(awardId){
@@ -1391,6 +1408,7 @@ setTimeout(function installFinalUserRequestedFixes(){
         var records = A(historyAwards).filter(function(x){return !awd || String(x).indexOf(awd.name)>=0;});
         $("mInfoTitle").innerText = "🏆 " + (awd ? awd.name + "历届获奖" : "查看历届获奖");
         $("mInfoContent").innerHTML = `<div style="max-height:70vh;overflow-y:auto;">${records.length ? records.map(function(x){return `<div class="card" style="font-size:12px;line-height:1.7;">${x}</div>`;}).join("") : "暂无该奖项历史获奖记录"}</div>`;
+        applyAwardModalTheme();
         $("mInfo").classList.add("open");
     };
 
@@ -1677,12 +1695,21 @@ setTimeout(function installFinalUserRequestedFixes(){
         t.promoCount=rec.total; t.promoCountThisWeek=rec.week;
         return rec;
     }
-    window.performSongPromoById = function(id, showName){
+    window.performSongPromoById = function(id, showName, options){
+        options = options || {};
         var t = findTrack(id); if(!t) return alert("找不到这首歌。");
+        // 打歌舞台按周运行：首次安排时选择 1-4 周，后续由周结算自动推进。
+        if(!options.weekly && !t.promoPlan){
+            var requested = window.prompt("本次打歌舞台持续几周？请输入 1、2、3 或 4。", "1");
+            if(requested === null) return false;
+            var duration = Math.max(1, Math.min(4, Math.floor(Number(requested)||1)));
+            t.promoPlan = { totalWeeks: duration, remainingWeeks: duration, showName: showName||"电视舞台", startedAt: time.y+"_"+time.m+"_"+time.w };
+        }
+        var plan = t.promoPlan || null;
+        if(plan && plan.remainingWeeks <= 0){ delete t.promoPlan; plan = null; }
         var rec = promoRecord(t);
-        if(rec.week >= 7) return alert("《"+t.n+"》本周通告已排满，请下周再来。");
-        if(typeof costEnergy === "function" && !costEnergy(10)) return;
-        if(typeof advHour === "function") advHour(24);
+        if(!options.auto && typeof costEnergy === "function" && !costEnergy(10)) return false;
+        if(!options.auto && typeof advHour === "function") advHour(24);
         var base = Math.max(50000, Number(t.stmGlobal_Week||0)*7 || Number(t.stmGlobal||0));
         var ownFreshness = rec.total < 5 ? (1-rec.total*0.03) : Math.max(0.5,0.88*Math.pow(0.94,rec.total-4));
         var singleOrder = Math.max(1,Number(t.albumSingleNo||1));
@@ -1715,9 +1742,14 @@ setTimeout(function installFinalUserRequestedFixes(){
             liveVideo.totalComments=Math.max(Number(liveVideo.totalComments||0),Math.floor(liveVideo.likes*0.12));
         }
         rec.total++; rec.week++; t.promoCount=rec.total; t.promoCountThisWeek=rec.week; t._independentPromoConfirmed=true;
+        if(plan){
+            plan.remainingWeeks = Math.max(0, Number(plan.remainingWeeks||1)-1);
+            plan.lastSettledWeek = options.settlementToken || (time.y+"_"+time.m+"_"+time.w);
+            if(plan.remainingWeeks===0) t.promoPlanCompletedAt = time.y+"_"+time.m+"_"+time.w;
+        }
         if(typeof updatePeakRanks === "function") updatePeakRanks();
         saveGame();
-        alert((isGod?"神级现场爆发！\n":isCrash?"翻车现场！歌曲评分与唱跳 Rap 状态没有撑住舞台。\n":"打单现场完成！\n")+"《"+t.n+"》在"+(showName||"电视舞台")+"增加流媒 "+extra.toLocaleString()+"。\n该歌曲打单次数："+rec.total+"\n现场新鲜度："+Math.round(ownFreshness*100)+"%　专辑时代新鲜度："+Math.round(eraFreshness*100)+"%"+(isGod?"\n神级现场不受300万上限限制。":""));
+        if(!options.auto) alert((isGod?"神级现场爆发！\n":isCrash?"翻车现场！歌曲评分与唱跳 Rap 状态没有撑住舞台。\n":"打歌舞台第 "+(plan ? (plan.totalWeeks-plan.remainingWeeks)+" 周" : "1 周")+"完成！\n")+"《"+t.n+"》在"+(showName||"电视舞台")+"增加流媒 "+extra.toLocaleString()+"。\n"+(plan&&plan.remainingWeeks?"剩余舞台周数："+plan.remainingWeeks+" 周\n":"舞台计划已结束。\n")+"现场新鲜度："+Math.round(ownFreshness*100)+"%　专辑时代新鲜度："+Math.round(eraFreshness*100)+"%"+(isGod?"\n神级现场不受300万上限限制。":""));
         return true;
     };
     window.promoAlbSong = function(id){ return performSongPromoById(id,"现场通告"); };
@@ -25878,7 +25910,38 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
     var songs=(typeof trackPool!=='undefined'&&Array.isArray(trackPool)?trackPool:[]),stamp=[Number(time&&time.y||0),Number(time&&time.m||0),Number(time&&time.w||0)].join('_');
     songs.forEach(function(t){if(!t||t.type!=='track'||Number(t.Spub||0)<=80||t._goodSoundEffectStamp===stamp)return;var score=Math.max(0,Math.min(20,Number(t.Spub)-80)),multiplier=1+score/20*.60,base=Math.max(0,Number(t.stmGlobal_Week||0),Number(t.stmGlobal_Day||0)*7);if(base<=0)return;var gain=Math.max(1,Math.floor(base*(multiplier-1)));t.stmGlobal_Week=base+gain;t.stmGlobal_Day=Math.max(1,Math.floor(t.stmGlobal_Week/7));t.stmGlobal=Math.max(0,Number(t.stmGlobal||0))+gain;t.goodSoundEffect={active:true,stamp:stamp,score:Number(t.Spub),multiplier:multiplier,gain:gain};t._goodSoundEffectStamp=stamp;});
   }
+  function settleWeeklyPromotionPlans(weekCount){
+    var count=Math.max(1,Math.floor(Number(weekCount)||1));
+    for(var step=0;step<count;step++){
+      (Array.isArray(trackPool)?trackPool:[]).slice().forEach(function(t){
+        if(!t||!t.isMe||!t.promoPlan||Number(t.promoPlan.remainingWeeks||0)<=0)return;
+        var key=[Number(time&&time.y||0),Number(time&&time.m||0),Number(time&&time.w||0)].join('_')+'_'+step;
+        if(t.promoPlan.lastSettledWeek===key)return;
+        performSongPromoById(t.id,t.promoPlan.showName||'电视舞台',{weekly:true,auto:true,settlementToken:key});
+      });
+    }
+  }
+  function checkCompanyStageOpportunity(){
+    if(typeof ad==='undefined'||!ad)return;
+    var fans=Number(ad.st&&ad.st.f||0), heat=Number(ad.publicFavor||0), score=Math.max(0,Number(ad.Geffect||1))*35;
+    var careerHeat=Math.min(100, fans/1000000*18+heat*.6+score);
+    if(careerHeat<72)return;
+    if(!ad.stageOpportunityState||typeof ad.stageOpportunityState!=='object')ad.stageOpportunityState={};
+    var key=[Number(time&&time.y||0),Number(time&&time.m||0),Number(time&&time.w||0)].join('_');
+    if(ad.stageOpportunityState.lastKey===key)return;
+    var mails=(typeof currentMails!=='undefined'&&Array.isArray(currentMails))?currentMails:(Array.isArray(window.currentMails)?window.currentMails:[]);
+    var direct=mails.some(function(m){return m&&(m.id==='c1'||/Coachella|科切拉|超级碗|世界杯/.test(String(m.title||'')));});
+    if(direct){ad.stageOpportunityState.lastKey=key;return;}
+    var grade=Math.max(0,Number(ad.Geffect||1)),bigChance=Math.min(.18,.025+Math.max(0,grade-1)*.08),big=Math.random()<bigChance;
+    if(Math.random()>.42)return;
+    var venue=big?'国际大型音乐节主舞台':'地区大型音乐节 / 城市音乐节';
+    ad.stageOpportunityState.lastKey=key;ad.stageOpportunityState.venue=venue;ad.stageOpportunityState.source='company_relation';
+    if(!Array.isArray(window.currentMails))window.currentMails=[];
+    window.currentMails.unshift({id:'company_stage_'+key,title:'公司关系安排舞台：'+venue,sender:ad.co&&ad.co!=='独立'?ad.co:'经纪团队',content:'你的热度达到门槛，公司希望动用行业关系安排一次舞台。该机会来自公司资源，不等同于凭实力获得的官方邀请。'});
+    alert('公司舞台机会\n你的热度达到门槛，'+(ad.co&&ad.co!=='独立'?ad.co:'经纪团队')+'表示愿意动用关系，安排你参加：'+venue+'。\n这是关系资源机会；凭实力获得的官方大舞台邀请仍会独立结算。');
+  }
   var previousAdvance=window.advTime;window.advTime=function(){var result=typeof previousAdvance==='function'?previousAdvance.apply(this,arguments):undefined;applyGoodSoundEffect();return result;};
+  var previousWeeklyAdvance=window.advTime;window.advTime=function(weeks,showMsg){var result=typeof previousWeeklyAdvance==='function'?previousWeeklyAdvance.apply(this,arguments):undefined;settleWeeklyPromotionPlans(weeks);checkCompanyStageOpportunity();return result;};
   window.applyGoodSoundEffect=applyGoodSoundEffect;
   // Every legacy promotion/MV/live-show handler writes raw streams directly.
   // Normalize immediately after those handlers finish so displayed and ranked

@@ -26428,8 +26428,23 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   function isNewcomer(cat){return !!cat&&(/新人|new\s*artist|newcomer|bna/i.test(String(cat.name||''))||/bna/i.test(String(cat.id||'')));}
   function isSongwriting(cat){return !!cat&&(cat.focus==='songwriting'||/创作|songwriter|songwriting/i.test(String(cat.name||'')));}
   function cycleKey(award,year){return String(year)+'_'+String(award&&award.id||'award');}
+  function submissionRecord(award,year){
+    var d=state(),all=d&&d.submissions||{},exact=all[cycleKey(award,year)];
+    if(exact)return exact;
+    var aid=String(award&&award.id||''),target=Number(year||now().y||2026),fallback=null;
+    Object.keys(all).forEach(function(key){
+      if(fallback||key.slice(-(aid.length+1))!==('_'+aid))return;
+      var y=Number(key.slice(0,key.length-aid.length-1));
+      if(Number.isFinite(y)&&Math.abs(y-target)<=1)fallback=all[key];
+    });
+    return fallback||{};
+  }
   function submittedIds(award,cat,year){
-    var d=state(),sub=d&&d.submissions&&d.submissions[cycleKey(award,year)]||{},c=sub.categories&&sub.categories[cat.id];
+    var sub=submissionRecord(award,year),c=sub.categories&&sub.categories[cat.id];
+    if(!Array.isArray(c)){
+      var match=arr(award&&award.categories).find(function(item){return item&&((item.targetType===cat.targetType&&item.name===cat.name)||item.name===cat.name);});
+      if(match&&sub.categories&&Array.isArray(sub.categories[match.id]))c=sub.categories[match.id];
+    }
     if(Array.isArray(c))return c.map(String);
     var legacy=cat.targetType==='track'?sub.track:cat.targetType==='album'?sub.album:cat.targetType==='mv'?sub.mv:cat.targetType==='artist'&&sub.artist?'player_self':'';
     return legacy?[String(legacy)]:[];
@@ -26504,6 +26519,11 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   window.getAwardTop5=function(award,cat,year){
     normalizeAwardEligibility();updateNewcomerLedger();
     var rows=typeof priorTop==='function'?arr(priorTop.apply(this,arguments)):[];
+    submittedIds(award,cat,year).forEach(function(id){
+      if(id==='player_self'){if(!rows.some(function(x){return x&&x.isMe;}))rows.push({id:'player_self',n:playerName(),artist:playerName(),isMe:true,score:Number(career()&&career().st&&career().st.f||0)});return;}
+      var item=tracks().find(function(x){return x&&String(x.id)===String(id);});
+      if(item&&!rows.some(function(x){return x&&String(x.id)===String(item.id);}))rows.push({id:item.id,n:item.n,artist:playerName(),isMe:true,playerWritingCredit:isSongwritingCredit(item),score:Number(item.Spub||50)*10000+Number(item.slTotal||0)});
+    });
     if(isNewcomer(cat)&&newcomerBlocked(award,year))rows=rows.filter(function(x){return !(x&&((x.isMe)||x.id==='player_self'||x.artist===playerName()));});
     if(isSongwriting(cat)){
       var submitted=submittedIds(award,cat,year);
@@ -26524,6 +26544,72 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
 })();
 </script>
 </body>
+<script>
+// Portable JSON save transfer: works in normal browsers and file:// pages.
+(function installFinalAwardCandidateCompatibility(){
+  if(window.__finalAwardCandidateCompatibilityInstalled)return;
+  window.__finalAwardCandidateCompatibilityInstalled=true;
+  function arr(v){return Array.isArray(v)?v:[];}
+  function player(){try{if(typeof ad!=='undefined'&&ad)return ad;}catch(e){}return window.ad||{};}
+  function pool(){try{if(typeof trackPool!=='undefined'&&Array.isArray(trackPool))return trackPool;}catch(e){}return arr(window.trackPool);}
+  function albums(){try{if(typeof albs!=='undefined'&&Array.isArray(albs))return albs;}catch(e){}return arr(window.albs);}
+  function works(){try{if(typeof myWorks!=='undefined'&&Array.isArray(myWorks))return myWorks;}catch(e){}return arr(window.myWorks);}
+  function registry(){try{if(typeof awardRegistry!=='undefined'&&Array.isArray(awardRegistry))return awardRegistry;}catch(e){}return arr(window.awardRegistry);}
+  function esc(v){return typeof E==='function'?E(v):String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function norm(v){return String(v==null?'':v).replace(/\s+/g,'').replace(/[《》【】\[\]]/g,'').replace(/(单曲|专辑)$/,'').toLowerCase();}
+  function currentTime(){try{if(typeof time!=='undefined'&&time)return time;}catch(e){}return window.time||{y:2026,m:1,w:1};}
+  function belongsToPlayer(item,recordNames,recordIds){
+    var p=player(),name=String(p.s||'');
+    if(!item)return false;
+    return !!item.isMe||item.playerOwned===true||item.writtenByPlayer===true||String(item.artist||'')===name||String(item.artistName||'')===name||String(item.owner||'')===name||recordIds[String(item.id)]||recordNames[norm(item.n)];
+  }
+  function stamp(item,index){
+    var y=Number(item.releaseYear||item.t_y||(item.releaseDate&&item.releaseDate.y)||0),m=Number(item.releaseMonth||item.t_m||(item.releaseDate&&item.releaseDate.m)||0),w=Number(item.releaseWeek||item.t_w||(item.releaseDate&&item.releaseDate.w)||0),created=Number(item._entityCreatedAt||item.createdAt||0);
+    return y*10000000000+m*100000000+w*100000+created+index;
+  }
+  function kind(item){return item&&item.type==='album'?'album':'track';}
+  function canUse(item,cat){
+    if(!item||!cat)return false;
+    if(cat.targetType==='artist')return true;
+    if(cat.targetType==='album'&&kind(item)!=='album')return false;
+    if((cat.targetType==='track'||cat.targetType==='mv')&&kind(item)!=='track')return false;
+    if(cat.targetType==='mv'&&!((Number(item.mvN)||0)>0||item.hasLyricMV||item.hasRealMV))return false;
+    var g=item.gnr||item.g||item.genres||[],genres=Array.isArray(g)?g.map(String):String(g).split(/[,/、|]/);
+    if(cat.targetGenre&&cat.targetGenre!=='ALL'&&genres.indexOf(String(cat.targetGenre))<0)return false;
+    if(cat.targetForm==='solo'&&item.isCollab)return false;
+    if(cat.targetForm==='collab'&&!item.isCollab)return false;
+    if(cat.targetSongType&&cat.targetSongType!=='ALL'&&item.sType!==cat.targetSongType)return false;
+    return true;
+  }
+  window.getAllAwardPlayerWorks=function(){
+    var recordIds={},recordNames={},seen={},out=[];works().forEach(function(x){if(!x)return;if(x.id)recordIds[String(x.id)]=true;if(x.n)recordNames[norm(x.n)]=true;});
+    pool().concat(albums()).forEach(function(item,index){
+      if(!item||!item.id||!belongsToPlayer(item,recordNames,recordIds))return;
+      if(seen[String(item.id)])return;seen[String(item.id)]=true;item.isMe=true;item.artist=item.artist||String(player().s||'');item.artistName=item.artistName||item.artist;
+      if(!item.releaseYear)item.releaseYear=Number(item.t_y||currentTime().y);if(!item.t_y)item.t_y=item.releaseYear;
+      if(!item.releaseMonth)item.releaseMonth=Number(item.t_m||currentTime().m);if(!item.releaseWeek)item.releaseWeek=Number(item.t_w||currentTime().w);
+      out.push({item:item,index:index,stamp:stamp(item,index)});
+    });
+    return out.sort(function(a,b){return b.stamp-a.stamp;}).map(function(x){return x.item;});
+  };
+  function savedIds(award,cat,year){var d=player().awardData||{},sub=d.submissions&&d.submissions[String(year)+'_'+award.id]||{},ids=sub.categories&&sub.categories[cat.id];if(Array.isArray(ids))return ids.map(String);var legacy=cat.targetType==='track'?sub.track:cat.targetType==='album'?sub.album:cat.targetType==='mv'?sub.mv:'';return legacy?[String(legacy)]:[];}
+  function patchCards(){
+    var list=window.getAllAwardPlayerWorks();
+    document.querySelectorAll('.awardSubmissionCard[data-award]').forEach(function(card){
+      var award=registry().find(function(x){return x&&String(x.id)===String(card.dataset.award);}),year=Number(card.dataset.year||currentTime().y);if(!award)return;
+      card.querySelectorAll('.awardBranchSubmission[data-cat]').forEach(function(branch){
+        var cat=arr(award.categories).find(function(x){return x&&String(x.id)===String(branch.dataset.cat);});if(!cat||cat.targetType==='artist'||cat.targetType==='cover')return;
+        var selected=savedIds(award,cat,year),host=branch.querySelector('.awardCategoryEntry')&&branch.querySelector('.awardCategoryEntry').closest('div');if(!host)return;
+        var candidates=list.filter(function(item){return canUse(item,cat);});
+        host.dataset.awardCandidateCompat='1';host.innerHTML=candidates.map(function(item){return '<label style="display:flex;align-items:center;gap:7px;font-size:12px;padding:4px 0;"><input class="awardCategoryEntry" data-cat="'+esc(cat.id)+'" type="checkbox" value="'+esc(item.id)+'" '+(selected.indexOf(String(item.id))>=0?'checked':'')+' style="width:auto;margin:0;">'+esc(item.n||'未命名作品')+' <span style="font-size:10px;color:#15803d;">最新发行作品</span></label>';}).join('')||'<span style="font-size:11px;color:#b91c1c;">没有找到可报名作品。请先确认作品已发行。</span>';
+      });
+    });
+  }
+  var priorOpen=window.openAwardSubmitUI;
+  window.openAwardSubmitUI=function(){var r=typeof priorOpen==='function'?priorOpen.apply(this,arguments):undefined;setTimeout(patchCards,0);setTimeout(patchCards,80);return r;};
+  var priorLoad=window.loadGame;if(typeof priorLoad==='function')window.loadGame=function(){var r=priorLoad.apply(this,arguments),done=function(){window.getAllAwardPlayerWorks();};if(r&&typeof r.then==='function')return r.then(function(v){done();return v;});done();return r;};
+})();
+</script>
 <script>
 // Portable JSON save transfer: works in normal browsers and file:// pages.
 (function installPortableSaveTransfer(){

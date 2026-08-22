@@ -5433,6 +5433,12 @@ window.renderChart = function() {
                     t._chartPts = Math.floor((pureSales * 200) + paidStream + (adStream / 4.5));
                     t._chartStr = t._chartPts.toLocaleString() + " Pts";
                 }
+                if (typeof window.getBillboardParts === 'function') {
+                    let parts = window.getBillboardParts(t);
+                    t._pctStm = Number(parts.pctStm || 0);
+                    t._pctSales = Number(parts.pctSales || 0);
+                    t._pctRadio = Number(parts.pctRadio || 0);
+                }
             }
         } 
         else if (curChartPlatform === 'Spot' || curChartPlatform === 'Daily') {
@@ -5451,7 +5457,8 @@ window.renderChart = function() {
         let peakVal = (curChReg === 'US') ? t.peakB : t.peakS;
         let peakStr = peakVal ? ` | 最高: #${peakVal} | 在榜: ${t.weeks}周` : ` | 在榜: ${t.weeks}周`;
         let detailBtn = (t.isMe && t.type === 'track') ? `<br><button class="sec inline" style="padding:2px 6px;font-size:10px;margin-top:4px;" onclick="viewSongStats('${t.id}')">查看歌曲详情</button>` : '';
-        return `<div style="display:flex;align-items:center;padding:10px;border-bottom:1px solid #eee;${isMe}"><b style="width:30px;color:#888;font-size:16px;">${i+1}</b><div style="flex:1;"><b>${escapeHTML(t.n)}</b><br><span style="font-size:11px;color:#666;">${escapeHTML(t.artist)}${peakStr}</span>${detailBtn}</div><div style="text-align:right;font-size:12px;color:#c8a440;font-weight:bold;">${t._chartStr}</div></div>`;
+        let bbMix = curChartPlatform === 'BB' && !isAlbum ? `<br><span style="font-size:10px;color:#888;">流媒 ${t._pctStm || 0}% · 销量 ${t._pctSales || 0}% · 电台 ${t._pctRadio || 0}%</span>` : '';
+        return `<div style="display:flex;align-items:center;padding:10px;border-bottom:1px solid #eee;${isMe}"><b style="width:30px;color:#888;font-size:16px;">${i+1}</b><div style="flex:1;"><b>${escapeHTML(t.n)}</b><br><span style="font-size:11px;color:#666;">${escapeHTML(t.artist)}${peakStr}</span>${bbMix}${detailBtn}</div><div style="text-align:right;font-size:12px;color:#c8a440;font-weight:bold;">${t._chartStr}</div></div>`;
     }).join('') || "<p style='text-align:center;'>暂无数据</p>";
 }
 
@@ -11096,6 +11103,10 @@ window.updatePerformCost = function() {
 // 重写舞台结算，支持三大巅峰舞台的史诗级爆发
 window.confirmPerformance = function() {
     let selectedIds = window.setlistSelectedIds;
+    if (performContext && performContext.type === 'award') {
+        performContext.selectedIds = selectedIds.slice();
+        if (selectedIds.length === 0) return alert('提名典礼现场版表演至少选择 1 首歌曲。');
+    }
     if (selectedIds.length === 0) {
         if(!confirm("你没有在歌单里加入任何歌曲！确定要纯走红毯/全场划水吗？（将没有歌曲加成）")) return;
     }
@@ -24053,25 +24064,6 @@ function installRuntimeAuthority(){
     var baseRenderChartAuthority=window.renderChart;window.renderChart=function(){ensureGlobalChartButton();var r=baseRenderChartAuthority.apply(this,arguments);ensureGlobalChartButton();return r;};
     var baseOpenAppAuthority=window.openApp;window.openApp=function(appId){var r=baseOpenAppAuthority.apply(this,arguments);if(['BB','Spot','Sale','Daily'].indexOf(appId)>=0)setTimeout(ensureGlobalChartButton,0);return r;};ensureGlobalChartButton();
 
-    function dailyMarketBase(){var input=document.getElementById('customMarketBase'),stored=ad&&ad.marketSettings&&ad.marketSettings.dailyBase,base=Math.max(100000,Number(input&&input.value||0)*10000||Number(stored||0)||3000000),key=[time&&time.y||0,time&&time.m||0,time&&time.d||0].join('_');if(!ad._dailyMarketJitterKey||ad._dailyMarketJitterKey!==key){ad._dailyMarketJitterKey=key;ad._dailyMarketJitter=0.95+Math.random()*0.10;}return Math.floor(base*Number(ad._dailyMarketJitter||1));}
-    function normalizeDailyMarket(){
-        var tracks=(trackPool||[]).filter(function(t){return t&&t.type==='track';}),target=dailyMarketBase(),top=tracks.reduce(function(m,t){var day=Number(t.stmGlobal_Day||0),source=day>0?day:Number(t.stmGlobal_Week||0)/7;return Math.max(m,source);},0);if(!top)return;
-        var scale=top>target?target/top:1;
-        tracks.forEach(function(t){
-            var day=Number(t.stmGlobal_Day||0),source=Math.max(0,day>0?day:Number(t.stmGlobal_Week||0)/7);
-            t.stmGlobal_Day=Math.min(target,Math.floor(source*scale));
-            t.stmGlobal_Week=t.stmGlobal_Day;
-            t.stmUS_Day=Math.min(t.stmGlobal_Day,Math.max(0,Math.floor(Number(t.stmUS_Day||t.stmUS_Week||0)*scale)));
-            t.stmUS_Week=t.stmUS_Day;
-            t._billboardGlobalWeek=t.stmGlobal_Day*7;t._billboardUSWeek=t.stmUS_Day*7;
-        });
-    }
-    var chartBeforeDaily=window.renderChart;window.renderChart=function(){
-        normalizeDailyMarket();if(curChartPlatform==='Spot'&&curChReg==='US')syncWeeklyChartStates();var saved=[];
-        if(curChartPlatform==='BB')(trackPool||[]).forEach(function(t){if(!t||t.type!=='track')return;saved.push([t,t.stmGlobal_Week,t.stmUS_Week]);t.stmGlobal_Week=Number(t._billboardGlobalWeek||t.stmGlobal_Day*7);t.stmUS_Week=Number(t._billboardUSWeek||t.stmUS_Day*7);});
-        var r=chartBeforeDaily.apply(this,arguments);saved.forEach(function(x){x[0].stmGlobal_Week=x[1];x[0].stmUS_Week=x[2];});return r;
-    };
-
     function validChartRank(value){var n=Number(value);return Number.isFinite(n)&&n>=1&&n<=100?Math.floor(n):null;}
     function chartPeriodKey(kind){return kind==='day'?[time.y,time.m,time.d].join('_'):[time.y,time.m,time.w].join('_');}
     function compactLegacyRanks(values){
@@ -24291,7 +24283,7 @@ function installRuntimeAuthority(){
         if(typeof updAttr==='function')updAttr();if(showNotice)alert(notices.length?notices.join('\n')+'\n\n'+summaries.join('\n'):summaries.join('\n'));return notices;
     }
     window.checkTitles=function(){var result=updateTitleCompetition(true);saveNow();return result;};window.updateTitleCompetition=updateTitleCompetition;window.__titleCompetitionDebug={normalizeGender:normalizedTitleGender,eligible:eligibleTitleArtists,strength:titleStrength};
-    var baseAdvAuthority=window.advTime;window.advTime=function(){var r=typeof baseAdvAuthority==='function'?baseAdvAuthority.apply(this,arguments):undefined;normalizeDailyMarket();scanRumors(false);settleRumors();updateTitleCompetition(false);return r;};
+    var baseAdvAuthority=window.advTime;window.advTime=function(){var r=typeof baseAdvAuthority==='function'?baseAdvAuthority.apply(this,arguments):undefined;scanRumors(false);settleRumors();updateTitleCompetition(false);return r;};
     var baseShowMapAuthority=window.showMap;window.showMap=function(id){var r=baseShowMapAuthority.apply(this,arguments);if(id==='mapHome')mountBasement();if(id==='mapFashion')window.renderFashionHouse();return r;};
 
     // One authoritative repair/migration kernel. It repairs invalid state only and never rerolls valid progress.
@@ -24535,7 +24527,7 @@ function bootCompanySystem(){
     function eligible(type,c){return companyEligibility(type,c).allowed;}
     function dealName(value){return value==='2/8'?'2/8（艺人高分成）':'7/3（公司高投入）';}
     function contractCard(type,c){var check=companyEligibility(type,c),coreLabel=(COMPANY_CORE[type]||[]).map(function(pair){return pair[1];}).join('、');var reason=check.fansPass?'粉丝达标':check.corePass?'核心属性达标':check.exception?'高属性破例':'未达标';return '<div class="card" style="padding:9px;margin:7px 0;"><b>'+esc(c.name)+'</b> <span class="tier-badge">'+esc(c.tier)+'</span><br><span style="font-size:11px;color:#777;">资源 '+Number(c.grade).toFixed(2)+' · 签约金 '+Number(c.bonus).toLocaleString()+' · 核心：'+esc(coreLabel)+' · 核心门槛 '+check.threshold+'/1000 · '+esc(reason)+'</span>'+(check.allowed?'<button class="sec" style="margin-top:6px;" onclick="openCompanyContract(\''+type+'\',\''+esc(c.id)+'\')">签约</button>':'<p style="font-size:11px;color:#b91c1c;">尚未达到签约门槛（核心属性需同时达到门槛，或其他属性达到 '+COMPANY_HIGH+'+ 破例）</p>')+(c.custom?'<button class="sec" onclick="openCustomCompanyEditor(\''+esc(c.id)+'\')">编辑自定义公司</button>':'')+'</div>';}
-    function signedCard(type,c){var facilities=type==='record'?'<button onclick="openInternalSongCatalog(\'record\')">内部曲库</button><button class="sec" onclick="visitCompanyProducer(\'record\')">拜访公司制作人</button>':type==='acting'?'<button onclick="openInternalActingRoles()">内部戏接取通道</button>':'<button onclick="openInternalSongCatalog(\'group\')">内部曲库</button><button class="sec" onclick="visitCompanyProducer(\'group\')">拜访公司制作人</button>';return '<div class="card" style="padding:10px;background:#fefcf5;"><b>当前签约：'+esc(c.name)+'</b><br><span style="font-size:11px;color:#777;">'+dealName(c.deal)+' · 至 '+c.endYear+' 年 · 资源 '+Number(c.grade).toFixed(2)+'</span>'+facilities+'<button class="sec" onclick="openChairmanOffice(\''+type+'\')">董事长办公室</button><button class="sec" onclick="openCompanyPractice(\''+type+'\')">公司内部练习室</button><button class="red" onclick="breakCompanyContract(\''+type+'\')">解除这份合约</button></div>';}
+    function signedCard(type,c){var facilities=type==='record'?'<button onclick="openInternalSongCatalog(\'record\')">内部曲库</button><button class="sec" onclick="visitCompanyProducer(\'record\')">拜访公司制作人</button>':type==='acting'?'<button onclick="openInternalActingRoles()">内部戏接取通道</button>':'<button onclick="openInternalSongCatalog(\'group\')">内部曲库</button><button class="sec" onclick="visitCompanyProducer(\'group\')">拜访公司制作人</button>';return '<div class="card" style="padding:10px;background:#fefcf5;"><b>当前签约：'+esc(c.name)+'</b><br><span style="font-size:11px;color:#777;">'+dealName(c.deal)+' · 至 '+c.endYear+' 年 · 资源 '+Number(c.grade).toFixed(2)+'</span>'+facilities+'<button class="sec" data-chairman-office="1" onclick="openChairmanOffice(\''+type+'\')">董事长办公室</button><button class="sec" onclick="openCompanyPractice(\''+type+'\')">公司内部练习室</button><button class="red" onclick="breakCompanyContract(\''+type+'\')">解除这份合约</button></div>';}
     function renderCompanyHub(){var map=document.getElementById('mapLabel');if(!map||!ensureCompanyState())return;map.innerHTML='<h3 class="tg">公司与独立合约</h3><p style="font-size:12px;color:#777;line-height:1.7;">唱片、演员、团体合约互相独立，可以同时签在三家不同公司。</p><div style="display:flex;gap:7px;flex-wrap:wrap;"><button class="sec" onclick="openCustomCompanyEditor()">创建自定义公司</button><button class="sec" data-create-owned-company="1" onclick="openCreateCompany()">创建我的公司</button></div><div class="sub-tab-bar" style="margin-top:9px;"><div class="sub-tab active" onclick="switchCompanyType(this,\'record\')">唱片</div><div class="sub-tab" onclick="switchCompanyType(this,\'acting\')">演员</div><div class="sub-tab" onclick="switchCompanyType(this,\'group\')">团体</div></div><div id="companyHubContent"></div>';renderCompanyType('record');var button=document.getElementById('btnMapCompany');if(button)button.innerText='🏢 公司与合约';}
     function renderCompanyType(type){var host=document.getElementById('companyHubContent');if(!host)return;var current=contract(type);host.innerHTML='<h4 style="margin:10px 0 5px;">'+TYPES[type].icon+' '+TYPES[type].name+'</h4>'+(current?signedCard(type,current):companyDirectory(type).map(function(c){return contractCard(type,c);}).join(''));}
     window.switchCompanyType=function(button,type){button.parentElement.querySelectorAll('.sub-tab').forEach(function(x){x.classList.remove('active');});button.classList.add('active');renderCompanyType(type);};
@@ -25353,8 +25345,6 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
 <script>
 // Ceremony stage selector and NPC/actor editing final patch.
 (function(){
-  var oldSetlist=window.openSetlistUI;
-  window.openSetlistUI=function(title){var r=oldSetlist&&oldSetlist.apply(this,arguments),s=document.getElementById('selPerformStage');if(window.performContext&&window.performContext.type==='award'&&s){s.innerHTML='<option value="minimal">简约纯享版 · $100万以下</option><option value="normal">常规舞美 · $100万~$1000万</option><option value="top">顶级舞美 · $1000万起</option>';s.value=window.performContext.stage||'normal';s.onchange=function(){window.performContext.stage=s.value;window.performContext.stageName=s.options[s.selectedIndex].text;};}return r;};
   var oldNpc=window.openNpcDetail;
   window.openNpcDetail=function(id){
     var source=null;
@@ -25371,16 +25361,6 @@ setInterval(function(){var s=petStore();if(!s)return;s.pets.forEach(function(p){
   function resolveNpc(key){key=String(key||'');if(key==='player_self')return ad;if(key.indexOf('screen_')===0)return (ad&&ad.screenActors||[]).find(function(x){return 'screen_'+x.id===key;});if(key.indexOf('group_')===0)return (ad&&ad.entertainmentGroups||[]).find(function(x){return 'group_'+x.id===key;});return (worldArtists||[]).find(function(x){return String(x.id)===key;});}
   window.setNpcUnifiedAvatar=function(id,input){var file=input&&input.files&&input.files[0],x=resolveNpc(id);if(!file||!x)return;var reader=new FileReader();reader.onload=function(){x.avatar=reader.result;input.value='';save();openNpcDetail(id);};reader.readAsDataURL(file);};
   window.saveNpcUnified=function(id){var x=resolveNpc(id);if(!x)return;var n=(document.getElementById('npcEditName')||{}).value.trim(),age=document.getElementById('npcEditAge'),nationality=document.getElementById('npcEditNationality');if(n){if(String(id)==='player_self')x.s=n;if(x.n!==undefined)x.n=n;if(x.name!==undefined)x.name=n;}if(age&&age.value!=='')x.age=Math.max(0,Math.min(120,Number(age.value)||0));if(nationality)x.nationality=nationality.value.trim()||'未设置';x.bio=(document.getElementById('npcEditBio')||{}).value||x.bio;save();if(typeof renderNpcList==='function')renderNpcList();alert('修改已保存。');closeM('mInfo');};
-  var oldChart=window.renderChart;window.renderChart=function(){
-    var r=oldChart&&oldChart.apply(this,arguments),platform=typeof curChartPlatform!=='undefined'?curChartPlatform:'Spot',chartType=typeof curChType!=='undefined'?String(curChType).toLowerCase():'track',region=typeof curChReg!=='undefined'?curChReg:'Global',isAlbum=chartType==='album'||chartType==='album_daily',isDaily=chartType.indexOf('daily')>=0,type=isAlbum?'album':'track',expected=(trackPool||[]).filter(function(t){return t&&t.type===type;}),box=document.getElementById('mChartContent');
-    if(!box)return r;
-    function metric(t){if(isAlbum)return Number(t.slTotal||t.stmGlobal||0);if(platform==='BB')return Number(t._chartPts||0);if(platform==='Sale')return Number(t.salesWeek||t.weeklySales||t.pureSalesWeek||t.slTotal||0);if(region==='US')return Number(t[isDaily?'stmUS_Day':'stmUS_Week']||0);return Number(t[isDaily?'stmGlobal_Day':'stmGlobal_Week']||0);}
-    function unit(){if(isAlbum)return ' EAU';if(platform==='BB')return ' Pts';if(platform==='Sale')return ' 份';return ' Streams';}
-    expected.sort(function(a,b){return metric(b)-metric(a);});
-    var rows=Array.from(box.children),first=expected[0],wrong=first&&rows[0]&&rows[0].textContent.indexOf(String(first.n||''))<0,wrongUnit=platform!=='BB'&&rows.some(function(row){return /\bPts\b/.test(row.textContent||'');}),limit=Math.min(expected.length,isAlbum&&platform==='BB'?200:100);
-    if(false&& (wrong||wrongUnit||rows.length!==limit)){box.innerHTML=expected.slice(0,limit).map(function(t,i){return '<div data-chart-type="'+type+'" class="card" style="display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:8px;align-items:center;"><b>'+(i+1)+'</b><div><b>'+String(t.n||'未命名')+'</b><br><span style="font-size:11px;color:#777;">'+String(t.artist||'未知艺人')+'</span></div><b style="font-size:11px;">'+metric(t).toLocaleString()+unit()+'</b></div>';}).join('')||'<p style="text-align:center;color:#888;">本榜暂无'+(isAlbum?'专辑':'单曲')+'数据</p>';}
-    else rows.forEach(function(row){row.dataset.chartType=type;});return r;
-  };
   // Clear stale player-avatar nodes before applying the current artist image.
   var oldAvatar=window.uploadMyAvatar;window.uploadMyAvatar=function(input){var r=oldAvatar&&oldAvatar.apply(this,arguments);setTimeout(function(){var current=ad&&ad.avatar||'';document.querySelectorAll('[data-player-avatar],img.player-avatar').forEach(function(img){if(current)img.src=current;else img.removeAttribute('src');});},30);return r;};
 })();
@@ -25583,10 +25563,6 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   var baseOpen=window.openAwardSubmitUI;
   window.openAwardSubmitUI=function(){var result=typeof baseOpen==='function'?baseOpen.apply(this,arguments):undefined;setTimeout(function(){document.querySelectorAll('.awardSubmissionCard').forEach(function(card){var award=awardById(card.dataset.award),year=nextAwardYear(award);card.dataset.year=String(year);var status=card.querySelector('span');if(status){status.textContent='报名中 · 将计入 '+year+' 届';status.style.color='#15803d';}card.querySelectorAll('.awardBranchSubmission').forEach(function(branch){var category=branch.dataset.cat,button=branch.querySelector('button');if(!button)return;button.disabled=false;button.textContent='保存报名（计入 '+year+' 届）';button.onclick=function(){window.saveAwardBranchSubmission(card.dataset.award,category,year,button);};});});},0);return result;};
   window.saveAwardBranchSubmission=function(awardId,catId,ignoredYear,button){var award=awardById(awardId),category=award&&Array.isArray(award.categories)&&award.categories.find(function(x){return String(x.id)===String(catId);});if(!award||!category)return alert('未找到该奖项分支。');if(!window.ad) return alert('当前没有可保存的生涯。');if(!ad.awardData)ad.awardData={};if(!ad.awardData.submissions)ad.awardData.submissions={};var year=nextAwardYear(award),key=year+'_'+award.id,submission=ad.awardData.submissions[key]||(ad.awardData.submissions[key]={categories:{}});if(!submission.categories||typeof submission.categories!=='object')submission.categories={};var branch=button&&button.closest('.awardBranchSubmission'),selected=branch?Array.from(branch.querySelectorAll('.awardCategoryEntry:checked')).map(function(input){return input.value;}):[];submission.categories[catId]=selected;submission.savedAt={year:Number(time.y),month:Number(time.m),week:Number(time.w),day:Number(time.d||1)};if(typeof window.saveGame==='function')window.saveGame();alert('已保存“'+(category.name||'该分支')+'”报名：'+selected.length+' 项，计入 '+year+' 届。');};
-  var baseOpenSetlist=window.openSetlistUI;
-  window.openSetlistUI=function(){if(window.performContext&&window.performContext.type==='award'){performContext=window.performContext;if(!Array.isArray(window.setlistSelectedIds))window.setlistSelectedIds=[];}return typeof baseOpenSetlist==='function'?baseOpenSetlist.apply(this,arguments):undefined;};
-  var baseConfirm=window.confirmPerformance;
-  window.confirmPerformance=function(){var checked=Array.from(document.querySelectorAll('.setlist-chk:checked')).map(function(input){return input.value;});window.setlistSelectedIds=checked.slice();if(window.performContext&&window.performContext.type==='award'){window.performContext.selectedIds=checked.slice();if(!checked.length)return alert('提名典礼现场版表演至少选择 1 首歌曲。');}return typeof baseConfirm==='function'?baseConfirm.apply(this,arguments):undefined;};
 })();
 </script>
 <script>
@@ -27062,7 +27038,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   window.negotiateParentLabel=function(){var c=contract('record');if(!c)return;ensure();var hot=Number(ad.st&&ad.st.f||0),ok=hot>=10000000&&Math.random()<.7;ad.companyRoutes.record=ad.companyRoutes.record||{};ad.companyRoutes.record.lastLabelTalk=[time.y,time.m].join('_');if(ok){ad.companyRoutes.record.route='parent_label';ad.companyRoutes.record.labelPermission=true;ad.ownedCompanies.push({id:'label_'+Date.now(),name:(ad.s||'艺人')+' Records',kind:'label',parentCompanyId:c.companyId,parentCompanyName:c.name,owner:'player',createdYear:time.y});save();alert('母公司同意你成立全资厂牌：发行、法务和部分宣发由母公司提供，你保留厂牌所有权。');}else{save();alert('母公司暂未批准厂牌权限。继续提升热度与谈判筹码后可再次申请。');}};
   window.openCreateCompany=function(){ensure();var title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo');if(!title||!content||!modal)return;content.innerHTML='<p style="font-size:12px;line-height:1.7;">创建公司与你去签约的“自定义公司”不同。这里创建的是你本人持有、你本人负责经营的公司。</p><label>公司名称</label><input id="ownedCompanyName" placeholder="例如：你的艺名娱乐"><label>公司形态</label><select id="ownedCompanyKind"><option value="entertainment">全资完整娱乐公司（唱片、经纪、商务）</option><option value="label">全资厂牌（专注音乐与发行）</option></select><label>初始资金</label><input id="ownedCompanyCapital" type="number" min="0" value="1000000"><button onclick="createOwnedCompany()">创建并成为老板</button>';title.innerText='创建我的公司';modal.classList.add('open');};
   window.createOwnedCompany=function(){ensure();var name=((document.getElementById('ownedCompanyName')||{}).value||'').trim(),kind=(document.getElementById('ownedCompanyKind')||{}).value||'label',capital=Math.max(0,Number((document.getElementById('ownedCompanyCapital')||{}).value||0));if(!name)return alert('请输入公司名称。');if(ad.ownedCompanies.some(function(x){return x&&x.name===name;}))return alert('你已经创建过同名公司。');if(Number(ad.m||0)<capital)return alert('资金不足，无法完成注册。');ad.m-=capital;var company={id:'owned_'+Date.now(),name:name,kind:kind,owner:'player',capital:capital,createdYear:time.y,departments:[],employees:[],route:kind==='label'?'independent_label':'full_company'};company.departments=kind==='entertainment'?['唱片','经纪','商务']:['音乐制作','发行'];ad.ownedCompanies.push(company);save();document.getElementById('mInfo').classList.remove('open');alert('创建成功：'+name+'。你现在是该公司的老板。');};
-  function addOfficeButton(){var map=document.getElementById('mapLabel');if(map&&!map.querySelector('[data-create-owned-company]')){var b=document.createElement('button');b.className='sec';b.dataset.createOwnedCompany='1';b.textContent='创建我的公司';b.onclick=function(){openCreateCompany();};var anchor=map.querySelector('#companyHubContent');if(anchor)anchor.parentNode.insertBefore(b,anchor);else map.appendChild(b);}var host=document.getElementById('companyHubContent');if(!host)return;host.querySelectorAll('.card').forEach(function(card){if(card.textContent.indexOf('当前签约：')<0||card.querySelector('[data-chairman-office]'))return;var type=card.textContent.indexOf('唱片')>=0?'record':card.textContent.indexOf('演员')>=0?'acting':'group';var b=document.createElement('button');b.className='sec';b.dataset.chairmanOffice='1';b.textContent='董事长办公室';b.onclick=function(){openChairmanOffice(type);};card.appendChild(b);});}
+  function addOfficeButton(){var host=document.getElementById('companyHubContent');if(!host)return;host.querySelectorAll('.card').forEach(function(card){if(card.textContent.indexOf('当前签约：')<0)return;var buttons=card.querySelectorAll('[data-chairman-office]');if(buttons.length>1)Array.prototype.slice.call(buttons,1).forEach(function(button){button.remove();});});}
   var oldRender=window.renderCompanyHub;if(typeof oldRender==='function')window.renderCompanyHub=function(){var r=oldRender.apply(this,arguments);setTimeout(addOfficeButton,0);return r;};
   var oldEnsure=window.ensureCompanyState;if(typeof oldEnsure==='function')window.ensureCompanyState=function(){var r=oldEnsure.apply(this,arguments);ensure();return r;};
   setTimeout(function(){ensure();addOfficeButton();},500);
@@ -27119,18 +27095,6 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
     return p;
   }
   window.migrateUnifiedFeatureState=migrate;
-  window.openUnifiedCompanyCenter=function(){
-    var p=migrate(),title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo');if(!p||!title||!content||!modal)return;
-    var names={record:'唱片公司',acting:'经纪/演艺公司',group:'团体公司'},routes={stay_original:'留在原公司',full_company:'全资完整娱乐公司',parent_label:'母公司内厂牌',independent_label:'独立厂牌',joint_label:'合资厂牌',independent_artist:'纯独立音乐人'};
-    content.innerHTML='<div class="card" style="font-size:12px;line-height:1.8;"><b>公司与厂牌控制中心</b><br>旧合约、厂牌路线、创建公司和董事长谈判统一从这里进入。</div>'+['record','acting','group'].map(function(type){var r=p.companyRoutes[type];return '<div class="card"><b>'+names[type]+'</b><br><span style="font-size:11px;color:#666;">当前路线：'+(routes[r.route]||r.route)+' · 事件记录 '+r.events.length+' 条</span><button class="sec" onclick="openChairmanOffice(\''+type+'\')">董事长办公室</button></div>';}).join('')+'<button onclick="openCreateCompany()">创建我的公司</button>';
-    title.innerText='公司控制中心';modal.classList.add('open');
-  };
-  window.openFashionEditorOffice=function(){
-    var p=migrate(),title=document.getElementById('mInfoTitle'),content=document.getElementById('mInfoContent'),modal=document.getElementById('mInfo');if(!p||!title||!content||!modal)return;
-    function request(kind,label){var note=prompt('请输入要向主编/品牌方提出的请求：',label);if(note===null)return;p.fashionOffice.talks.push({kind:kind,text:note,year:clock().y,month:clock().m});var ok=Math.random()<Math.min(.92,.25+Number(p.fashionRelationship||50)/150);if(ok){p.fashionOffice.offers.push({kind:kind,text:note,year:clock().y,month:clock().m,status:'accepted'});save();alert('对方接受了请求：'+note);}else{save();alert('对方暂时没有接受：'+note);}}
-    content.innerHTML='<div class="card" style="font-size:12px;line-height:1.8;"><b>主编办公室</b><br>这里可以直接谈 Title、广告、地区广告、高定借用和杂志拍摄，不再依赖随机偶遇。</div><button onclick="openFashionEditorOfficeAction(\'title\',\'升级我的 Title\')">谈 Title</button><button class="sec" onclick="openFashionEditorOfficeAction(\'ad\',\'争取一支广告\')">谈广告</button><button class="sec" onclick="openFashionEditorOfficeAction(\'regionalAd\',\'争取地区广告\')">谈地区广告</button><button class="sec" onclick="openFashionEditorOfficeAction(\'couture\',\'申请借一套高定\')">谈高定</button><div class="card" style="font-size:11px;color:#666;">历史谈判：'+p.fashionOffice.talks.length+' 次 · 已获得资源：'+p.fashionOffice.offers.length+' 项</div>';
-    window.openFashionEditorOfficeAction=request;title.innerText='时尚资源办公室';modal.classList.add('open');
-  };
   function mount(){
     // Company and fashion actions are rendered inside their native pages/cards.
     // Do not add detached control-center buttons that duplicate those entries.
@@ -27142,27 +27106,6 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   var oldLoad=window.loadGame;if(typeof oldLoad==='function')window.loadGame=function(){var r=oldLoad.apply(this,arguments),done=function(){migrate();setTimeout(mount,80);};if(r&&typeof r.then==='function')return r.then(function(v){done();return v;});done();return r;};
   var oldAdv=window.advTime;if(typeof oldAdv==='function')window.advTime=function(){var r=oldAdv.apply(this,arguments);migrate();return r;};
   setInterval(mount,1200);migrate();
-})();
-</script>
-<script>
-// Source-level final chart presentation: the visible Billboard rows always use
-// the same stream/sales/radio composition as the point calculation.
-(function installBillboardPresentationSource(){
-  function tracks(){try{return Array.isArray(trackPool)?trackPool:[];}catch(e){return [];} }
-  function apply(){
-    if(String(window.curChartPlatform||'')!=='BB')return;
-    var parts=typeof window.getBillboardParts==='function'?window.getBillboardParts:null;
-    if(!parts)return;
-    var order=tracks().filter(function(t){return t&&t.type==='track';}).sort(function(a,b){return Number(b._chartPts||0)-Number(a._chartPts||0);});
-    Array.from(document.querySelectorAll('#mChartContent > div')).forEach(function(row,i){
-      var t=order[i];if(!t)return;var p=parts(t),pct='🎧流媒 '+p.pctStm+'%　🛒销量 '+p.pctSales+'%　📻电台 '+p.pctRadio+'%';
-      row.querySelectorAll('span').forEach(function(s){if(/流媒|销量|电台|radio|sales|stream/i.test(s.textContent||''))s.textContent=pct;});
-      var bars=Array.from(row.querySelectorAll('[style*="width"]')).filter(function(x){return /height:\s*4px/i.test(x.getAttribute('style')||'');});
-      if(bars[0])bars[0].style.width=p.pctStm+'%';if(bars[1])bars[1].style.width=p.pctSales+'%';if(bars[2])bars[2].style.width=p.pctRadio+'%';
-    });
-  }
-  var prior=window.renderChart;window.renderChart=function(){var r=typeof prior==='function'?prior.apply(this,arguments):undefined;setTimeout(apply,0);setTimeout(apply,80);return r;};
-  window.refreshBillboardPresentation=apply;
 })();
 </script>
 </html>

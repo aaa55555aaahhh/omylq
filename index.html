@@ -1380,7 +1380,7 @@ setTimeout(function installFinalUserRequestedFixes(){
         }).join("");
         $("mInfoTitle").innerText = "📢 报名奖项";
         $("mInfoContent").innerHTML = html;
-        applyAwardModalTheme();
+        applyAwardModalTheme("submission");
         $("mInfo").classList.add("open");
     };
     window.saveAwardBranchSubmission=function(awdId,catId,year,button){
@@ -1392,26 +1392,34 @@ setTimeout(function installFinalUserRequestedFixes(){
     window.saveFinalAwardSubmission=function(awdId,year,button){var branch=button&&button.closest(".awardBranchSubmission");if(branch)return saveAwardBranchSubmission(awdId,branch.dataset.cat,year,button);};
     window.__finalAwardSubmitUI=window.openAwardSubmitUI;
     window.__finalAwardBranchSave=window.saveAwardBranchSubmission;
-    function applyAwardModalTheme(){
+    function applyAwardModalTheme(mode){
         var modal=$("mInfo"),box=modal&&modal.querySelector(".modal-box"),content=$("mInfoContent");
         if(!box||!content)return;
+        if(mode==="submission"){
+            modal.classList.remove("award-transparent-modal");
+            modal.removeAttribute("data-award-modal");
+            box.style.background="";box.style.color="";box.style.border="";box.style.boxShadow="";content.style.color="";
+            content.querySelectorAll(".card").forEach(function(card){card.style.background="";card.style.borderColor="";card.style.color="";});
+            content.querySelectorAll("button").forEach(function(button){button.removeAttribute("data-award-action");button.style.background="";button.style.color="";button.style.borderColor="";});
+            return;
+        }
         modal.classList.add("award-transparent-modal");
         modal.setAttribute("data-award-modal","1");
-        box.style.background="rgba(0,0,0,.78)";
+        box.style.background="rgba(31,35,43,.94)";
         box.style.color="#fff";
         box.style.border="1px solid rgba(255,255,255,.24)";
         box.style.boxShadow="0 20px 70px rgba(0,0,0,.42)";
         content.style.color="#fff";
         content.querySelectorAll(".card").forEach(function(card){
-            card.style.background="rgba(0,0,0,.34)";
+            card.style.background="rgba(63,68,78,.9)";
             card.style.borderColor="rgba(255,255,255,.22)";
             card.style.color="#fff";
         });
         content.querySelectorAll("button").forEach(function(button){
             button.setAttribute("data-award-action","1");
-            button.style.background="#facc15";
-            button.style.color="#111827";
-            button.style.borderColor="#fde047";
+            button.style.background="var(--baby-yellow)";
+            button.style.color="#2f280d";
+            button.style.borderColor="var(--baby-yellow-border)";
         });
     }
     window.viewNominationsUI = function(awardId){
@@ -2687,16 +2695,14 @@ input,select,textarea,.sub-tab,.g-tag,.log,.prog-wrap {
 [data-award-modal="1"] .modal-box,
 .award-transparent-modal .modal-box,
 #mAwardNominationNotice .modal-box {
-  background:rgba(0,0,0,.78) !important;
+  background:rgba(31,35,43,.94) !important;
   color:#fff !important;
   border-color:rgba(255,255,255,.24) !important;
 }
 [data-award-modal="1"] .modal-box .card,
 .award-transparent-modal .modal-box .card,
-#mAwardNominationNotice .modal-box .card,
-.awardSubmissionCard,
-.awardBranchSubmission {
-  background:rgba(0,0,0,.34) !important;
+#mAwardNominationNotice .modal-box .card {
+  background:rgba(63,68,78,.9) !important;
   color:#fff !important;
   border-color:rgba(255,255,255,.22) !important;
 }
@@ -2705,37 +2711,28 @@ input,select,textarea,.sub-tab,.g-tag,.log,.prog-wrap {
 [data-award-modal="1"] .modal-box b,
 [data-award-modal="1"] .modal-box h3,
 [data-award-modal="1"] .modal-box h4,
-.awardSubmissionCard p,
-.awardSubmissionCard span,
-.awardSubmissionCard b,
-.awardSubmissionCard h3,
-.awardSubmissionCard h4,
-.awardBranchSubmission p,
-.awardBranchSubmission span,
-.awardBranchSubmission b,
-.awardBranchSubmission h3,
-.awardBranchSubmission h4,
 #mAwardNominationNotice .modal-box,
 #mAwardNominationNotice .modal-box h3,
 #mAwardNominationNotice .modal-box div {
   color:#fff !important;
 }
 [data-award-modal="1"] .modal-box button,
-.awardSubmissionCard button,
-.awardBranchSubmission button,
 #mAwardNominationNotice .modal-box button,
-button[data-award-action="1"] {
-  background:#facc15 !important;
-  color:#111827 !important;
-  border-color:#fde047 !important;
-  box-shadow:0 0 0 1px rgba(250,204,21,.28),0 3px 12px rgba(250,204,21,.18);
+button[data-award-action="1"],
+#finalAwardBtns button,
+#mInfo[data-award-modal="1"] button {
+  background:var(--baby-yellow) !important;
+  color:#2f280d !important;
+  border-color:var(--baby-yellow-border) !important;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--baby-yellow) 35%,transparent),0 3px 12px rgba(0,0,0,.18);
 }
 [data-award-modal="1"] .modal-box button:hover,
-.awardSubmissionCard button:hover,
-.awardBranchSubmission button:hover,
 #mAwardNominationNotice .modal-box button:hover,
-button[data-award-action="1"]:hover {
-  background:#fde047 !important;
+button[data-award-action="1"]:hover,
+#finalAwardBtns button:hover,
+#mInfo[data-award-modal="1"] button:hover {
+  background:var(--baby-yellow-strong) !important;
+  color:#fff !important;
 }
 
 .ui-theme-swatches { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 14px; }
@@ -24687,7 +24684,10 @@ function bootScreenAndGroupWorld(){
     if(window.__screenGroupWorldInstalled)return;window.__screenGroupWorldInstalled=true;
     var SCREEN_TITLES=['龙套新人','潜力配角','剧集新星','荧幕红人','院线主力','影坛巨星','传奇影人'];
     var HEAT_LEVELS=[['史诗级大爆',36000],['史诗级大火',29000],['现象级大爆',22500],['现象级大火',18500],['大爆',14500],['小爆',8500],['大火',5500],['小火',3500],['平播',2000],['扑街',0]];
-    var FILM_AWARDS=['奥斯卡金像奖','金球奖（电影）','英国电影学院奖','美国演员工会电影奖'];
+    var FILM_AWARDS=[
+        '奥斯卡金像奖','金球奖（电影）','英国电影学院奖','美国演员工会电影奖',
+        '戛纳电影节','威尼斯国际电影节','柏林国际电影节'
+    ];
     var TV_AWARDS=['艾美奖','金球奖（电视）','评论家选择电视奖','美国演员工会电视奖'];
     var PLATFORMS={Netflix:1,Max:.95,'Disney+':.9,'Prime Video':.88,'Apple TV+':.82,'独立流媒体':.7};
     var SCRIPT_MODS={E:.40,'E+':.46,D:.52,'D+':.58,C:.65,'C+':.72,B:.80,'B+':.88,A:.96,'A+':1.04,S:1.12,'S+':1.20};
@@ -24715,7 +24715,12 @@ function bootScreenAndGroupWorld(){
         updateActorTitle(false);
         return ad;
     }
-    function seedScreenAwards(){if(ad.screenAwardData.registry.length){ad.screenAwardData.registry.forEach(function(a){if(Array.isArray(a.categories)&&a.categories.indexOf('最佳原创歌曲 / OST')<0)a.categories.push('最佳原创歌曲 / OST');});return;}FILM_AWARDS.forEach(function(name,i){ad.screenAwardData.registry.push({id:'film_award_'+i,name:name,medium:'film',month:[3,1,2,2][i],categories:['最佳影片','最佳导演','最佳男主角','最佳女主角','最佳男配角','最佳女配角','最佳原创歌曲 / OST']});});TV_AWARDS.forEach(function(name,i){ad.screenAwardData.registry.push({id:'tv_award_'+i,name:name,medium:'tv',month:[9,1,1,2][i],categories:['最佳剧集','最佳限定剧','最佳男主角','最佳女主角','最佳男配角','最佳女配角','最佳原创歌曲 / OST']});});}
+    function seedScreenAwards(){
+        var filmCategories=['最佳影片','最佳导演','最佳男主角','最佳女主角','最佳男配角','最佳女配角','最佳原创歌曲 / OST'];
+        var tvCategories=['最佳剧集','最佳限定剧','最佳男主角','最佳女主角','最佳男配角','最佳女配角','最佳原创歌曲 / OST'];
+        FILM_AWARDS.forEach(function(name,i){var id='film_award_'+i,existing=ad.screenAwardData.registry.find(function(a){return a&&a.id===id||a&&a.name===name;});if(!existing)ad.screenAwardData.registry.push({id:id,name:name,medium:'film',month:[3,1,2,2,5,9,2][i],categories:filmCategories.slice()});else{existing.medium='film';if(!Array.isArray(existing.categories))existing.categories=filmCategories.slice();if(existing.categories.indexOf('最佳原创歌曲 / OST')<0)existing.categories.push('最佳原创歌曲 / OST');}});
+        TV_AWARDS.forEach(function(name,i){var id='tv_award_'+i,existing=ad.screenAwardData.registry.find(function(a){return a&&a.id===id||a&&a.name===name;});if(!existing)ad.screenAwardData.registry.push({id:id,name:name,medium:'tv',month:[9,1,1,2][i],categories:tvCategories.slice()});else{existing.medium='tv';if(!Array.isArray(existing.categories))existing.categories=tvCategories.slice();if(existing.categories.indexOf('最佳原创歌曲 / OST')<0)existing.categories.push('最佳原创歌曲 / OST');}});
+    }
     function seedActors(){var first=['Emma','Olivia','Sophia','Mia','Ava','Noah','Liam','Ethan','Lucas','James','Chloe','Isla','Maya','Leo','Theo','Henry','Grace','Zoe','Oscar','Jack'],last=['Stone','Carter','Reed','Blake','Cole','Hart','Lane','Grant','Brooks','West','Hayes','Ford'];var count=rand(10,20);while(ad.screenActors.length<count){var actor={id:id('actor'),n:pick(first)+' '+pick(last),gender:Math.random()<.48?'女':Math.random()<.92?'男':'非二元',fans:rand(1000,8000000),acting:rand(35,900),lines:rand(35,900),titleIndex:rand(0,5),dignity:rand(20,90),fanApprovalFloor:rand(35,70),finance:rand(-300000,5000000),relations:{},credits:[],autonomy:Math.random()};actor.title=SCREEN_TITLES[actor.titleIndex];ad.screenActors.push(actor);}}
     function seedGroups(){var a=['Neon','Velvet','Silver','Wild','Midnight','Electric','Golden','Crystal'],b=['Theory','Club','Hearts','Union','Echo','Drive','Society','Cinema'];var count=rand(5,10);while(ad.entertainmentGroups.length<count){var size=rand(3,7),members=[];for(var i=0;i<size;i++){var actor=pick(ad.screenActors),memberId='npc_'+actor.id;if(!members.some(function(x){return x.id===memberId;}))members.push({id:memberId,n:actor.n,fans:Math.max(1000,Math.floor(actor.fans*.5)),roles:[i===0?'主唱':i===1?'舞蹈担当':i===2?'Rapper':'门面'],solo:true});}var relations={};members.forEach(function(x){relations[x.id]={};members.forEach(function(y){if(x.id!==y.id)relations[x.id][y.id]=rand(45,80);});});ad.entertainmentGroups.push({id:id('group'),name:pick(a)+' '+pick(b),members:members,relations:relations,contract:pick(['groupFirst','balanced','limited']),incomePlan:pick(['equal','popularity','hybrid']),phase:pick(['筹备期','出道爆发期','平稳发展期']),fans:members.reduce(function(s,x){return s+x.fans;},0),heat:rand(1500,18000),cohesion:rand(45,85),concept:pick(['流行','R&B','舞曲','摇滚']),createdYear:Number(time.y||2026)-rand(0,6),lastComebackKey:'',active:true,npc:true});}}
     function playerTitle(){return SCREEN_TITLES[Math.max(0,Math.min(6,Number(ad.screenCareer.titleIndex||0)))];}
@@ -24785,7 +24790,7 @@ function bootScreenAndGroupWorld(){
     window.releaseGroupSingle=function(){var group=playerGroup(),d=group&&group.groupDraft;if(!group||!d||!d.mv)return alert('请先完成歌曲筹备并拍摄 MV。');var promotionPlan=ensureGroupPromotionPlan(group),name=d.name,genre=d.genre,plan=d.plan||'equal',social=rand(200,1000),search=rand(180,1000),event=1+(Math.max(0,Number(promotionPlan.approvedShows||1)-1)*.04);if(plan==='player'){group.cohesion-=8;Object.keys(groupRelations(group)).forEach(function(k){group.relations.player[k]-=8;});event*=1.08;}else if(plan==='popular'){group.cohesion-=3;}var streams=groupReleaseStreams(group,promotionPlan),heat=groupHeat(group,streams,social,search,null,event),track=typeof createEntity==='function'?createEntity(name,group.name,true,'track',[genre],group.fans,Number(ad.sk.w||100),Number(ad.sk.v||100),time.y,time.m,time.w):{id:id('grouptrack'),n:name,artist:group.name,isMe:true,type:'track',gnr:[genre],stmGlobal:streams};promotionPlan.totalWeeks=promotionPlan.approvedShows;promotionPlan.remainingWeeks=promotionPlan.approvedShows;promotionPlan.startedAt=[time.y,time.m,time.w].join('_');track.groupId=group.id;track.isGroupWork=true;track.memberCount=group.members.length;track.heatIndex=heat;track.groupMod=1/Math.sqrt(group.members.length);track.promotionShows=promotionPlan.approvedShows;track.promotionPlan=JSON.parse(JSON.stringify(promotionPlan));track.promoPlan={totalWeeks:promotionPlan.approvedShows,remainingWeeks:promotionPlan.approvedShows,showName:group.name+' 团体打歌',startedAt:[time.y,time.m,time.w].join('_')};track.stmGlobal=streams;track.stmGlobal_Day=Math.floor(streams/7);track.stmGlobal_Week=track.stmGlobal_Day*7;trackPool.push(track);group.lastComebackKey=time.y+'_'+time.m;group.phase=group.phase==='筹备期'?'出道爆发期':'平稳发展期';group.heat=heat;group.fans+=Math.floor(heat*50);group.groupDraft=null;save();if(typeof updatePeakRanks==='function')updatePeakRanks();alert(group.name+' 正式发布《'+track.n+'》，首日全球流媒 '+streams.toLocaleString()+' · 全网热度 '+heat.toLocaleString()+'（'+heatLabel(heat)+'），公司安排 '+track.promotionShows+' 周打歌。');openGroupHub();};
     function processAutonomousCareers(){ensureWorld();ad.screenActors.forEach(function(a){if(Math.random()<.003){a.titleIndex=Math.max(0,Math.min(6,a.titleIndex+(Math.random()<.65?1:-1)));a.title=SCREEN_TITLES[a.titleIndex];}if(Math.random()<.002&&a.finance<0)a.dignity=Math.max(5,a.dignity-2);});ad.entertainmentGroups.forEach(function(g){if(!g.active)return;Object.keys(g.relations||{}).forEach(function(a){Object.keys(g.relations[a]||{}).forEach(function(b){if(Math.random()<.01)g.relations[a][b]=Math.max(0,g.relations[a][b]-rand(1,5));});});if(g.cohesion<20&&Math.random()<.03){g.phase='分化期';if(Math.random()<.3)g.active=false;}if(g.npc&&Math.random()<.004){var actor=pick(ad.screenActors);if(actor&&!g.members.some(function(m){return m.actorId===actor.id;}))g.members.push({id:'npc_'+actor.id,n:actor.n,fans:actor.fans,roles:['外援'],solo:true,actorId:actor.id,outsider:true});}});var p=ad.screenCareer.currentProduction;if(p&&p.status==='拍摄中'){p.remainingWeeks=Math.max(0,p.remainingWeeks-1);if(!p.remainingWeeks)completeScreenProduction();}refreshAnnouncements(false);}
     function mountScreenAwards(){var hall=document.getElementById('mapAwards');if(!hall||document.getElementById('screenAwardEntry'))return;var panel=document.createElement('div');panel.id='screenAwardEntry';panel.className='card';panel.innerHTML='<h4>影视奖项体系</h4><p style="font-size:11px;color:#777;">四个电影奖与四个电视剧奖，使用独立影视作品池；支持自定义与增加奖项。</p><button onclick="openScreenAwards()">进入影视奖项</button>';hall.appendChild(panel);}
-    window.openScreenAwards=function(){ensureWorld();document.getElementById('mInfoTitle').innerText='电影与电视剧奖项';document.getElementById('mInfoContent').innerHTML='<button class="sec" onclick="openCustomScreenAward()">增加自定义影视奖项</button>'+ad.screenAwardData.registry.map(function(a){return '<div class="card"><b>'+esc(a.name)+'</b> · '+(a.medium==='film'?'电影':'电视剧')+'<br><span style="font-size:11px;">'+esc(a.categories.join('、'))+'</span><button onclick="submitScreenAward(\''+a.id+'\')">报名作品</button></div>';}).join('')+'<h4>获奖历史</h4>'+(ad.screenAwardData.history.map(function(x){return '<div>'+esc(x.year+' '+x.award+' - '+x.category+'《'+x.project+'》')+'</div>';}).join('')||'暂无');document.getElementById('mInfo').classList.add('open');};
+    window.openScreenAwards=function(){ensureWorld();document.getElementById('mInfoTitle').innerText='电影与电视剧奖项';document.getElementById('mInfoContent').innerHTML='<button class="sec" onclick="openCustomScreenAward()">增加自定义影视奖项</button>'+ad.screenAwardData.registry.map(function(a){return '<div class="card"><b>'+esc(a.name)+'</b> · '+(a.medium==='film'?'电影':'电视剧')+'<br><span style="font-size:11px;">'+esc(a.categories.join('、'))+'</span><button onclick="submitScreenAward(\''+a.id+'\')">报名作品</button></div>';}).join('')+'<h4>获奖历史</h4>'+(ad.screenAwardData.history.map(function(x){return '<div>'+esc(x.year+' '+x.award+' - '+x.category+'《'+x.project+'》')+'</div>';}).join('')||'暂无');var modal=document.getElementById('mInfo');modal.setAttribute('data-award-modal','1');modal.classList.add('award-transparent-modal','open');};
     window.openCustomScreenAward=function(){document.getElementById('mInfoTitle').innerText='自定义影视奖项';document.getElementById('mInfoContent').innerHTML='<label>奖项名称</label><input id="customScreenAwardName"><label>赛道</label><select id="customScreenAwardMedium"><option value="film">电影</option><option value="tv">电视剧</option></select><label>分支类目（逗号分隔）</label><input id="customScreenAwardCategories" value="最佳作品,最佳主角,最佳配角"><button onclick="saveCustomScreenAward()">保存奖项</button>';};
     window.saveCustomScreenAward=function(){var name=(document.getElementById('customScreenAwardName')||{}).value||'',medium=(document.getElementById('customScreenAwardMedium')||{}).value||'film',categories=((document.getElementById('customScreenAwardCategories')||{}).value||'').split(/[,，]/).map(function(x){return x.trim();}).filter(Boolean);if(!name.trim()||!categories.length)return alert('请填写奖项名称和类目。');ad.screenAwardData.registry.push({id:id('screenaward'),name:name.trim(),medium:medium,month:time.m,categories:categories,custom:true});save();openScreenAwards();};
     window.submitScreenAward=function(awardId){var award=ad.screenAwardData.registry.find(function(x){return x.id===awardId;}),works=ad.screenCareer.credits.filter(function(x){return award.medium==='film'?x.kind==='film':x.kind==='tv'||x.kind==='short';});if(!works.length)return alert('暂无符合该奖项赛道的作品。');document.getElementById('mInfoTitle').innerText=award.name+' 报名';document.getElementById('mInfoContent').innerHTML=award.categories.map(function(cat){var ost=cat.indexOf('OST')>=0||cat.indexOf('原创歌曲')>=0,list=ost?(trackPool||[]).filter(function(t){return t&&t.isMe&&t.isOST&&works.some(function(w){return w.id===t.ostProjectId;});}):works;return '<div class="card"><b>'+esc(cat)+'</b>'+(list.length?'<select class="screenAwardWork" data-category="'+esc(cat)+'" data-kind="'+(ost?'ost':'screen')+'">'+list.map(function(w){return '<option value="'+w.id+'">'+esc(w.n||w.name)+(ost?' · 《'+esc(w.ostProjectName)+'》 OST':' · '+esc(w.tier))+'</option>';}).join('')+'</select><button onclick="judgeScreenAward(\''+award.id+'\',this)">提交并评选</button>':'<p style="font-size:11px;color:#888;">暂无符合条件的'+(ost?'OST':'作品')+'</p>')+'</div>';}).join('');};
@@ -27189,7 +27194,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
       modal.setAttribute('data-award-modal','1');
       var box=modal.querySelector('.modal-box');
       if(box){
-        box.style.background='rgba(0,0,0,.78)';
+        box.style.background='rgba(31,35,43,.94)';
         box.style.backdropFilter='blur(5px)';
         box.style.color='#fff';
         box.style.borderColor='rgba(255,255,255,.24)';
@@ -27200,9 +27205,9 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
       content.style.color='#fff';
       content.querySelectorAll('button').forEach(function(button){
         button.setAttribute('data-award-action','1');
-        button.style.background='#facc15';
-        button.style.color='#111827';
-        button.style.borderColor='#fde047';
+        button.style.background='var(--baby-yellow)';
+        button.style.color='#2f280d';
+        button.style.borderColor='var(--baby-yellow-border)';
       });
       markPlayerRelated(content);
     }

@@ -26801,6 +26801,18 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   window.awardCycleKeyFor=awardCycleKeyFor;
   window.recordAwardCycleWin=recordAwardCycleWin;
   window.isAwardCycleBlocked=isAwardCycleBlocked;
+  function isReleasedAlbum(album){
+    if(!album)return false;
+    var ref=album.trackRef||{};
+    return album.released===true||album.st==='已发'||album.st==='已发行'||ref.released===true||ref.st==='已发'||ref.st==='已发行';
+  }
+  function titleSingle(label){return /首单|二单|三单|四单|五单|六单|七单|八单|九单|十单|先行主打|主打|宣传曲|单曲/.test(String(label||''));}
+  function albumBelongsToPlayer(album,recordNames,recordIds){
+    if(belongsToPlayer(album,recordNames,recordIds))return true;
+    var ref=album&&album.trackRef;
+    if(ref&&belongsToPlayer(ref,recordNames,recordIds))return true;
+    return arr(album&&album.s).some(function(song){return song&&belongsToPlayer(song,recordNames,recordIds);});
+  }
   function canUse(item,cat){
     if(!item||!cat)return false;
     if(cat.targetType==='artist')return isNewcomerCategory(cat)||!artistCycleBlocked(currentTime().y);
@@ -26818,13 +26830,33 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
     return true;
   }
   window.getAllAwardPlayerWorks=function(){
-    var recordIds={},recordNames={},seen={},out=[];works().forEach(function(x){if(!x)return;if(x.id)recordIds[String(x.id)]=true;if(x.n)recordNames[norm(x.n)]=true;});
-    pool().concat(albums()).forEach(function(item,index){
+    var recordIds={},recordNames={},seen={},out=[],source=pool().concat(albums());works().forEach(function(x){if(!x)return;if(x.id)recordIds[String(x.id)]=true;if(x.n)recordNames[norm(x.n)]=true;});
+    function add(item,index,album){
+      if(!item)return;
+      if(album){
+        var existing=item.id&&pool().find(function(t){return t&&String(t.id)===String(item.id);});
+        if(!existing&&item.n)existing=pool().find(function(t){return t&&t.type==='track'&&belongsToPlayer(t,recordNames,recordIds)&&norm(t.n)===norm(item.n);});
+        item=existing||item;
+        if(!item.id)item.id='album_track_'+String(album.id||album.n||'release').replace(/[^a-zA-Z0-9_-]/g,'_')+'_'+index;
+        item.type='track';item.albumId=item.albumId||album.id||album.albumId||null;item.albumName=item.albumName||album.n||album.name||'';
+        item.releaseYear=item.releaseYear||album.releaseYear||album.t_y||currentTime().y;item.releaseMonth=item.releaseMonth||album.releaseMonth||album.t_m||currentTime().m;item.releaseWeek=item.releaseWeek||album.releaseWeek||album.t_w||currentTime().w;
+        item.t_y=item.t_y||item.releaseYear;item.t_m=item.t_m||item.releaseMonth;item.t_w=item.t_w||item.releaseWeek;item.released=true;
+        item.singleLabel=item.singleLabel||item.label||'';item.isTitleSingle=!!item.isTitleSingle||titleSingle(item.singleLabel);
+        item.isMe=true;item.playerOwned=true;item.artist=item.artist||String(player().s||'');item.artistName=item.artistName||item.artist;
+        if(!existing)pool().push(item);
+      }
       if(!item||!item.id||!belongsToPlayer(item,recordNames,recordIds))return;
       if(seen[String(item.id)])return;seen[String(item.id)]=true;item.isMe=true;item.playerOwned=true;item.artist=item.artist||String(player().s||'');item.artistName=item.artistName||item.artist;
       if(!item.releaseYear)item.releaseYear=Number(item.t_y||currentTime().y);if(!item.t_y)item.t_y=item.releaseYear;
       if(!item.releaseMonth)item.releaseMonth=Number(item.t_m||currentTime().m);if(!item.releaseWeek)item.releaseWeek=Number(item.t_w||currentTime().w);
       out.push({item:item,index:index,stamp:stamp(item,index)});
+    }
+    source.forEach(function(item,index){add(item,index,null);});
+    albums().forEach(function(album,albumIndex){
+      if(!isReleasedAlbum(album)||!albumBelongsToPlayer(album,recordNames,recordIds))return;
+      album.isMe=true;album.playerOwned=true;album.artist=album.artist||String(player().s||'');album.artistName=album.artistName||album.artist;
+      if(!seen[String(album.id)]){seen[String(album.id)]=true;if(!album.releaseYear)album.releaseYear=Number(album.t_y||currentTime().y);if(!album.t_y)album.t_y=album.releaseYear;if(!album.releaseMonth)album.releaseMonth=Number(album.t_m||currentTime().m);if(!album.releaseWeek)album.releaseWeek=Number(album.t_w||currentTime().w);out.push({item:album,index:source.length+albumIndex,stamp:stamp(album,source.length+albumIndex)});}
+      arr(album.s).forEach(function(song,songIndex){add(song,source.length+albumIndex*1000+songIndex,album);});
     });
     return out.sort(function(a,b){return b.stamp-a.stamp;}).map(function(x){return x.item;});
   };

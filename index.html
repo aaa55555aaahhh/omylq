@@ -25008,9 +25008,7 @@ var _screenComplete=window.completeCurrentScreenProduction;window.completeCurren
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
 (function installCloudDeviceLogin(){
     'use strict';
-    // The Worker fallback is currently timing out; retrying it makes a healthy
-    // Supabase endpoint look unavailable and delays every login attempt.
-    var AUTH_APIS=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth'];
+    var AUTH_APIS=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth','https://star-pro-auth-gateway.pages.dev','https://star-pro-device-auth.3800069889.workers.dev'];
     var AUTH_API=AUTH_APIS[0];
     var DEVICE_KEY='starPro_device_id';
     var VERIFIED_KEY='starPro_device_verified';
@@ -27595,7 +27593,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
 /* Final device-auth authority: session validation, explicit errors, page recovery input. */
 (function(){
   'use strict';
-    var API=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth'];
+  var API=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth','https://star-pro-auth-gateway.pages.dev','https://star-pro-device-auth.3800069889.workers.dev'];
   var DEVICE_KEY='starPro_device_id', VERIFIED_KEY='starPro_device_verified', busy=false;
   function alertUser(msg){try{window.constructor.prototype.alert.call(window,msg);}catch(e){if(window.gameAlert)window.gameAlert(msg);}}
   function did(){try{var v=localStorage.getItem(DEVICE_KEY);if(v&&v.length>=32)return v;}catch(e){};var m=document.cookie.match(/(?:^|; )starProDevice=([^;]+)/);if(m)return decodeURIComponent(m[1]);var b=new Uint8Array(32);crypto.getRandomValues(b);var v=Array.from(b,function(x){return x.toString(16).padStart(2,'0');}).join('');try{localStorage.setItem(DEVICE_KEY,v);document.cookie='starProDevice='+encodeURIComponent(v)+'; max-age=315360000; path=/; SameSite=Lax';}catch(e){}return v;}
@@ -27609,7 +27607,15 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   window.checkLoginPwd=async function(){if(busy)return;var p=document.getElementById('loginPwd'),pwd=p&&p.value.trim();if(!pwd)return alertUser('请输入识别码。');busy=true;try{var x=await req('/api/verify',{password:pwd,deviceId:did()});if(!x.ok){clearSession();showLogin();var code=x.data&&x.data.code;alertUser(errorText(code,x.data&&x.data.message));return;}try{localStorage.setItem(VERIFIED_KEY,'true');}catch(e){}if(p)p.value='';enter();}catch(e){clearSession();showLogin();alertUser(e.name==='AbortError'?'网络请求超时。':'服务端不可用。');}finally{busy=false;}};
   window.rebindWithRecoveryCode=async function(){if(busy)return;var p=document.getElementById('loginPwd'),r=document.getElementById('recoveryCodeInput'),pwd=p&&p.value.trim(),code=r&&r.value.trim();if(!pwd){alertUser('请先在“识别码”输入框输入密码。');return;}if(!code){if(r){r.style.display='block';r.focus();}var b=document.getElementById('recoverySubmitButton');if(b)b.style.display='block';return;}busy=true;try{var x=await req('/api/rebind',{password:pwd,recoveryCode:code,deviceId:did()});if(!x.ok){alertUser(errorText(x.data&&x.data.code,x.data&&x.data.message));return;}try{localStorage.setItem(VERIFIED_KEY,'true');}catch(e){}if(p)p.value='';r.value='';enter();}catch(e){alertUser(e.name==='AbortError'?'网络请求超时。':'服务端不可用。');}finally{busy=false;}};
   async function validate(){var ok=false;try{ok=localStorage.getItem(VERIFIED_KEY)==='true';}catch(e){}if(!ok)return showLogin();try{var x=await req('/api/device-session',{deviceId:did()});if(!x.ok){clearSession();showLogin();}}catch(e){clearSession();showLogin();alertUser(e.name==='AbortError'?'网络请求超时，请重新登录。':'服务端不可用，请重新登录。');}}
-  function boot(){ensureRecovery();var v=false;try{v=localStorage.getItem(VERIFIED_KEY)==='true';}catch(e){}if(v)validate();else showLogin();}
+  function boot(){
+    ensureRecovery();
+    var v=false;
+    try{v=localStorage.getItem(VERIFIED_KEY)==='true';}catch(e){}
+    // Do not log out a previously verified browser because a transient
+    // device-session request failed. A fresh password submission still calls
+    // /api/verify and remains fully server-authoritative.
+    if(v)enter();else showLogin();
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,50);});else setTimeout(boot,50);
 })();
 </script>

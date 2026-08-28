@@ -25008,7 +25008,7 @@ var _screenComplete=window.completeCurrentScreenProduction;window.completeCurren
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
 (function installCloudDeviceLogin(){
     'use strict';
-    var AUTH_APIS=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth','https://star-pro-auth-gateway.pages.dev','https://star-pro-device-auth.3800069889.workers.dev'];
+    var AUTH_APIS=['https://star-pro-auth-gateway.pages.dev','https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth','https://star-pro-device-auth.3800069889.workers.dev'];
     var AUTH_API=AUTH_APIS[0];
     var DEVICE_KEY='starPro_device_id';
     var VERIFIED_KEY='starPro_device_verified';
@@ -27593,7 +27593,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
 /* Final device-auth authority: session validation, explicit errors, page recovery input. */
 (function(){
   'use strict';
-  var API=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth','https://star-pro-auth-gateway.pages.dev','https://star-pro-device-auth.3800069889.workers.dev'];
+  var API=['https://star-pro-auth-gateway.pages.dev','https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth','https://star-pro-device-auth.3800069889.workers.dev'];
   var DEVICE_KEY='starPro_device_id', VERIFIED_KEY='starPro_device_verified', busy=false;
   function alertUser(msg){try{window.constructor.prototype.alert.call(window,msg);}catch(e){if(window.gameAlert)window.gameAlert(msg);}}
   function did(){try{var v=localStorage.getItem(DEVICE_KEY);if(v&&v.length>=32)return v;}catch(e){};var m=document.cookie.match(/(?:^|; )starProDevice=([^;]+)/);if(m)return decodeURIComponent(m[1]);var b=new Uint8Array(32);crypto.getRandomValues(b);var v=Array.from(b,function(x){return x.toString(16).padStart(2,'0');}).join('');try{localStorage.setItem(DEVICE_KEY,v);document.cookie='starProDevice='+encodeURIComponent(v)+'; max-age=315360000; path=/; SameSite=Lax';}catch(e){}return v;}

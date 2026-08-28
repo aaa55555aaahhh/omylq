@@ -3283,9 +3283,9 @@ var PET_IMAGE_DATA=BUNDLED_VISUAL_ASSETS;
   <div class="card" style="text-align:center; padding:30px; box-shadow:0 10px 30px rgba(0,0,0,0.1); width:90%; max-width:350px;">
     <h2 class="tg" style="font-size:24px;margin-bottom:10px;">星路制作人</h2>
     <p style="font-size:12px;color:#888;margin-bottom:20px;">系统身份检测装置已开启</p>
-    <!-- 这里把 type="password" 改成了 type="text"，输入内容不再变成黑点 -->
-    <input type="text" id="loginPwd" placeholder="请输入检测识别码" style="text-align:center;font-size:16px;padding:12px;">
+    <input type="password" id="loginPwd" autocomplete="off" placeholder="请输入检测识别码" style="text-align:center;font-size:16px;padding:12px;">
     <button onclick="checkLoginPwd()" style="padding:12px;font-size:16px;">验证并进入大厅</button>
+    <button id="switchLoginCodeButton" type="button" class="sec" style="padding:10px;font-size:13px;margin-top:8px;display:block;" onclick="switchLoginCode()">切换识别码 / 上传新密码</button>
     <p style="font-size:11px;color:#aaa;margin-top:10px;">(验证成功后永久免密)</p>
   </div>
 </div>
@@ -3293,6 +3293,7 @@ var PET_IMAGE_DATA=BUNDLED_VISUAL_ASSETS;
 <div id="createPage" class="page" style="display:none; padding-top:20px;">
   <div class="card" style="text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.1);">
     <h2 class="tg" style="font-size:24px;margin-bottom:20px;">星路制作人</h2>
+    <button type="button" class="sec" style="font-size:12px;padding:7px 10px;margin-bottom:12px;" onclick="switchLoginCode()">切换识别码 / 上传新密码</button>
     
     <!-- 新建档案区 -->
     <div style="background:#fefcf5; padding:15px; border-radius:8px; border:1px solid #d1c290; margin-bottom:20px;">
@@ -25007,7 +25008,9 @@ var _screenComplete=window.completeCurrentScreenProduction;window.completeCurren
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
 (function installCloudDeviceLogin(){
     'use strict';
-    var AUTH_APIS=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth','https://star-pro-device-auth.3800069889.workers.dev'];
+    // The Worker fallback is currently timing out; retrying it makes a healthy
+    // Supabase endpoint look unavailable and delays every login attempt.
+    var AUTH_APIS=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth'];
     var AUTH_API=AUTH_APIS[0];
     var DEVICE_KEY='starPro_device_id';
     var VERIFIED_KEY='starPro_device_verified';
@@ -25033,7 +25036,18 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
         document.querySelectorAll('.page').forEach(function(page){page.classList.remove('active');page.style.display='none';});
         var login=document.getElementById('loginPage');
         if(login){login.style.display='flex';login.classList.add('active');}
+        var switchButton=document.getElementById('switchLoginCodeButton');
+        if(switchButton)switchButton.style.display='block';
     }
+    window.switchLoginCode=function(){
+        try{localStorage.removeItem(VERIFIED_KEY);localStorage.removeItem('starPro_login_pwd');localStorage.removeItem('starPro_is_unlocked');}catch(error){}
+        showLogin();
+        var input=document.getElementById('loginPwd');
+        var value='';
+        try{value=window.prompt('请输入新的设备识别码：','')||'';}catch(error){}
+        if(input){input.value=value.trim();input.focus();}
+        if(value.trim())nativeAlert('识别码已填入验证框，请点击“验证并进入大厅”。若提示已绑定其他设备，请使用一次性恢复码换绑。');
+    };
     function enterLobby(){
         var login=document.getElementById('loginPage');
         if(login){login.classList.remove('active');login.style.display='none';}
@@ -25076,7 +25090,7 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
                 if(result.data.code==='DEVICE_MISMATCH'){
                     nativeAlert('该账号已经绑定其他设备。请点击“使用一次性恢复码换绑”，输入恢复码即可迁移到当前设备。');
                 }
-                else if(result.data.code==='DEVICE_ALREADY_BOUND')nativeAlert('当前设备已经绑定过另一个密码，不能再使用新的密码。');
+                else if(result.data.code==='DEVICE_ALREADY_BOUND')nativeAlert('当前设备已经绑定过另一个密码，不能再使用新的密码。请使用“切换识别码”后重试，或让管理员为该密码生成一次性恢复码。');
                 else nativeAlert(result.data.message||'密码错误或已停用。');
                 return;
             }
@@ -25131,6 +25145,8 @@ var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(
         // storage migration or origin change, even though the player had not
         // switched devices. Explicit password login still verifies binding.
         enterLobby();
+        var switchButton=document.getElementById('switchLoginCodeButton');
+        if(switchButton)switchButton.style.display='block';
     }
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(start,20);});
     else setTimeout(start,20);
@@ -27573,6 +27589,93 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   function mount(){var box=document.getElementById('tourLegsList');if(!box)return;Array.from(box.querySelectorAll('.card')).forEach(function(card,i){if(i<1||card.querySelector('[data-continue-setlist]'))return;var buttons=card.querySelectorAll('button');var anchor=buttons.length?buttons[0]:null;var b=document.createElement('button');b.className='sec inline';b.dataset.continueSetlist='1';b.style.cssText='position:absolute;top:5px;right:62px;padding:2px 6px;font-size:10px;color:#166534;border-color:#166534;';b.textContent='延续上一场歌单';b.onclick=function(){window.continuePreviousTourSetlist(i);};if(anchor)anchor.insertAdjacentElement('beforebegin',b);else card.insertBefore(b,card.firstChild);});}
   var base=window.renderTourLegs;if(typeof base==='function')window.renderTourLegs=function(){var r=base.apply(this,arguments);setTimeout(mount,0);return r;};
   setTimeout(mount,300);
+})();
+</script>
+<script>
+/* Final device-auth authority: session validation, explicit errors, page recovery input. */
+(function(){
+  'use strict';
+    var API=['https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth'];
+  var DEVICE_KEY='starPro_device_id', VERIFIED_KEY='starPro_device_verified', busy=false;
+  function alertUser(msg){try{window.constructor.prototype.alert.call(window,msg);}catch(e){if(window.gameAlert)window.gameAlert(msg);}}
+  function did(){try{var v=localStorage.getItem(DEVICE_KEY);if(v&&v.length>=32)return v;}catch(e){};var m=document.cookie.match(/(?:^|; )starProDevice=([^;]+)/);if(m)return decodeURIComponent(m[1]);var b=new Uint8Array(32);crypto.getRandomValues(b);var v=Array.from(b,function(x){return x.toString(16).padStart(2,'0');}).join('');try{localStorage.setItem(DEVICE_KEY,v);document.cookie='starProDevice='+encodeURIComponent(v)+'; max-age=315360000; path=/; SameSite=Lax';}catch(e){}return v;}
+  function showLogin(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.style.display='none';});var p=document.getElementById('loginPage');if(p){p.style.display='flex';p.classList.add('active');}var s=document.getElementById('switchLoginCodeButton');if(s)s.style.display='block';}
+  function clearSession(){try{localStorage.removeItem(VERIFIED_KEY);localStorage.removeItem('starPro_login_pwd');localStorage.removeItem('starPro_is_unlocked');}catch(e){}}
+  function enter(){var p=document.getElementById('loginPage'),c=document.getElementById('createPage');if(p){p.style.display='none';p.classList.remove('active');}if(c){c.style.display='block';c.classList.add('active');}}
+  function errorText(code,msg){return code==='INVALID_PASSWORD'?'密码错误。':code==='DEVICE_MISMATCH'?'密码已绑定其他设备。':code==='DEVICE_ALREADY_BOUND'?'当前设备已绑定其他密码。':code==='SESSION_INVALID'?'当前登录会话已失效，请重新输入识别码。':code==='INVALID_RECOVERY_CODE'?'恢复码错误、已使用或未生成。':msg||'服务端不可用。';}
+  async function req(path,body){var last=null;for(var i=0;i<API.length;i++){try{var ctl=new AbortController(),tm=setTimeout(function(){ctl.abort();},15000),f=window.__starProNativeFetch||originalFetch||window.fetch,r=await f(API[i]+path,{method:'POST',mode:'cors',credentials:'omit',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify(body),cache:'no-store',signal:ctl.signal});clearTimeout(tm);var d={};try{d=await r.json();}catch(e){}if(r.status>=500)continue;return {ok:r.ok&&d.ok,data:d,status:r.status};}catch(e){last=e;}}if(last&&last.name==='AbortError')throw last;throw new Error('SERVER_UNAVAILABLE');}
+  function ensureRecovery(){var login=document.getElementById('loginPage');if(!login||document.getElementById('recoveryCodeInput'))return;var i=document.createElement('input');i.id='recoveryCodeInput';i.type='password';i.autocomplete='off';i.placeholder='一次性恢复码（仅换绑时填写）';i.style.cssText='display:none;text-align:center;font-size:14px;padding:10px;margin-top:8px;';var b=document.createElement('button');b.id='recoverySubmitButton';b.type='button';b.className='sec';b.textContent='使用恢复码换绑';b.style.display='block';b.onclick=window.rebindWithRecoveryCode;var anchor=document.getElementById('switchLoginCodeButton');(anchor&&anchor.parentNode||login).appendChild(i);(anchor&&anchor.parentNode||login).appendChild(b);}
+  window.switchLoginCode=function(){clearSession();var p=document.getElementById('loginPwd'),r=document.getElementById('recoveryCodeInput');if(p){p.value='';p.type='password';p.focus();}if(r){r.value='';r.style.display='none';}var b=document.getElementById('recoverySubmitButton');if(b)b.style.display='none';showLogin();};
+  window.checkLoginPwd=async function(){if(busy)return;var p=document.getElementById('loginPwd'),pwd=p&&p.value.trim();if(!pwd)return alertUser('请输入识别码。');busy=true;try{var x=await req('/api/verify',{password:pwd,deviceId:did()});if(!x.ok){clearSession();showLogin();var code=x.data&&x.data.code;alertUser(errorText(code,x.data&&x.data.message));return;}try{localStorage.setItem(VERIFIED_KEY,'true');}catch(e){}if(p)p.value='';enter();}catch(e){clearSession();showLogin();alertUser(e.name==='AbortError'?'网络请求超时。':'服务端不可用。');}finally{busy=false;}};
+  window.rebindWithRecoveryCode=async function(){if(busy)return;var p=document.getElementById('loginPwd'),r=document.getElementById('recoveryCodeInput'),pwd=p&&p.value.trim(),code=r&&r.value.trim();if(!pwd){alertUser('请先在“识别码”输入框输入密码。');return;}if(!code){if(r){r.style.display='block';r.focus();}var b=document.getElementById('recoverySubmitButton');if(b)b.style.display='block';return;}busy=true;try{var x=await req('/api/rebind',{password:pwd,recoveryCode:code,deviceId:did()});if(!x.ok){alertUser(errorText(x.data&&x.data.code,x.data&&x.data.message));return;}try{localStorage.setItem(VERIFIED_KEY,'true');}catch(e){}if(p)p.value='';r.value='';enter();}catch(e){alertUser(e.name==='AbortError'?'网络请求超时。':'服务端不可用。');}finally{busy=false;}};
+  async function validate(){var ok=false;try{ok=localStorage.getItem(VERIFIED_KEY)==='true';}catch(e){}if(!ok)return showLogin();try{var x=await req('/api/device-session',{deviceId:did()});if(!x.ok){clearSession();showLogin();}}catch(e){clearSession();showLogin();alertUser(e.name==='AbortError'?'网络请求超时，请重新登录。':'服务端不可用，请重新登录。');}}
+  function boot(){ensureRecovery();var v=false;try{v=localStorage.getItem(VERIFIED_KEY)==='true';}catch(e){}if(v)validate();else showLogin();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,50);});else setTimeout(boot,50);
+})();
+</script>
+<script>
+/* Admin license upload panel. Credentials remain page-local and are never persisted. */
+(function(){
+  'use strict';
+  var API='https://yoihsbnncbejpvznxhuj.supabase.co/functions/v1/device-auth';
+  function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function show(msg){try{window.constructor.prototype.alert.call(window,msg);}catch(e){if(window.gameAlert)window.gameAlert(msg);}}
+  function mount(){var login=document.getElementById('loginPage');if(!login||document.getElementById('adminLicenseButton'))return;var btn=document.createElement('button');btn.id='adminLicenseButton';btn.type='button';btn.className='sec';btn.style.cssText='padding:10px;font-size:13px;margin-top:8px;';btn.textContent='管理员上传新密码';btn.onclick=openPanel;login.querySelector('.card')?.appendChild(btn);}
+  function openPanel(){var old=document.getElementById('adminLicensePanel');if(old)old.remove();var panel=document.createElement('div');panel.id='adminLicensePanel';panel.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px;';panel.innerHTML='<div class="card" style="width:100%;max-width:360px;padding:22px;text-align:center;"><h3>上传新密码到后端</h3><p style="font-size:12px;color:#666;">凭据仅用于本次请求，不会保存。</p><input id="adminLicensePassword" type="password" autocomplete="off" placeholder="识别码 / 新密码" style="text-align:center;padding:11px;"><input id="adminLicenseKey" type="password" autocomplete="off" placeholder="管理员密钥" style="text-align:center;padding:11px;margin-top:8px;"><div style="display:flex;gap:8px;margin-top:12px;"><button id="adminLicenseSubmit" type="button" style="flex:1;padding:11px;">上传</button><button id="adminLicenseCancel" type="button" class="sec" style="flex:1;padding:11px;">取消</button></div><p id="adminLicenseStatus" style="font-size:12px;color:#666;min-height:18px;margin-top:8px;"></p></div>';
+    document.body.appendChild(panel);document.getElementById('adminLicenseCancel').onclick=function(){panel.remove();};document.getElementById('adminLicenseSubmit').onclick=submit;document.getElementById('adminLicensePassword').focus();
+  }
+  async function submit(){var p=document.getElementById('adminLicensePassword'),k=document.getElementById('adminLicenseKey'),s=document.getElementById('adminLicenseStatus'),b=document.getElementById('adminLicenseSubmit'),password=p&&p.value.trim(),key=k&&k.value.trim();if(!password||!key){if(s)s.textContent='请填写识别码和管理员密钥。';return;}b.disabled=true;s.textContent='正在上传…';try{var ctl=new AbortController(),timer=setTimeout(function(){ctl.abort();},15000),f=window.__starProNativeFetch||originalFetch||window.fetch,r=await f(API+'/api/admin/licenses',{method:'POST',mode:'cors',credentials:'omit',headers:{'content-type':'text/plain;charset=UTF-8','x-admin-key':key},body:JSON.stringify({password:password}),cache:'no-store',signal:ctl.signal});clearTimeout(timer);var d={};try{d=await r.json();}catch(e){}if(r.ok&&d.ok){p.value='';k.value='';s.textContent='上传成功。现在可在登录框输入该识别码。';}else if(r.status===401)s.textContent='管理员密钥错误。';else if(r.status===409)s.textContent='该识别码已存在。';else s.textContent='上传失败，请检查服务端状态。';}catch(e){s.textContent=e&&e.name==='AbortError'?'网络请求超时。':'服务端不可用。';}finally{b.disabled=false;}}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount);else setTimeout(mount,50);
+})();
+</script>
+<script>
+// Final market-base authority: legacy advTime patches can restore the old
+// 3M/day default (21M/week). Reconcile weekly values at render time with the
+// saved setting while preserving the relative ranking between songs.
+(function installFinalWeeklyMarketAuthority(){
+  function tracks(){
+    return (typeof trackPool!=='undefined'&&Array.isArray(trackPool))
+      ? trackPool.filter(function(t){return t&&t.type==='track';}) : [];
+  }
+  function configuredDaily(){
+    var input=document.getElementById('customMarketBase');
+    var value=input&&Number(input.value);
+    if(typeof ad!=='undefined'&&ad&&ad.marketSettings&&Number(ad.marketSettings.dailyBase)>0){
+      value=Number(ad.marketSettings.dailyBase)/10000;
+    }else if(!(value>0)&&typeof ad!=='undefined'&&ad){
+      value=Number(ad.customMarketBase||0)/10000;
+    }
+    return Math.max(100000, (value>0?value*10000:3000000));
+  }
+  function reconcile(){
+    var list=tracks(), cap=configuredDaily()*7;
+    if(!list.length||!isFinite(cap)||cap<=0)return;
+    var stamp=String(typeof time!=='undefined'&&time?time.y+'_'+time.m+'_'+time.w:'market')+'|'+cap;
+    list.forEach(function(t){
+      if(t._finalWeeklyMarketStamp!==stamp){
+        t._finalWeeklyMarketBase=Math.max(0,Number(t.stmGlobal_Week||0));
+      }
+    });
+    var ordered=list.slice().sort(function(a,b){return Number(b._finalWeeklyMarketBase||0)-Number(a._finalWeeklyMarketBase||0);});
+    var raw=ordered.map(function(t){return Number(t._finalWeeklyMarketBase||0);});
+    var top=raw.reduce(function(m,v){return Math.max(m,v);},0);
+    if(top>cap){
+      var compressed=typeof window.rankStableMarketCompression==='function'
+        ? window.rankStableMarketCompression(raw,cap)
+        : raw.map(function(v){return Math.floor(v*cap/top);});
+      ordered.forEach(function(t,i){
+        t.stmGlobal_Week=Math.max(0,Math.floor(compressed[i]||0));
+        t.stmGlobal_Day=Math.floor(t.stmGlobal_Week/7);
+        t.stmUS_Week=Math.min(t.stmGlobal_Week,Math.max(0,Number(t.stmUS_Week||0)));
+        t.stmUS_Day=Math.floor(t.stmUS_Week/7);
+      });
+    }
+    list.forEach(function(t){t._finalWeeklyMarketStamp=stamp;});
+  }
+  var base=window.renderChart;
+  if(typeof base==='function')window.renderChart=function(){reconcile();return base.apply(this,arguments);};
+  window.reconcileFinalWeeklyMarket=reconcile;
+  setInterval(reconcile,1500);
 })();
 </script>
 </html>

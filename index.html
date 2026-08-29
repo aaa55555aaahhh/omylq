@@ -27733,4 +27733,115 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   setInterval(reconcile,1500);
 })();
 </script>
+<script>
+// Immediate studio UI authority: recording mutates lib/std synchronously,
+// but several legacy wrappers only repaint after a later navigation. Refresh
+// the visible studio surfaces in the same task and persist the new snapshot.
+(function installImmediateStudioSync(){
+  if(window.__immediateStudioSyncInstalled)return;
+  window.__immediateStudioSyncInstalled=true;
+  function repaint(){
+    try{if(typeof window.renderStdMap==='function')window.renderStdMap();}catch(e){}
+    try{if(typeof window.renderLib==='function')window.renderLib();}catch(e){}
+    try{if(typeof window.updAttr==='function')window.updAttr();}catch(e){}
+  }
+  function after(){
+    repaint();
+    if(typeof window.requestAnimationFrame==='function')window.requestAnimationFrame(repaint);
+    else setTimeout(repaint,0);
+    if(typeof window.saveGameImmediate==='function')window.saveGameImmediate();
+    else if(typeof window.saveGame==='function')window.saveGame();
+  }
+  var record=window.startRecord;
+  if(typeof record==='function')window.startRecord=function(){var result=record.apply(this,arguments);after();return result;};
+  var write=window.writeSongStep;
+  if(typeof write==='function')window.writeSongStep=function(){var result=write.apply(this,arguments);after();return result;};
+  window.refreshStudioNow=after;
+})();
+</script>
+<script>
+// Unified work index: unreleased finished recordings live in std until
+// release, while older MV code searched trackPool only. Keep all song actions
+// addressable by id/name so a freshly recorded work is immediately usable.
+(function installUnifiedSongActionAuthority(){
+  function arr(v){return Array.isArray(v)?v:[];}
+  function findSong(id){
+    var key=String(id==null?'':id), pools=[arr(typeof trackPool!=='undefined'?trackPool:[]),arr(typeof std!=='undefined'?std:[]),arr(typeof lib!=='undefined'?lib:[])];
+    for(var p=0;p<pools.length;p++){var hit=pools[p].find(function(t){return t&&String(t.id)===key;});if(hit)return hit;}
+    for(var q=0;q<pools.length;q++){var byName=pools[q].find(function(t){return t&&String(t.n||'')===key;});if(byName)return byName;}
+    return null;
+  }
+  var previousShoot=window.shootMV;
+  window.shootMV=function(id,type){
+    var song=findSong(id);
+    if(!song)return alert('找不到这首歌曲。');
+    // Existing logic can operate on trackPool entities; temporarily expose an
+    // unreleased finished recording there, then keep the same object identity.
+    var pool=typeof trackPool!=='undefined'?trackPool:(window.trackPool||[]),added=false;
+    if(pool.indexOf(song)<0){song.type='track';pool.push(song);added=true;}
+    var result=typeof previousShoot==='function'?previousShoot.call(this,song.id,type):undefined;
+    if(added){var idx=pool.indexOf(song);if(idx>=0)pool.splice(idx,1);}
+    if(typeof window.renderMVMap==='function')window.renderMVMap();
+    if(typeof window.saveGameImmediate==='function')window.saveGameImmediate();
+    return result;
+  };
+  var previousRender=window.renderMVMap;
+  window.renderMVMap=function(){
+    var pool=typeof trackPool!=='undefined'?trackPool:(window.trackPool||[]),finished=arr(typeof std!=='undefined'?std:[]).filter(function(t){return t&&t.type!=='album';}),seen={};
+    pool.concat(finished).forEach(function(t){if(t&&t.id)seen[String(t.id)]=t;});
+    var all=Object.keys(seen).map(function(k){return seen[k];}).filter(function(t){return t&&((t.isMe&&t.type==='track')||finished.indexOf(t)>=0);});
+    if(!all.length)return typeof previousRender==='function'?previousRender.apply(this,arguments):undefined;
+    var box=document.getElementById('listMV');
+    if(!box)return;
+    all.sort(function(a,b){return Number(a.weeks||0)-Number(b.weeks||0);});
+    box.innerHTML=all.map(function(t){var label=t.released?'已发行':'已录制待发行',stream=Number(t.stmGlobal||t.stm||0);return '<div class="card" style="padding:10px;margin-bottom:8px;"><b>'+String(t.n||'未命名歌曲').replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c];})+'</b> <span style="font-size:11px;color:#888;">('+label+')</span><br><span style="font-size:11px;color:#888;">流媒: '+stream.toLocaleString()+' | MV次数: '+Number(t.mvN||0)+'</span><div style="margin-top:6px;"><button class="sec inline" onclick="shootMV(\''+String(t.id).replace(/'/g,'\\\'')+'\',0)">歌词MV ('+Number(t.mvLyricCount||0)+'/5)</button><button class="inline" onclick="shootMV(\''+String(t.id).replace(/'/g,'\\\'')+'\',1)">真人MV ('+Number(t.mvRealCount||0)+'/3)</button></div></div>';}).join('');
+  };
+})();
+</script>
+<script>
+// Last-resort market clamp. A legacy timer still writes the old 300万 default
+// after newer handlers run, so enforce the persisted market setting after all
+// other callbacks and before chart rendering.
+(function installHardMarketClamp(){
+  if(window.__hardMarketClampInstalled)return;
+  window.__hardMarketClampInstalled=true;
+  function list(){return (typeof trackPool!=='undefined'&&Array.isArray(trackPool))?trackPool.filter(function(t){return t&&t.type==='track';}):[];}
+  function dailyBase(){
+    var saved=0;
+    try{saved=Number(ad&&ad.marketSettings&&ad.marketSettings.dailyBase)||0;}catch(e){}
+    if(saved>0)return Math.max(100000,saved);
+    var input=document.getElementById('customMarketBase'),v=input&&Number(input.value);
+    return Math.max(100000,v>0?v*10000:3000000);
+  }
+  function jitteredBase(base){
+    var stamp=String(typeof time!=='undefined'&&time?time.y+'_'+time.m+'_'+time.w:'market');
+    var hash=0,text=stamp+'|'+base;for(var i=0;i<text.length;i++)hash=(hash*31+text.charCodeAt(i))>>>0;
+    // One stable +/-5% fluctuation per game week, rather than per timer tick.
+    return Math.max(100000,Math.floor(base*(.95+(hash%1001)/10000)));
+  }
+  function clamp(){
+    var songs=list(),dayCap=jitteredBase(dailyBase()),weekCap=dayCap*7;
+    if(!songs.length)return;
+    function scale(field,cap){
+      var ordered=songs.slice().sort(function(a,b){return Number(b[field]||0)-Number(a[field]||0);}),raw=ordered.map(function(t){return Math.max(0,Number(t[field]||0));}),top=raw[0]||0;
+      if(top<=cap)return;
+      var out=typeof window.rankStableMarketCompression==='function'?window.rankStableMarketCompression(raw,cap):raw.map(function(v){return Math.floor(v*cap/top);});
+      ordered.forEach(function(t,i){t[field]=Math.max(0,Math.floor(out[i]||0));});
+    }
+    scale('stmGlobal_Day',dayCap);scale('stmGlobal_Week',weekCap);
+    songs.forEach(function(t){
+      t.stmGlobal_Day=Math.min(dayCap,Math.max(0,Number(t.stmGlobal_Day||0)));
+      t.stmGlobal_Week=Math.min(weekCap,Math.max(0,Number(t.stmGlobal_Week||0)));
+      t.stmUS_Day=Math.min(t.stmGlobal_Day,Math.max(0,Number(t.stmUS_Day||0)));
+      t.stmUS_Week=Math.min(t.stmGlobal_Week,Math.max(0,Number(t.stmUS_Week||0)));
+    });
+  }
+  window.clampMarketNow=clamp;
+  var oldRender=window.renderChart;
+  if(typeof oldRender==='function')window.renderChart=function(){clamp();return oldRender.apply(this,arguments);};
+  var oldAdvance=window.advTime;
+  if(typeof oldAdvance==='function')window.advTime=function(){var r=oldAdvance.apply(this,arguments);clamp();return r;};
+  clamp();setInterval(clamp,100);
+})();
+</script>
 </html>

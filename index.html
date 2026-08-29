@@ -27679,7 +27679,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
     return Math.max(100000, (value>0?value*10000:3000000));
   }
   function reconcile(){
-    var list=tracks(), cap=configuredDaily()*7;
+    var list=tracks(), dailyCap=configuredDaily(), cap=dailyCap*7;
     if(!list.length||!isFinite(cap)||cap<=0)return;
     var stamp=String(typeof time!=='undefined'&&time?time.y+'_'+time.m+'_'+time.w:'market')+'|'+cap;
     list.forEach(function(t){
@@ -27701,10 +27701,34 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
         t.stmUS_Day=Math.floor(t.stmUS_Week/7);
       });
     }
+    // Keep the daily chart independent from legacy weekly rendering layers.
+    var dailyOrdered=list.slice().sort(function(a,b){return Number(b.stmGlobal_Day||0)-Number(a.stmGlobal_Day||0);});
+    var dailyRaw=dailyOrdered.map(function(t){return Math.max(0,Number(t.stmGlobal_Day||0));});
+    var dailyTop=dailyRaw.reduce(function(m,v){return Math.max(m,v);},0);
+    if(dailyTop>dailyCap){
+      var dailyCompressed=typeof window.rankStableMarketCompression==='function'
+        ? window.rankStableMarketCompression(dailyRaw,dailyCap)
+        : dailyRaw.map(function(v){return Math.floor(v*dailyCap/dailyTop);});
+      dailyOrdered.forEach(function(t,i){t.stmGlobal_Day=Math.max(0,Math.floor(dailyCompressed[i]||0));});
+    }
     list.forEach(function(t){t._finalWeeklyMarketStamp=stamp;});
   }
   var base=window.renderChart;
-  if(typeof base==='function')window.renderChart=function(){reconcile();return base.apply(this,arguments);};
+  if(typeof base==='function')window.renderChart=function(){
+    reconcile();
+    var result=base.apply(this,arguments);
+    // The legacy chart layer displays weekly values even when the Day tab is
+    // selected. Rewrite the visible metric from the correctly compressed day
+    // values after every render.
+    if(typeof curChTime!=='undefined'&&curChTime==='Day'){
+      var ordered=tracks().slice().sort(function(a,b){return Number(b.stmGlobal_Day||0)-Number(a.stmGlobal_Day||0);});
+      Array.from(document.querySelectorAll('#mChartContent > div')).forEach(function(row,i){
+        var t=ordered[i],node=row&&row.lastElementChild;
+        if(t&&node)node.textContent=Number(t.stmGlobal_Day||0).toLocaleString();
+      });
+    }
+    return result;
+  };
   window.reconcileFinalWeeklyMarket=reconcile;
   setInterval(reconcile,1500);
 })();

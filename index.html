@@ -27822,26 +27822,44 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   function clamp(){
     var songs=list(),dayCap=jitteredBase(dailyBase()),weekCap=dayCap*7;
     if(!songs.length)return;
+    // Absolute proportional cap, independent of any legacy compression helper.
+    ['stmGlobal_Day','stmGlobal_Week'].forEach(function(field){
+      var limit=field==='stmGlobal_Day'?dayCap:weekCap,top=songs.reduce(function(m,t){return Math.max(m,Number(t[field]||0));},0);
+      if(top>limit){var factor=limit/top;songs.forEach(function(t){t[field]=Math.max(0,Math.floor(Number(t[field]||0)*factor));});}
+    });
     function scale(field,cap){
       var ordered=songs.slice().sort(function(a,b){return Number(b[field]||0)-Number(a[field]||0);}),raw=ordered.map(function(t){return Math.max(0,Number(t[field]||0));}),top=raw[0]||0;
       if(top<=cap)return;
-      var out=typeof window.rankStableMarketCompression==='function'?window.rankStableMarketCompression(raw,cap):raw.map(function(v){return Math.floor(v*cap/top);});
-      ordered.forEach(function(t,i){t[field]=Math.max(0,Math.floor(out[i]||0));});
+      var factor=cap/top;
+      // Every song uses the same factor so relative performance is preserved.
+      ordered.forEach(function(t){t[field]=Math.max(0,Math.floor(Number(t[field]||0)*factor));});
     }
     scale('stmGlobal_Day',dayCap);scale('stmGlobal_Week',weekCap);
     songs.forEach(function(t){
       t.stmGlobal_Day=Math.min(dayCap,Math.max(0,Number(t.stmGlobal_Day||0)));
       t.stmGlobal_Week=Math.min(weekCap,Math.max(0,Number(t.stmGlobal_Week||0)));
+      // Keep the two chart periods coherent after legacy code rewrites one.
+      if(t.stmGlobal_Day>0&&t.stmGlobal_Week>t.stmGlobal_Day*7)t.stmGlobal_Week=Math.min(weekCap,t.stmGlobal_Day*7);
       t.stmUS_Day=Math.min(t.stmGlobal_Day,Math.max(0,Number(t.stmUS_Day||0)));
       t.stmUS_Week=Math.min(t.stmGlobal_Week,Math.max(0,Number(t.stmUS_Week||0)));
     });
   }
   window.clampMarketNow=clamp;
+  function bindInput(){
+    var input=document.getElementById('customMarketBase');if(!input||input.dataset.hardMarketBound)return;
+    input.dataset.hardMarketBound='1';
+    input.addEventListener('input',function(){
+      var v=Number(input.value);if(!(v>0))return;
+      try{if(typeof ad!=='undefined'&&ad){ad.marketSettings=ad.marketSettings||{};ad.marketSettings.dailyBase=v*10000;ad.customMarketBase=v*10000;}}catch(e){}
+      clamp();
+    });
+    input.addEventListener('change',function(){try{if(typeof saveGameImmediate==='function')saveGameImmediate();}catch(e){}});
+  }
   var oldRender=window.renderChart;
   if(typeof oldRender==='function')window.renderChart=function(){clamp();return oldRender.apply(this,arguments);};
   var oldAdvance=window.advTime;
   if(typeof oldAdvance==='function')window.advTime=function(){var r=oldAdvance.apply(this,arguments);clamp();return r;};
-  clamp();setInterval(clamp,100);
+  bindInput();clamp();setInterval(function(){bindInput();clamp();},100);
 })();
 </script>
 </html>

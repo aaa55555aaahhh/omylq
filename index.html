@@ -24971,7 +24971,9 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
   setTimeout(normalizeSeedScreenTiers,1600);
 })();
 
-// Cloud device-license authority. This must remain after every legacy login override.
+// Cloud device-license authority. The legacy copy below is disabled; the
+// single final auth module is the only login implementation.
+window.__legacyCloudAuthDisabled=true;
 function normalizeGroupState(){(ad&&ad.entertainmentGroups||[]).forEach(function(g){g.members=g.members||[];g.fans=Math.max(Number(g.fans)||0,g.members.reduce(function(s,m){return s+Math.max(0,Number(m.fans)||0);},0));if(g.fans<=0)g.fans=Math.max(1000,g.members.length*1000);g.cohesion=Math.max(1,Math.min(100,Number(g.cohesion)||55));});}
 normalizeGroupState();setTimeout(normalizeGroupState,1800);
 window.openOSTStudio=function(projectId){var p=(ad.screenProjects||[]).find(function(x){return String(x.id)===String(projectId);});if(!p)return;var escapeText=typeof E==='function'?E:function(v){return String(v||'');},released=(trackPool||[]).filter(function(t){return t&&t.isMe&&t.type==='track';}),unreleased=(lib||[]).filter(function(t){return t&&!t.released;}),slots=p.ostSlots||{};document.getElementById('mInfoTitle').innerText='为《'+p.name+'》争取 OST';document.getElementById('mInfoContent').innerHTML='<p style="font-size:11px;color:#777;">每部作品最多三首：开场曲、插曲、结尾曲。每个槽位只能录用一次。</p><label>OST 类型</label><select id="ostType">'+['opening','insert','ending'].map(function(k){return '<option value="'+k+'">'+(k==='opening'?'开场曲':k==='insert'?'插曲':'结尾曲')+(slots[k]?'（已录用）':'')+'</option>';}).join('')+'</select><label>争取方式</label><select id="ostRoute"><option value="audition">主动试镜</option>'+(p.ostDirectorInvite||p.ostActorInvite?'<option value="invite">接受剧组邀请</option>':'')+(p.isFinanced?'<option value="finance">带资进组</option>':'')+'</select><label>歌曲来源</label><select id="ostSongSource"><option value="new">现场录制新歌</option>'+released.map(function(t){return '<option value="released:'+t.id+'">已发行 · '+escapeText(t.n)+'</option>';}).join('')+unreleased.map(function(t,i){return '<option value="library:'+i+'">未发行曲库 · '+escapeText(t.n)+'</option>';}).join('')+'</select><input id="ostNewName" placeholder="新 OST 名称"><input id="ostNewGenre" value="流行"><button onclick="contributeOST(\''+p.id+'\')">提交 OST 申请</button>';document.getElementById('mInfo').classList.add('open');};
@@ -25007,6 +25009,7 @@ window.saveScreenMarketLimits=function(){var l=ensureScreenMarketLimits();l.film
 var _screenComplete=window.completeCurrentScreenProduction;window.completeCurrentScreenProduction=function(){var r=_screenComplete&&_screenComplete.apply(this,arguments);applyScreenMarketCompression();if(typeof saveGameImmediate==='function')saveGameImmediate();else if(typeof saveGame==='function')saveGame();return r;};
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
 (function installCloudDeviceLogin(){
+    if(window.__legacyCloudAuthDisabled)return;
     if(window.__starProAuthInstalled)return;
     window.__starProAuthInstalled=true;
     'use strict';

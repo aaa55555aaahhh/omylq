@@ -25007,6 +25007,8 @@ window.saveScreenMarketLimits=function(){var l=ensureScreenMarketLimits();l.film
 var _screenComplete=window.completeCurrentScreenProduction;window.completeCurrentScreenProduction=function(){var r=_screenComplete&&_screenComplete.apply(this,arguments);applyScreenMarketCompression();if(typeof saveGameImmediate==='function')saveGameImmediate();else if(typeof saveGame==='function')saveGame();return r;};
 var _screenHub=window.openScreenProjectHub;window.openScreenProjectHub=function(){return _screenHub&&_screenHub.apply(this,arguments);};
 (function installCloudDeviceLogin(){
+    if(window.__starProAuthInstalled)return;
+    window.__starProAuthInstalled=true;
     'use strict';
     var AUTH_APIS=['https://star-pro-auth-gateway.pages.dev'];
     var AUTH_API=AUTH_APIS[0];
@@ -27593,6 +27595,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
 /* Final device-auth authority: session validation, explicit errors, page recovery input. */
 (function(){
   'use strict';
+  if(window.__starProAuthInstalled)return;
+  window.__starProAuthInstalled=true;
   var API=['https://star-pro-auth-gateway.pages.dev'];
   var DEVICE_KEY='starPro_device_id', VERIFIED_KEY='starPro_device_verified', busy=false;
   function alertUser(msg){try{window.constructor.prototype.alert.call(window,msg);}catch(e){if(window.gameAlert)window.gameAlert(msg);}}

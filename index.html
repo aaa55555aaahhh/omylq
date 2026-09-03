@@ -27838,15 +27838,19 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
     });
     var rawDayTop=songs.reduce(function(m,t){return Math.max(m,t._hardMarketRawDay||0);},0),
         rawWeekTop=songs.reduce(function(m,t){return Math.max(m,t._hardMarketRawWeek||0);},0),
-        dayFactor=rawDayTop>dayCap?dayCap/rawDayTop:1,
-        weekFactor=rawWeekTop>weekCap?weekCap/rawWeekTop:1;
-    // Each chart period has exactly one shared multiplier: relative streams
-    // and ranking are preserved, with no subtraction or rank-based curve.
+        easing=.5; // square-root easing narrows large gaps without changing rank
+    function compress(raw,top,cap){
+      raw=Math.max(0,Number(raw)||0);
+      if(!(top>cap)||!(top>0))return Math.floor(raw);
+      return Math.floor(cap*Math.pow(raw/top,easing));
+    }
+    // Each period is normalized against its own leader. The leader reaches the
+    // market cap; lower songs use the same power curve, not subtraction.
     songs.forEach(function(t){
-      t.stmGlobal_Day=Math.floor((t._hardMarketRawDay||0)*dayFactor);
-      t.stmGlobal_Week=Math.floor((t._hardMarketRawWeek||0)*weekFactor);
-      t.stmUS_Day=Math.min(t.stmGlobal_Day,Math.floor((t._hardMarketRawUSDay||0)*dayFactor));
-      t.stmUS_Week=Math.min(t.stmGlobal_Week,Math.floor((t._hardMarketRawUSWeek||0)*weekFactor));
+      t.stmGlobal_Day=compress(t._hardMarketRawDay,rawDayTop,dayCap);
+      t.stmGlobal_Week=compress(t._hardMarketRawWeek,rawWeekTop,weekCap);
+      t.stmUS_Day=Math.min(t.stmGlobal_Day,compress(t._hardMarketRawUSDay,rawDayTop,dayCap));
+      t.stmUS_Week=Math.min(t.stmGlobal_Week,compress(t._hardMarketRawUSWeek,rawWeekTop,weekCap));
     });
   }
   window.clampMarketNow=clamp;

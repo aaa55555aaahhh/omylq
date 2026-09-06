@@ -24762,7 +24762,7 @@ function bootScreenAndGroupWorld(){
         if(roll<.006)outcome*=5+Math.random()*4;else if(roll<.035)outcome*=2+Math.random()*1.8;else if(roll>.965)outcome*=.12+Math.random()*.2;
         project.performanceRoll=Math.max(.08,outcome);project.reputation=Math.max(0,Math.min(100,Math.round(30+Number(project.scriptQuality||60)*.45+actingScore*.025+director*.12+rand(-22,18))));project.actorBreakoutChance=Math.min(.9,.05+actingScore/1800+Number(project.scriptQuality||60)/250);if(Math.random()<project.actorBreakoutChance*.08){project.screenEvents=project.screenEvents||[];project.screenEvents.push({type:'演技大爆',at:[time.y,time.m,time.w].join('-')});project.reputation=Math.min(100,project.reputation+Math.round(5+actingScore/180));}project.imdb=Math.max(1,Math.min(10,project.reputation/10+rand(-8,8)/10));project.rottenCritic=Math.max(0,Math.min(100,Math.round(project.reputation+rand(-12,12))));project.rottenAudience=Math.max(0,Math.min(100,Math.round(project.reputation+rand(-18,18))));project.douban=Math.max(2,Math.min(9.8,project.reputation/11+rand(-8,8)/10));
         if(project.kind==='film'){var baseFilm=(Number(ad.st.f||0)*22+Number(project.budget||20000000)*.7+director*500000)*project.performanceRoll;project.boxOffice=Math.max(1000000,Math.floor(baseFilm));var tm=project.boxOffice/100000000;project.heat=clampHeat(Math.sqrt(tm*1000)*Math.pow(social,.35)*Math.pow(search,.35)*fan*loc*d*event*project.scriptMod);}else{project.episodes=Math.max(1,Number(project.episodes||8));var baseHours=(Number(ad.st.f||0)/25000+Number(project.budget||10000000)/120000+director*4+rand(100,1200))*project.episodes*project.performanceRoll;project.watchHours=Math.max(50,Math.floor(baseHours));project.avgHours=project.watchHours/project.episodes;if(project.kind==='tv')project.heat=clampHeat(Math.sqrt(project.avgHours)*Math.pow(social,.35)*Math.pow(search,.35)*fan*loc*d*event*project.scriptMod);else project.heat=clampHeat(Math.pow(Math.sqrt(project.watchHours),.9)*Math.pow(social,.35)*Math.pow(search,.35)*fan*loc*d*event*.65*project.scriptMod);}
-        project.tier=finalTier(project);project.screenEvents=project.screenEvents||[];if(['大爆','现象级大火','现象级大爆','史诗级大火','史诗级大爆'].indexOf(project.tier)>=0&&Number(project.scriptQuality||0)>=72&&Math.random()<.35){project.screenEvents.push({type:'剧集大爆',at:[time.y,time.m,time.w].join('-')});}project.dailyMetric=project.kind==='film'?Math.floor(project.boxOffice/rand(21,55)):Math.floor(project.watchHours/rand(20,50));project.releaseStamp={year:project.releaseYear,month:project.releaseMonth,week:1};return project;
+        project.tier=finalTier(project);project.screenEvents=project.screenEvents||[];if(['大爆','现象级大火','现象级大爆','史诗级大火','史诗级大爆'].indexOf(project.tier)>=0&&Number(project.scriptQuality||0)>=72&&Math.random()<.35){project.screenEvents.push({type:'剧集大爆',at:[time.y,time.m,time.w].join('-')});}project.dailyMetric=project.kind==='film'?Math.floor(project.boxOffice/rand(21,55)):Math.floor(project.watchHours/rand(20,50));project.releaseStamp={year:project.releaseYear,month:project.releaseMonth,week:1};if(typeof window.__afterScreenPerformance==='function')window.__afterScreenPerformance(project);return project;
     }
     function roleGapWeight(artistTier,roleTier,tags){var gap=roleTier-artistTier,weight=Math.max(.0001,1/(1+Math.abs(gap)*2));if(gap<-2){weight*=.01;if(tags.indexOf('友情客串')>=0||tags.indexOf('情怀项目')>=0)weight*=8;}return Math.max(.0001,weight);}
     function refreshAnnouncements(force){if(!ad||!time)return;var key=time.y+'_'+time.m;if(!force&&ad.castingAnnouncementKey===key&&ad.castingAnnouncements.length)return;ad.castingAnnouncementKey=key;var names=['Glass Horizon','The Last Summer','Silent Avenue','Northern Lights','Red Room','After the Storm','Electric Hearts','Blue Hour'],styles=['悬疑','爱情','科幻','传记','喜剧','犯罪','奇幻','青春'];ad.castingAnnouncements=[];for(var i=0;i<9;i++){var kind=i%3===0?'film':i%3===1?'tv':'short',tier=rand(0,6),gap=tier-Number(ad.screenCareer.titleIndex||0),friend=gap<-2&&(Number(ad.screenCareer.titleIndex||0)>=5||Math.random()<.12),tags=friend?['知名导演友情邀约','友情客串','情怀项目']:Math.random()<.15?['奖项冲刺']:[];ad.castingAnnouncements.push({id:id('casting'),name:pick(names),kind:kind,style:pick(styles),roleTier:tier,role:SCREEN_TITLES[Math.min(6,tier)].replace('新人','角色'),tags:tags,scriptQuality:rand(35,98),directorFame:rand(15,100),budget:kind==='film'?rand(20,350)*1000000:rand(5,120)*1000000,platform:kind==='film'?'院线':pick(Object.keys(PLATFORMS)),weeks:rand(4,8),releaseYear:Number(time.y)+(time.m>10?1:0),releaseMonth:(Number(time.m)+rand(2,8)-1)%12+1,weight:roleGapWeight(Number(ad.screenCareer.titleIndex||0),tier,tags)});}}
@@ -28342,4 +28342,60 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){mount();setTimeout(mount,800);});else{mount();setTimeout(mount,800);}setInterval(mount,2000);
 })();
 </script>
+<script>
+// 影视幕后评分、剧集等级联动与奖项自动报名（最终权威层）
+(function installScreenCrewAwards(){
+  if(window.__screenCrewAwardsInstalled)return; window.__screenCrewAwardsInstalled=true;
+  function A(v){return Array.isArray(v)?v:[];} function N(v,d){var n=Number(v);return Number.isFinite(n)?n:(d||0);} function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function ensure(){if(!window.ad)return null; ad.screenAwardData=ad.screenAwardData||{};ad.screenAwardData.registry=A(ad.screenAwardData.registry);ad.screenAwardData.history=A(ad.screenAwardData.history);ad.screenAwardData.submissions=A(ad.screenAwardData.submissions);ad.screenAwardData.nominations=A(ad.screenAwardData.nominations);return ad;}
+  function awardCount(name){var a=ensure(),n=0;if(!a||!name)return 0;A(a.screenAwardData.history).forEach(function(x){if(x.playerWon&&A(x.crew).some(function(c){return String(c.name)===String(name);}))n++;});return n;}
+  function memberScore(name,base){return Math.max(0,Math.min(100,Math.round(N(base,50)+Math.min(24,awardCount(name)*4))));}
+  function crewScore(p){p=p||{};var c=p.crew||{};var members=[{role:'导演',name:c.director,base:c.directorScore},{role:'编剧',name:c.writer,base:c.writerScore},{role:'摄影',name:c.camera,base:c.cameraScore},{role:'场地',name:c.location,base:c.locationScore}];members.forEach(function(m){m.score=memberScore(m.name,m.base);});c.members=members;return Math.max(0,Math.min(100,Math.round(members.reduce(function(s,m){return s+m.score;},0)/members.length)));}
+  function grade(score){return score>=92?'S':score>=84?'A+':score>=74?'A':score>=64?'B+':score>=54?'B':score>=44?'C':score>=32?'D':'E';}
+  function tierRank(t){var x=['扑街','平播','小火','大火','小爆','大爆','现象级大火','现象级大爆','史诗级大火','史诗级大爆'];return Math.max(0,x.indexOf(t));}
+  function applyCrew(p){if(!p)return p;var choices=p.productionChoices||{};p.crew=p.crew||{};p.crew.director=p.crew.director||choices.director||'项目导演';p.crew.writer=p.crew.writer||choices.writer||'项目编剧';p.crew.camera=p.crew.camera||choices.camera||'摄影指导';p.crew.location=p.crew.location||choices.location||'制片地';p.crew.directorScore=N(p.crew.directorScore,N(p.directorFame,Number(p.directorLevel||4)*12));p.crew.writerScore=N(p.crew.writerScore,N(p.scriptQuality,Number(p.writerLevel||4)*12));p.crew.cameraScore=N(p.crew.cameraScore,N(p.visualQuality||p.cameraQuality,Number(p.cameraLevel||4)*12));p.crew.locationScore=N(p.crew.locationScore,N(p.locationQuality,Number(p.locationLevel||4)*12));p.crewScore=crewScore(p);p.crewGrade=grade(p.crewScore);p.crewLevel=p.crewGrade+'级幕后团队';var cap=Math.max(0,Math.min(9,Math.floor(p.crewScore/11)));p.crewTierCap=cap;return p;}
+  function autoRegister(p){var a=ensure();if(!a||!p||p._screenAwardsAutoRegistered)return; p._screenAwardsAutoRegistered=true;applyCrew(p);var medium=p.kind==='film'?'film':'tv';var awards=A(a.screenAwardData.registry).filter(function(x){return x.medium===medium;});var won=[];awards.forEach(function(awd){A(awd.categories).forEach(function(cat){var key=awd.id+'::'+cat+'::'+p.id;if(a.screenAwardData.submissions.some(function(x){return x.autoKey===key;}))return;var chance=Math.max(.03,Math.min(.82,(N(p.reputation,50)*.45+N(p.heat,0)/700+p.crewScore*.65)/180));var isWon=Math.random()<chance;var rec={year:N(window.time&&time.y,2026),awardId:awd.id,award:awd.name,category:cat,project:p.name,projectId:p.id,player:true,auto:true,autoKey:key,won:isWon,crew:A(p.crew.members).map(function(m){return {role:m.role,name:m.name,score:m.score};})};a.screenAwardData.submissions.push(rec);a.screenAwardData.nominations.push(rec);if(isWon){a.screenAwardData.history.unshift(Object.assign({},rec,{playerWon:true}));won.push(rec);p.crewAwards=p.crewAwards||[];p.crewAwards.push({award:awd.name,category:cat});}});});if(won.length){p.awardsWon=won.length;var lines=won.slice(0,6).map(function(x){return '🏆 '+x.award+' · '+x.category+'\n   影视团队：'+x.crew.map(function(c){return c.role+' '+c.name+'（'+Math.round(c.score)+'分）';}).join('、');}).join('\n');alert('影视奖项结果（剧组自动报名）\n《'+p.name+'》获得 '+won.length+' 项荣誉！\n'+lines+'\n\n影视团队综合评分：'+p.crewScore+'/100（'+p.crewGrade+'级），作品等级：'+p.tier+'。');} }
+  function autoTier(p){applyCrew(p);var labels=['扑街','平播','小火','大火','小爆','大爆','现象级大火','现象级大爆','史诗级大火','史诗级大爆'];var byGrade={S:9,'A+':8,A:7,'B+':5,B:3,C:2,D:1,E:0};p.teamTierIndex=byGrade[p.crewGrade]===undefined?0:byGrade[p.crewGrade];p.tier=labels[p.teamTierIndex];p.screenTeamLevel=p.crewGrade+'级影视团队';return p;}
+  window.__afterScreenPerformance=function(p){applyCrew(p);autoTier(p);autoRegister(p);if(typeof saveGameImmediate==='function')saveGameImmediate();};
+  var oldComplete=window.completeCurrentScreenProduction;window.completeCurrentScreenProduction=function(){var r=oldComplete&&oldComplete.apply(this,arguments);var p=r||(ad&&ad.screenCareer&&ad.screenCareer.credits&&ad.screenCareer.credits[0]);if(p){applyCrew(p);autoTier(p);autoRegister(p);if(typeof saveGameImmediate==='function')saveGameImmediate();}return r;};
+  var oldOpen=window.openScreenAwards;window.openScreenAwards=function(){var r=oldOpen&&oldOpen.apply(this,arguments);setTimeout(function(){var box=document.getElementById('mInfoContent');if(!box)return;box.querySelectorAll('button[onclick^="submitScreenAward"]').forEach(function(b){b.remove();});box.querySelectorAll('.card').forEach(function(card){if(card.textContent.indexOf('影视奖项')<0&&card.querySelector('button[onclick^="submitScreenAward"]'))return;});var note=document.createElement('div');note.className='card';note.style.cssText='font-size:11px;line-height:1.7;background:#f0fdf4;border-color:#86efac;';note.innerHTML='<b>自动报名已启用</b><br>所有已上映电影、电视剧及其幕后团队会由剧组统一报名，无需手动提交。影视团队由导演、编剧、摄影、场地成员组成；成员评分及获奖记录形成团队等级，团队等级直接决定作品等级。';box.insertBefore(note,box.firstChild);},0);return r;};
+  var oldStats=window.projectStatsHtml; if(typeof oldStats==='function')window.projectStatsHtml=function(p){applyCrew(p);var html=oldStats.apply(this,arguments);return html.replace('</span><button','<br>影视团队：'+esc(p.screenTeamLevel||p.crewGrade||grade(p.crewScore))+'（'+Math.round(p.crewScore||0)+'/100） · 导演 '+esc(p.crew&&p.crew.director||'未指定')+' · 编剧 '+esc(p.crew&&p.crew.writer||'未指定')+' · 摄影 '+esc(p.crew&&p.crew.camera||'未指定')+' · 场地 '+esc(p.crew&&p.crew.location||'未指定')+'</span><button');};
+  function normalize(){var a=ensure();if(!a)return;A(a.screenCareer&&a.screenCareer.credits).forEach(function(p){applyCrew(p);if(p.tier)autoTier(p);});}
+  normalize();var oldLoad=window.loadGame;window.loadGame=function(){var r=oldLoad&&oldLoad.apply(this,arguments),done=function(){normalize();};if(r&&typeof r.then==='function')return r.then(function(v){done();return v;});done();return r;};
+})();
+</script>
+<script>
+// 最终榜单压缩权威层：第一名保留原始结算值，其余名次按原始比例和根号名次因子平滑压缩。
+(function installRankSqrtCompression(){
+  if(window.__rankSqrtCompressionInstalled)return;window.__rankSqrtCompressionInstalled=true;
+  function tracks(){return Array.isArray(window.trackPool)?window.trackPool.filter(function(t){return t&&t.type==='track';}):[];}
+  function compress(){
+    var rows=tracks().filter(function(t){return Number(t.stmGlobal_Week||0)>0;}).sort(function(a,b){return Number(b.stmGlobal_Week||0)-Number(a.stmGlobal_Week||0);});
+    if(rows.length<2)return;
+    var top=Math.max(1,Number(rows[0].stmGlobal_Week||0));
+    rows[0]._rankCompressionRaw=top;rows[0]._rankCompressionRank=1;
+    for(var i=1;i<rows.length;i++){
+      var t=rows[i],rank=i+1,raw=Math.max(0,Number(t.stmGlobal_Week||0)),rawRatio=Math.min(.999999,raw/top);
+      // #2 begins from #1's scale; sqrt(rank - 1) makes the separation grow smoothly.
+      var factor=1/(1+.055*Math.sqrt(rank-1)),next=Math.floor(top*rawRatio*factor)+1;
+      var previous=Math.max(0,Number(rows[i-1].stmGlobal_Week||0));
+      next=Math.min(next,Math.max(0,previous-1));
+      t._rankCompressionRaw=raw;t._rankCompressionRank=rank;t.stmGlobal_Week=next;t.stmGlobal_Day=Math.floor(next/7);t._chartPts=Math.max(0,Math.floor(next/150));
+      var usRatio=Math.max(.05,Math.min(.85,Number(t.stmUS_Week||0)/Math.max(1,raw)));t.stmUS_Week=Math.floor(next*usRatio);t.stmUS_Day=Math.floor(t.stmUS_Week/7);
+    }
+  }
+  window.applyRankSqrtCompression=compress;
+  var priorAdvance=window.advTime;
+  window.advTime=function(){var result=typeof priorAdvance==='function'?priorAdvance.apply(this,arguments):undefined;compress();if(typeof window.updatePeakRanks==='function')window.updatePeakRanks();if(typeof window.saveGameImmediate==='function')window.saveGameImmediate();return result;};
+  var priorLoad=window.loadGame;
+  window.loadGame=function(){var result=typeof priorLoad==='function'?priorLoad.apply(this,arguments):undefined;var done=function(){if(typeof window.renderChart==='function')window.renderChart();};if(result&&typeof result.then==='function')return result.then(function(value){done();return value;});done();return result;};
+})();
+</script>
 </html>
+
+
+
+
+
+
+

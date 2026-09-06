@@ -28414,6 +28414,30 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   window.cleanBillboardOutRows=clean;
 })();
 </script>
+<script>
+// TV program persistence authority: the manual-save layer intentionally makes
+// generic saveGame a dirty marker, so the editor must invoke the real save flow.
+(function installTVProgramPersistence(){
+  if(window.__tvProgramPersistenceInstalled)return;window.__tvProgramPersistenceInstalled=true;
+  function list(){if(!window.ad)return [];if(!Array.isArray(ad.tvPrograms))ad.tvPrograms=[];return ad.tvPrograms;}
+  function persist(){window.__starProSaveDirty=true;if(typeof window.manualSaveGame==='function')return Promise.resolve(window.manualSaveGame());if(typeof window.saveGameImmediate==='function')return Promise.resolve(window.saveGameImmediate());return Promise.resolve(false);}
+  window.saveTVPrograms=function(){var rows=Array.from(document.querySelectorAll('.tvProgramEdit'));rows.forEach(function(row){var id=String(row.dataset.id||''),p=list().find(function(x){return String(x.id)===id;});if(!p)return;var name=row.querySelector('.tvProgramName'),category=row.querySelector('.tvProgramCategory');p.name=(name&&name.value||'').trim()||p.name||'未命名节目';p.category=(category&&category.value)||p.category||'搞笑类';});persist().then(function(){if(typeof window.renderTVPrograms==='function')window.renderTVPrograms();if(typeof window.closeM==='function')window.closeM('mInfo');});};
+  window.addTVProgram=function(){list().push({id:'tv_custom_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),name:'新节目',category:'搞笑类'});persist().then(function(){if(typeof window.openTVProgramManager==='function')window.openTVProgramManager();});};
+  window.deleteTVProgram=function(id){ad.tvPrograms=list().filter(function(p){return String(p.id)!==String(id);});persist().then(function(){if(typeof window.openTVProgramManager==='function')window.openTVProgramManager();});};
+})();
+</script>
+<script>
+// Absolute music-market cap authority. Several legacy compression passes run
+// later than the settings UI; this final pass reapplies the persisted cap to
+// both daily and weekly audio streams.
+(function installAbsoluteMusicCap(){
+  if(window.__absoluteMusicCapInstalled)return;window.__absoluteMusicCapInstalled=true;
+  function songs(){try{return Array.isArray(trackPool)?trackPool.filter(function(t){return t&&t.type==='track';}):[];}catch(e){return [];}}
+  function cap(){var v=0;try{v=Number(ad&&ad.marketSettings&&ad.marketSettings.dailyBase)||0;}catch(e){}if(!(v>0)){try{v=Number(ad&&ad.customMarketBase)||0;}catch(e){}}if(!(v>0)){try{var saved=JSON.parse(localStorage.getItem('starPro_market_settings_v2')||'null');v=Number(saved&&saved.dailyBase)||0;}catch(e){}}if(!(v>0)){var input=document.getElementById('customMarketBase');v=input&&Number(input.value)>0?Number(input.value)*10000:3000000;}return Math.max(100000,v);}
+  function apply(){var list=songs();if(!list.length)return;var dailyCap=cap(),weeklyCap=dailyCap*7,key=String(dailyCap)+'|'+String(typeof time!=='undefined'&&time?time.y+'_'+time.m+'_'+time.w:'market');list.forEach(function(t){if(t._absoluteCapKey!==key){/* Prefer raw snapshots created before legacy clamps; otherwise use current values. */t._absoluteRawDay=Math.max(0,Number(t._hardMarketRawDay||0),Number(t._rankCompressionRaw||0)/7,Number(t.stmGlobal_Day||0),Number(t.stmGlobal_Week||0)/7);t._absoluteRawWeek=Math.max(0,Number(t._hardMarketRawWeek||0),Number(t._rankCompressionRaw||0),Number(t.stmGlobal_Week||0),Number(t.stmGlobal_Day||0)*7);t._absoluteCapKey=key;}});var topDay=list.reduce(function(m,t){return Math.max(m,t._absoluteRawDay||0);},0),topWeek=list.reduce(function(m,t){return Math.max(m,t._absoluteRawWeek||0);},0);list.forEach(function(t){var d=Number(t._absoluteRawDay||0),w=Number(t._absoluteRawWeek||0);t.stmGlobal_Day=topDay>dailyCap?Math.floor(dailyCap*Math.pow(d/Math.max(1,topDay),.5)):Math.min(d,dailyCap);t.stmGlobal_Week=topWeek>weeklyCap?Math.floor(weeklyCap*Math.pow(w/Math.max(1,topWeek),.5)):Math.min(w,weeklyCap);t.stmUS_Day=Math.min(t.stmGlobal_Day,Math.max(0,Number(t.stmUS_Day||0)));t.stmUS_Week=Math.min(t.stmGlobal_Week,Math.max(0,Number(t.stmUS_Week||0)));});}
+  window.applyAbsoluteMusicCap=apply;var oldRender=window.renderChart;window.renderChart=function(){apply();var r=typeof oldRender==='function'?oldRender.apply(this,arguments):undefined;apply();return r;};var oldAdv=window.advTime;window.advTime=function(){var r=typeof oldAdv==='function'?oldAdv.apply(this,arguments):undefined;apply();return r;};function bind(){var input=document.getElementById('customMarketBase');if(!input||input.dataset.absoluteCapBound)return;input.dataset.absoluteCapBound='1';input.addEventListener('input',function(){var v=Number(input.value);if(!(v>0))return;try{if(typeof ad!=='undefined'&&ad){ad.marketSettings=ad.marketSettings||{};ad.marketSettings.dailyBase=v*10000;ad.customMarketBase=v*10000;}localStorage.setItem('starPro_market_settings_v2',JSON.stringify(Object.assign({},JSON.parse(localStorage.getItem('starPro_market_settings_v2')||'{}'),{dailyBase:v*10000})));}catch(e){}apply();});}setInterval(function(){bind();apply();},700);bind();apply();
+})();
+</script>
 </html>
 
 

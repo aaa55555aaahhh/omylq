@@ -4245,7 +4245,7 @@ function createEntity(name, artist, isMe, type, gnr, fans, C, V, t_y, t_m, t_w, 
       else L_mod = 1.2;
       
       // 2. 期待值 E
-      let E = (isMe && typeof ad !== 'undefined') ? (ad.Elead || 1.1) : (Math.random() * 0.3 + 0.9);
+      let E = (isMe && typeof ad !== 'undefined') ? (ad.Elead || 1.1) * (ad.publicExpectation || 1.0) : (Math.random() * 0.3 + 0.9);
       
       // 3. 随机扰动 Random (0.9 ~ 1.1)
       let randomMod = (Math.random() * 0.2) + 0.9;
@@ -4880,7 +4880,7 @@ window.relWipAlb = async function(){
 
   if(a.preCount>0){ if(tAlb.Spub>80) { ad.Elead=1.2; ad.Kalbum=1.1; } else if(tAlb.Spub<55) { ad.Elead=0.7; ad.Kalbum=0.8; } }
   
-  tAlb.stmGlobal = Math.floor(tAlb.stmGlobal * ad.Elead * ad.Kalbum * ad.H * ad.D * ad.Geffect * curAlbPj.hype * Dleak); 
+  tAlb.stmGlobal = Math.floor(tAlb.stmGlobal * ad.Elead * ad.Kalbum * (ad.publicExpectation || 1.0) * ad.H * ad.D * ad.Geffect * curAlbPj.hype * Dleak); 
   tAlb.stmUS = Math.floor(tAlb.stmGlobal * 0.4);
   tAlb.slTotal = Math.floor(tAlb.stmGlobal / 100); 
   
@@ -23826,8 +23826,12 @@ document.addEventListener("DOMContentLoaded", function(){
             songs.forEach(function(t){var result=calculateAppleMusicTrack(t,true);t.amFinalScore=Math.floor(result.raw*scale*result.penalty);t.amPureScore=t.amFinalScore;t.amChartScale=scale;});
             return songs.slice().sort(function(a,b){return Number(b.amFinalScore||0)-Number(a.amFinalScore||0);});
         }
+        function amCurrentRegions(t){
+            var global=Math.max(0,Number(t.stmGlobal_Day||0),Number(t.stmGlobal_Week||0)/7),us=Math.min(global,Math.max(0,Number(t.stmUS_Day||0),Number(t.stmUS_Week||0)/7));
+            return {US:Math.floor(Math.max(us*.34,global*.10)),UK:Math.floor(global*.08),CA:Math.floor(global*.06),AU:Math.floor(global*.045),JP:Math.floor(global*.07),DE:Math.floor(global*.05),FR:Math.floor(global*.04),KR:Math.floor(global*.035),BR:Math.floor(global*.06)};
+        }
         function advanceAppleMusicDay(){
-            Array.from(trackPool||[]).forEach(function(t){if(!t||t.type!=="track")return;var regions=amRegionsFor(t),decay=amDecayMultiplier(t),event=amActivityMultiplier(t);Object.keys(regions).forEach(function(k){regions[k]=Math.floor(Math.max(0,Number(regions[k]||0))*decay*event);});calculateAppleMusicTrack(t,true);});
+            Array.from(trackPool||[]).forEach(function(t){if(!t||t.type!=="track")return;var regions=amRegionsFor(t),floor=amCurrentRegions(t),decay=amDecayMultiplier(t),event=amActivityMultiplier(t);Object.keys(floor).forEach(function(k){regions[k]=Math.floor(Math.max(Number(floor[k]||0),Math.max(0,Number(regions[k]||0))*decay)*event);});calculateAppleMusicTrack(t,true);});
             calculateAppleMusicChart();
         }
         window.calculateAppleMusicTrack=calculateAppleMusicTrack;
@@ -23880,8 +23884,12 @@ document.addEventListener("DOMContentLoaded", function(){
             });
             return songs.slice().sort(function(a,b){return Number(b.itunesFinalScore||0)-Number(a.itunesFinalScore||0);});
         }
+        function itunesCurrentRegions(t){
+            var age=Math.max(1,Number(t.weeks||1)),sales=Math.max(0,Number(t.salesWeek||0),Number(t.weeklySales||0),Number(t.pureSalesWeek||0))/7,career=Math.min(5000,Math.floor(Math.max(0,Number(t.slTotal||0))/(age*35))),streams=Math.min(5000,Math.floor(Math.max(0,Number(t.stmGlobal_Day||0),Number(t.stmGlobal_Week||0)/7)/1750)),daily=Math.max(sales,career,streams);
+            return {US:Math.floor(daily*.44),UK:Math.floor(daily*.12),CA:Math.floor(daily*.08),AU:Math.floor(daily*.06),JP:Math.floor(daily*.09),DE:Math.floor(daily*.06),FR:Math.floor(daily*.05),BR:Math.floor(daily*.06),MX:Math.floor(daily*.04)};
+        }
         function advanceITunesDay(){
-            Array.from(trackPool||[]).forEach(function(t){if(!t||t.type!=="track")return;var regions=itunesRegionsFor(t),decay=itunesDecay(t),event=itunesEvent(t);Object.keys(regions).forEach(function(k){regions[k]=Math.floor(Math.max(0,Number(regions[k]||0))*decay*event);});calculateITunesTrack(t,true);});calculateITunesChart();
+            Array.from(trackPool||[]).forEach(function(t){if(!t||t.type!=="track")return;var regions=itunesRegionsFor(t),floor=itunesCurrentRegions(t),decay=itunesDecay(t),event=itunesEvent(t);Object.keys(floor).forEach(function(k){regions[k]=Math.floor(Math.max(Number(floor[k]||0),Math.max(0,Number(regions[k]||0))*decay)*event);});calculateITunesTrack(t,true);});calculateITunesChart();
         }
         window.calculateITunesTrack=calculateITunesTrack;
         window.calculateITunesChart=calculateITunesChart;
@@ -25726,7 +25734,7 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){do
   function genres(t){var list=Array.isArray(t.gnr)?t.gnr:Array.isArray(t.g)?t.g:String(t.gnr||t.g||'').split(/[,，/、|]/);return list.map(function(x){return String(x||'').trim();}).filter(Boolean).join(' / ')||'未设置';}
   window.shootMV=function(id,type){var t=songById(id);if(!t)return alert('找不到这首歌曲。');type=Number(type)||0;var field=type===0?'mvLyricCount':'mvRealCount',flag=type===0?'hasLyricMV':'hasRealMV',limit=type===0?5:3,count=Math.max(0,Number(t[field]||0));if(count>=limit)return alert((type===0?'歌词 MV':'真人 MV')+' 已拍摄 '+limit+' 次；等待歌曲触发回春后可重置次数。');if(typeof costEnergy==='function'&&!costEnergy(10))return;var cost=type===0?10000:1000000;if(type===1&&ad&&ad.co!=='独立')cost=0;if(Number(ad&&ad.m||0)<cost)return alert('资金不足！拍摄需要 $'+cost.toLocaleString());ad.m-=cost;var base=Math.max(10000,Number(t.stmGlobal||t.stm||0)),bonus=type===1?(1+Math.random()*2):(.2+Math.random()*.5),gain=Math.floor(base*bonus*Math.max(.1,Number(ad.Geffect||1)));t.stmGlobal=base+gain;t.stmGlobal_Day=Math.max(0,Number(t.stmGlobal_Day||0))+Math.floor(gain/7);t.slTotal=Math.max(0,Number(t.slTotal||0))+Math.floor(gain/150);t.viralWk=Math.max(3,Number(t.viralWk||0));t.mvN=Math.max(0,Number(t.mvN||0))+1;t[field]=count+1;t[flag]=true;t._mvAvailableAgain=false;if(typeof advHour==='function')advHour(type===1?72:24);if(typeof updatePeakRanks==='function')updatePeakRanks();if(typeof updAttr==='function')updAttr();if(typeof renderMVMap==='function')renderMVMap();if(typeof saveGame==='function')saveGame();alert('MV 拍摄完成！《'+(t.n||'未命名歌曲')+'》新增 '+gain.toLocaleString()+' 全球流媒。');};
   var chainedAdvance=window.advTime;
-  window.advTime=function(){var before={};songs().forEach(function(t){before[t.id]=Math.max(0,Number(t.longViral||0),Number(t.viralWk||0));});var result=typeof chainedAdvance==='function'?chainedAdvance.apply(this,arguments):undefined;songs().forEach(function(t){var active=Math.max(0,Number(t.longViral||0),Number(t.viralWk||0));if(active>0&&before[t.id]===0){t.mvLyricCount=0;t.mvRealCount=0;t.hasLyricMV=false;t.hasRealMV=false;t._mvAvailableAgain=true;t.freshness=Math.min(100,Math.max(Number(t.freshness||45),72));t.promoFreshness=Math.min(100,Math.max(Number(t.promoFreshness||45),72));if(window.posts&&Array.isArray(posts.mom))posts.mom.unshift({t:'歌曲回春',c:'《'+(t.n||'未命名歌曲')+'》重新获得大众新鲜感，歌词 MV 与真人 MV 拍摄次数已重置。'});}});return result;};
+  window.advTime=function(){var before={};songs().forEach(function(t){before[t.id]=Math.max(0,Number(t.longViral||0),Number(t.viralWk||0));});var result=typeof chainedAdvance==='function'?chainedAdvance.apply(this,arguments):undefined;songs().forEach(function(t){var active=Math.max(0,Number(t.longViral||0),Number(t.viralWk||0));if(active>0&&before[t.id]===0){t.mvLyricCount=0;t.mvRealCount=0;t.hasLyricMV=false;t.hasRealMV=false;t._mvAvailableAgain=true;var oldReleased=typeof window.shouldBoostRevivalFreshness==='function'?window.shouldBoostRevivalFreshness(t):Number(t.weeks||0)>4;if(oldReleased){t.freshness=Math.min(100,Math.max(Number(t.freshness||45),72));t.promoFreshness=Math.min(100,Math.max(Number(t.promoFreshness||45),72));}if(window.posts&&Array.isArray(posts.mom))posts.mom.unshift({t:oldReleased?'歌曲回春':'歌曲热度扩散',c:'《'+(t.n||'未命名歌曲')+'》'+(oldReleased?'重新获得大众新鲜度，歌词 MV 与真人 MV 拍摄次数已重置。':'因新歌热度带动艺人关注，但不额外增加新歌新鲜度。')});}});return result;};
   var chainedSongStats=window.viewSongStats;
   window.viewSongStats=function(id){var result=typeof chainedSongStats==='function'?chainedSongStats.apply(this,arguments):undefined,t=songs().find(function(x){return String(x.id)===String(id);}),box=document.getElementById('mGameInputDesc');if(!t||!box)return result;var old=box.querySelector('[data-complete-song-meta]');if(old)old.remove();var card=document.createElement('div');card.dataset.completeSongMeta='1';card.className='card';card.style.cssText='margin-top:8px;font-size:12px;line-height:1.8;';card.innerHTML='<b>作品资料</b><br>发行时间：'+esc(releaseDate(t))+'<br>曲风：'+esc(genres(t))+'<br>乐评分：'+Number(t.Spub||0).toFixed(1)+'<br>PK 点数：'+Number(t._bbPtsExact||t.pkScore||t.score||0).toLocaleString()+'<br>SPO 全球：当前 '+rank(t.lastW)+' · 最高 '+rank(t.peakS)+' · 在榜 '+Number(t.chartWeeks||0)+' 周<br>SPO 美国：当前 '+rank(t.lastSpotifyUS||t.lastB)+' · 最高 '+rank(t.peakSpotifyUS||t.peakB)+' · 在榜 '+Number(t.usChartWeeks||0)+' 周<br>Billboard：当前 '+rank(t.lastB)+' · 最高 '+rank(t.peakB)+' · 在榜 '+Number(t.billboardChartWeeks||0)+' 周<br>MV：歌词版 '+Math.max(0,Number(t.mvLyricCount||0))+'/5 · 真人版 '+Math.max(0,Number(t.mvRealCount||0))+'/3'+(t._mvAvailableAgain?' · 回春已重置次数':'')+'</div><button class="sec inline" onclick="openEmergencyRecall(\''+esc(t.id)+'\')">紧急召回，重新打单</button>';box.appendChild(card);return result;};
 })();
@@ -27869,6 +27877,469 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   var oldAdvance=window.advTime;
   if(typeof oldAdvance==='function')window.advTime=function(){var r=oldAdvance.apply(this,arguments);clamp();return r;};
   bindInput();clamp();setInterval(function(){bindInput();clamp();},500);
+})();
+</script>
+<style>
+#idealChartApp{display:none;position:fixed;inset:0;z-index:10020;background:#07111d;color:#d9f7ff;font-family:Arial,sans-serif;overflow:auto}
+#idealChartApp.open{display:block}
+#idealChartApp *{box-sizing:border-box}
+.ic-shell{max-width:1180px;margin:0 auto;padding:20px}
+.ic-head{display:flex;align-items:center;gap:12px;border-bottom:1px solid #1b4157;padding-bottom:14px;margin-bottom:16px}
+.ic-head h1{font-size:20px;margin:0;letter-spacing:0;color:#eaffff}.ic-kicker{font-size:11px;color:#70cfe7;letter-spacing:1px;text-transform:uppercase}
+.ic-view{display:none}.ic-view.active{display:block}.ic-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.ic-btn{border:1px solid #24738d;background:#0c2635;color:#dffaff;padding:8px 12px;border-radius:3px;cursor:pointer}.ic-btn:hover{background:#12394d}.ic-btn.primary{background:#087f9e;border-color:#26c6ed;color:#fff}.ic-btn.danger{border-color:#a6495b;color:#ffcdd5}
+.ic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.ic-card{background:#0b1d2b;border:1px solid #1b475d;padding:14px;border-radius:4px}.ic-card h3{margin:0 0 8px;font-size:15px;color:#e9ffff}.ic-muted{font-size:12px;color:#82aebc}.ic-pill{display:inline-block;padding:3px 7px;border:1px solid #23657c;color:#8be5fa;font-size:11px;margin:2px 3px 2px 0;border-radius:2px}
+.ic-era-card{cursor:pointer;min-height:130px;transition:border-color .15s}.ic-era-card:hover{border-color:#45d9ff}.ic-table{width:100%;border-collapse:collapse;font-size:12px}.ic-table th,.ic-table td{border-bottom:1px solid #17394a;padding:9px 7px;text-align:left;vertical-align:middle}.ic-table th{color:#79d8ed;font-weight:600}.ic-table input,.ic-table select{width:100%;background:#071722;border:1px solid #246078;color:#dffaff;padding:6px;border-radius:2px}.ic-table input[type=range]{padding:0;accent-color:#20c9f2}.ic-readonly{color:#9dbac4}.ic-section{background:#091a28;border:1px solid #19445a;padding:14px;margin-bottom:14px;border-radius:4px}.ic-section h2{font-size:15px;margin:0 0 10px;color:#a9edff}.ic-layout{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(0,1.5fr);gap:14px}.ic-real-list{display:grid;gap:8px}.ic-real-row{border-bottom:1px solid #17394a;padding-bottom:8px}.ic-real-row b{display:block;color:#e8ffff}.ic-real-row span{font-size:11px;color:#86aab6}.ic-mode{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.ic-mode label{font-size:12px;color:#bceefa}.ic-mode input{accent-color:#20c9f2}.ic-buff{padding:9px;border-left:3px solid #22c6ef;background:#0b2736;font-size:12px;color:#bceefa;margin:10px 0}.ic-player{background:#06121d;border:1px solid #1c536a;padding:10px;border-radius:4px}.ic-player canvas{display:block;width:100%;height:340px;background:#06131e;border:1px solid #19475b}.ic-player-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:11px}.ic-player-controls input[type=range]{accent-color:#20c9f2}.ic-range-row{display:grid;grid-template-columns:48px 1fr 48px;gap:7px;align-items:center;margin-top:8px;font-size:11px;color:#8fb9c6}.ic-note{font-size:11px;color:#7197a5;line-height:1.6}.ic-empty{padding:24px;text-align:center;color:#7798a5;border:1px dashed #245367}
+@media(max-width:760px){.ic-shell{padding:12px}.ic-layout{grid-template-columns:1fr}.ic-table{min-width:720px}.ic-section.table-wrap{overflow:auto}.ic-player canvas{height:260px}}
+</style>
+<script>
+/* Ideal chart trajectories: local-only computation, no network/API dependency. */
+(function installIdealChartModule(){
+  if(window.__idealChartModuleInstalled)return; window.__idealChartModuleInstalled=true;
+  var KEY='starProIdealChart_v1', root, state={artist:null,era:null,song:null,playing:false,raf:0,progress:0,speed:1,from:1,to:52};
+  function A(v){return Array.isArray(v)?v:[];} function N(v,d){var n=Number(v);return isFinite(n)?n:(d||0)}
+  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function store(){try{var payload={eras:state.data||{},artistId:state.artist&&state.artist.id,eraId:state.era&&state.era.id};localStorage.setItem(KEY,JSON.stringify(payload));}catch(e){}}
+  function load(){try{var raw=JSON.parse(localStorage.getItem(KEY)||'{}')||{};state.data=raw.eras||raw||{};state.savedArtistId=raw.artistId||null;state.savedEraId=raw.eraId||null;}catch(e){state.data={};}}
+  function player(){return typeof ad!=='undefined'&&ad&&ad.s?{id:'player',name:ad.s,isMe:true}:null}
+  function artists(){var out=A(typeof worldArtists!=='undefined'?worldArtists:[]).map(function(a){return {id:String(a.id||a.n),name:a.n||a.name||'未知艺人',fans:N(a.fans),isMe:false};});var p=player();if(p)out.unshift(p);return out;}
+  function artistConfig(a){state.data=state.data||{};state.data._artists=state.data._artists||{};var id=String(a&&a.id||a&&a.name||'unknown');if(!state.data._artists[id])state.data._artists[id]={idealIndex:a&&a.isMe?60:50};var c=state.data._artists[id];c.idealIndex=Math.max(0,Math.min(100,N(c.idealIndex,a&&a.isMe?60:50)));return c;}
+  function weekKey(){var t=typeof time!=='undefined'&&time?time:{y:2026,m:1,w:1};return [t.y,t.m,t.w].join('_');}
+  function npcVideos(){state.data=state.data||{};state.data._videos=A(state.data._videos);return state.data._videos;}
+  function generateNpcVideos(){var key=weekKey(),videos=npcVideos();if(videos.some(function(v){return v.week===key;}))return;A(artists()).filter(function(a){return !a.isMe;}).forEach(function(a){if(Math.random()>0.24)return;var es=eras(a),e=es[es.length?Math.floor(Math.random()*es.length):0],song=e&&A(e.songs)[0];if(!song)return;var cfg=artistConfig(a),x=getEdit(e,song),r=reality(song),gain=Math.max(0,Math.round((r.peak*.18+5)*(cfg.idealIndex/100)));x.idealPeak=Math.max(1,Math.min(100,r.peak-gain));x.viral=Math.max(.05,Math.min(.95,.08+cfg.idealIndex/250));videos.unshift({id:'ideal_video_'+Date.now()+'_'+Math.random().toString(36).slice(2),artistId:a.id,artistName:a.name,eraId:e.id,songId:song.id||song.n,title:a.name+' · '+(song.n||'单曲')+' 理想走势',week:key,index:cfg.idealIndex});});videos.splice(30);store();}
+  function tracks(){return A(typeof trackPool!=='undefined'?trackPool:[]).filter(function(t){return t&&t.type==='track';});}
+  function findTrack(song,artist){var id=song&&song.id, name=song&&song.n;return tracks().find(function(t){return id&&String(t.id)===String(id);})||tracks().find(function(t){return t.n===name&&(!artist||t.artist===artist.name);})||null;}
+  function reality(t){return {peak:N(t&& (t.peakB||t.peakS||t.lastB||t.lastW),100),peakWeeks:N(t&& (t.peakWeeks||t.peakSWeeks||t.peakBWeeks),1),weeks:Math.max(1,N(t&&(t.chartWeeks||t.weeks||t.usChartWeeks),12))};}
+  function dateVal(a){var y=N(a&&(a.releaseYear||a.year||a.y||(a.releaseDate&&a.releaseDate.y)),0),m=N(a&&(a.releaseMonth||a.month||a.m||(a.releaseDate&&a.releaseDate.m)),1);return y*12+m;}
+  function eras(artist){var out=[];var mine=artist&&artist.isMe;var albums=A(typeof albs!=='undefined'?albs:[]).filter(function(a){return a&&(!mine||a.isMe!==false);});if(mine){albums.forEach(function(a,i){var songs=A(a.s).map(function(s){return findTrack(s,artist)||s;});var date=dateVal(a);if(!date)date=N(typeof time!=='undefined'&&time?time.y:2026,2026)*12+N(typeof time!=='undefined'&&time?time.m:1,1)-i;out.push({id:String(a.id||'alb_'+i),name:a.n||'未命名专辑',era:a.era||a.n||'Era',date:date,songs:songs,album:a});});}else{var grouped={};tracks().filter(function(t){return t.artist===artist.name;}).forEach(function(t){var key=t.album||t.albumName||'单曲时代';(grouped[key]||(grouped[key]=[])).push(t);});Object.keys(grouped).forEach(function(k,i){out.push({id:'npc_'+artist.id+'_'+i,name:k,era:k,date:0,songs:grouped[k]});});}
+    if(!out.length){out.push({id:'fallback_'+artist.id,name:'首张单曲 Era',era:'首张单曲 Era',date:0,songs:tracks().filter(function(t){return artist.isMe?t.isMe&&t.artist===artist.name:t.artist===artist.name;}).slice(0,6)});}return out.sort(function(a,b){return a.date-b.date;});}
+  function getEdit(era,t){state.data=state.data||{};state.data[era.id]=state.data[era.id]||{songs:{},score:0,realScore:0,better:false,stamp:0};var e=state.data[era.id].songs[String(t.id||t.n)];if(!e){var r=reality(t);e={idealPeak:r.peak,status:'keep',viral:0.08,peakWeeks:r.peakWeeks,weeks:r.weeks};state.data[era.id].songs[String(t.id||t.n)]=e;}return e;}
+  function realScore(era){return A(era.songs).reduce(function(sum,t){var r=reality(t);return sum+(101-r.peak)*r.weeks;},0);}
+  function heatMultiplier(era){return careerBuff(era)?1.12:1;}
+  function idealScore(era){return Math.round(A(era.songs).reduce(function(sum,t){var e=getEdit(era,t);return sum+(e.status==='drop'?0:(101-N(e.idealPeak,100))*Math.max(1,N(e.weeks,12)));},0)*heatMultiplier(era));}
+  function careerBuff(era){var all=eras(state.artist),idx=all.findIndex(function(x){return x.id===era.id;}),prev=idx>0?all[idx-1]:null;if(!prev)return false;var rec=state.data[prev.id];return !!(rec&&rec.better&&era.date-prev.date>0&&era.date-prev.date<=12);}
+  function sync(){var r=document.getElementById('icRoot');if(r)r.innerHTML=render();}
+  function render(){var v=state.view||'artists';if(v==='artists')return renderArtists();if(v==='eras')return renderEras();if(v==='editor')return renderEditor();return renderPlayer();}
+  function head(title,back){return '<div class="ic-head"><button class="ic-btn" onclick="idealBack()">'+(back?'← 返回':'× 关闭')+'</button><div><div class="ic-kicker">IDEAL CHART TRAJECTORIES</div><h1>'+esc(title)+'</h1></div></div>';}
+  function renderArtists(){var videos=npcVideos(),vhtml=videos.length?'<section class="ic-section"><h2>YouTube · NPC 理想走势视频</h2><div class="ic-grid">'+videos.slice(0,8).map(function(v){return '<div class="ic-card"><h3>'+esc(v.title)+'</h3><span class="ic-muted">第 '+esc(v.week)+' 刷新 · 理想指数 '+N(v.index,50)+'</span><div style="margin-top:9px"><button class="ic-btn primary" onclick="idealOpenVideo(\''+esc(v.id)+'\')">▶ 播放视频</button></div></div>';}).join('')+'</div></section>':'<section class="ic-section"><h2>YouTube · NPC 理想走势视频</h2><div class="ic-empty">本周暂无新视频，NPC 会按概率刷新。</div></section>';return head('理想榜单走势',false)+vhtml+'<div class="ic-toolbar"><span class="ic-muted">选择歌手，调整理想指数并查看其音乐时代。</span></div><div class="ic-grid">'+artists().map(function(a){var cfg=artistConfig(a);return '<div class="ic-card ic-era-card" onclick="idealChooseArtist(\''+esc(a.id)+'\')"><h3>'+esc(a.name)+'</h3><span class="ic-muted">'+(a.isMe?'玩家歌手':'艺人')+' · 粉丝 '+N(a.fans).toLocaleString()+'</span><div style="margin-top:10px"><span class="ic-pill">'+eras(a).length+' 个 Era</span></div><div onclick="event.stopPropagation()" style="margin-top:10px"><label class="ic-muted">理想指数 <b id="icIdxTxt_'+esc(a.id)+'">'+cfg.idealIndex+'</b></label><input type="range" min="0" max="100" value="'+cfg.idealIndex+'" oninput="document.getElementById(\'icIdxTxt_'+esc(a.id)+'\').textContent=this.value;idealSetArtistIndex(\''+esc(a.id)+'\',this.value)"></div></div>';}).join('')+'</div>';}
+  function renderEras(){var es=eras(state.artist);return head(state.artist.name+' · Era',true)+'<div class="ic-grid">'+(es.map(function(e){var peaks=A(e.songs).map(function(t){return reality(t).peak;}).filter(function(x){return x>0;});var peak=peaks.length?Math.min.apply(null,peaks):100;return '<div class="ic-card ic-era-card" onclick="idealChooseEra(\''+esc(e.id)+'\')"><h3>'+esc(e.name)+'</h3><span class="ic-muted">Era：'+esc(e.era)+' · '+A(e.songs).length+' 首单曲</span><p style="font-size:12px;color:#a9dce8;">现实最高成绩：#'+peak+'</p><span class="ic-pill">进入理想编辑</span></div>';}).join('')||'<div class="ic-empty">暂无可用 Era 数据</div>')+'</div>';}
+  function renderEditor(){var e=state.era,rs=realScore(e),is=idealScore(e);state.data[e.id]=state.data[e.id]||{};state.data[e.id].realScore=rs;state.data[e.id].score=is;state.data[e.id].better=is>rs;store();var buff=careerBuff(e);return head(e.name+' · 理想编辑',true)+'<div class="ic-toolbar"><div class="ic-mode"><label><input type="radio" name="icMode" '+((state.mode||'manual')==='manual'?'checked':'')+' onchange="idealSetMode(\'manual\')"> 玩家手动自定义</label><label><input type="radio" name="icMode" '+((state.mode||'manual')==='auto'?'checked':'')+' onchange="idealSetMode(\'auto\')"> 系统自动生成</label><button class="ic-btn primary" onclick="idealAutoGenerate()">一键生成整套 Era</button></div></div><div class="ic-buff">'+(buff?'生涯加成已激活：上一 Era 理想成绩更优，本 Era 在 12 个月窗口内获得热度红利。':'本 Era 暂无生涯加成。上一 Era 理想成绩优于现实且发行间隔不超过 12 个月时自动激活。')+'</div><div class="ic-layout"><section class="ic-section"><h2>现实固定原始数据 · 只读</h2><div class="ic-real-list">'+A(e.songs).map(function(t){var r=reality(t);return '<div class="ic-real-row"><b>'+esc(t.n||'未命名歌曲')+'</b><span>现实 Peak #'+r.peak+' · Peak 周数 '+r.peakWeeks+' · 在榜总周数 '+r.weeks+'</span></div>';}).join('')+'</div></section><section class="ic-section table-wrap"><h2>理想榜单走势编辑</h2><table class="ic-table"><thead><tr><th>歌曲</th><th>现实 Peak</th><th>理想 Peak</th><th>打单状态</th><th>爆火概率</th><th>预览</th></tr></thead><tbody>'+A(e.songs).map(function(t){var r=reality(t),x=getEdit(e,t),id=esc(String(t.id||t.n));return '<tr><td>'+esc(t.n||'未命名歌曲')+'</td><td class="ic-readonly">#'+r.peak+'</td><td><input type="number" min="1" max="100" value="'+N(x.idealPeak,r.peak)+'" onchange="idealEdit(\''+id+'\',\'idealPeak\',this.value)"></td><td><select onchange="idealEdit(\''+id+'\',\'status\',this.value)"><option value="keep" '+(x.status==='keep'?'selected':'')+'>维持原版</option><option value="add" '+(x.status==='add'?'selected':'')+'>开启打单</option><option value="drop" '+(x.status==='drop'?'selected':'')+'>取消打单</option></select></td><td><input type="range" min="0" max="100" step="1" value="'+Math.round(N(x.viral,.08)*100)+'" oninput="this.nextElementSibling.textContent=this.value+'%';idealEdit(\''+id+'\',\'viral\',this.value/100)"><span style="font-size:11px;color:#8be5fa">'+Math.round(N(x.viral,.08)*100)+'%</span></td><td><button class="ic-btn" onclick="idealPreview(\''+id+'\')">走势</button></td></tr>';}).join('')+'</tbody></table></section></div>'+'<div class="ic-toolbar" style="margin-top:14px"><span class="ic-muted">本 Era 理想总分 '+is.toLocaleString()+' / 现实 '+rs.toLocaleString()+'</span><button class="ic-btn primary" onclick="idealSaveAndBack()">保存并返回</button></div>';}
+  function renderPlayer(){var e=state.era,t=state.song;return head((t.n||'单曲')+' · 理想走势',true)+'<div class="ic-player"><canvas id="icCanvas" width="900" height="340"></canvas><div class="ic-player-controls"><button class="ic-btn primary" onclick="idealPlay()">▶ 播放</button><button class="ic-btn" onclick="idealPause()">Ⅱ 暂停</button><select onchange="state.speed=Number(this.value);"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select><button class="ic-btn" onclick="idealReset()">↺ 重置</button><span class="ic-muted">仅显示理想走势 · Peak #'+N(getEdit(e,t).idealPeak,100)+'</span></div><div class="ic-range-row"><span>起点</span><input id="icFrom" type="range" min="1" max="'+Math.max(2,N(getEdit(e,t).weeks,12))+'" value="'+state.from+'" oninput="state.from=Math.min(Number(this.value),state.to-1);drawChart()"><span id="icFromTxt">W'+state.from+'</span></div><div class="ic-range-row"><span>终点</span><input id="icTo" type="range" min="2" max="'+Math.max(2,N(getEdit(e,t).weeks,12))+'" value="'+state.to+'" oninput="state.to=Math.max(Number(this.value),state.from+1);drawChart()"><span id="icToTxt">W'+state.to+'</span></div><p class="ic-note">拖动双滑块选择片段后播放，可预览选定周数区间。现实曲线不会在此图表中渲染。</p></div>';}
+  function curve(t){var x=getEdit(state.era,t),weeks=Math.max(2,N(x.weeks,12)),peak=Math.max(1,Math.min(100,Math.round(N(x.idealPeak,100)/heatMultiplier(state.era)))),arr=[];for(var i=1;i<=weeks;i++){var p=i<=2?Math.max(peak,100-(i-1)*Math.max(3,(100-peak)/2)):peak+Math.abs(Math.sin(i*1.73))*Math.max(1,(100-peak)*.08)+(i>weeks*.65?(i-weeks*.65)*2:0);arr.push(Math.max(1,Math.min(100,Math.round(p))));}return arr;}
+  function drawChart(){var c=document.getElementById('icCanvas');if(!c||!state.song)return;var ctx=c.getContext('2d'),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#06131e';ctx.fillRect(0,0,w,h);var pad={l:48,r:16,t:18,b:34},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;ctx.font='11px Arial';ctx.strokeStyle='#1c3b4b';ctx.setLineDash([3,4]);[1,2,5,10,20,50,100].forEach(function(rank){var y=pad.t+(rank-1)/99*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillStyle='#81a9b5';ctx.fillText(rank,pad.l-28,y+4);});ctx.setLineDash([]);var vals=curve(state.song),max=vals.length,from=Math.max(1,state.from),to=Math.min(max,state.to),drawTo=state.progress?Math.max(from,Math.floor(from+(to-from)*state.progress)):from;ctx.strokeStyle='#22d3ee';ctx.lineWidth=3;ctx.beginPath();for(var i=from;i<=drawTo;i++){var xx=pad.l+(i-1)/Math.max(1,max-1)*cw,yy=pad.t+(vals[i-1]-1)/99*ch;if(i===from)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy);}ctx.stroke();var peak=Math.min.apply(null,vals),pi=vals.indexOf(peak)+1,px=pad.l+(pi-1)/Math.max(1,max-1)*cw,py=pad.t+(peak-1)/99*ch;ctx.fillStyle='#b8f7ff';ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.fillText('Peak #'+peak+' · W'+pi,Math.min(w-120,px+8),py-8);ctx.fillStyle='#81a9b5';for(var j=1;j<=max;j+=Math.max(1,Math.ceil(max/8))){var tx=pad.l+(j-1)/Math.max(1,max-1)*cw;ctx.fillText('W'+j,tx-8,h-10);}var a=document.getElementById('icFromTxt'),b=document.getElementById('icToTxt');if(a)a.textContent='W'+from;if(b)b.textContent='W'+to;}
+  function tick(){if(!state.playing)return;var span=Math.max(1,state.to-state.from);state.progress+=(.012*state.speed);if(state.progress>=1){state.progress=1;state.playing=false;}drawChart();if(state.playing)state.raf=requestAnimationFrame(tick);}
+  window.openIdealCharts=function(){load();generateNpcVideos();state.view='artists';state.mode='manual';state.from=1;state.to=52;if(!root){root=document.createElement('div');root.id='idealChartApp';root.innerHTML='<div class="ic-shell" id="icRoot"></div>';document.body.appendChild(root);}root.classList.add('open');sync();};
+  window.idealBack=function(){if(state.view==='artists'){root.classList.remove('open');return;}if(state.view==='eras')state.view='artists';else if(state.view==='editor')state.view='eras';else state.view='editor';state.playing=false;sync();};
+  window.idealChooseArtist=function(id){state.artist=artists().find(function(a){return String(a.id)===String(id);});state.savedArtistId=state.artist&&state.artist.id;store();state.view='eras';sync();};
+  window.idealChooseEra=function(id){state.era=eras(state.artist).find(function(e){return String(e.id)===String(id);});state.savedEraId=state.era&&state.era.id;store();state.view='editor';sync();};
+  window.idealSetMode=function(mode){state.mode=mode;sync();};
+  window.idealSetArtistIndex=function(id,value){var a=artists().find(function(x){return String(x.id)===String(id);});if(!a)return;artistConfig(a).idealIndex=Math.max(0,Math.min(100,Math.round(N(value,50))));store();};
+  window.idealEdit=function(id,key,value){var t=A(state.era.songs).find(function(x){return String(x.id||x.n)===String(id);});if(!t)return;var x=getEdit(state.era,t);x[key]=key==='idealPeak'?Math.max(1,Math.min(100,Math.round(N(value,100)))):key==='viral'?Math.max(0,Math.min(1,N(value,.08))):value;store();sync();};
+  window.idealAutoGenerate=function(){var cfg=artistConfig(state.artist),boost=cfg.idealIndex/100;A(state.era.songs).forEach(function(t,i){var r=reality(t),x=getEdit(state.era,t),gain=Math.max(0,Math.round((r.peak*.18+5)*boost));x.idealPeak=Math.max(1,Math.min(100,r.peak-gain));x.status=r.peak<=100?'keep':'add';x.viral=Math.max(.05,Math.min(.95,.08+boost*.42+(100-r.peak)/220));});state.mode='auto';store();sync();};
+  window.idealSaveAndBack=function(){store();state.view='eras';sync();};
+  window.idealPreview=function(id){state.song=A(state.era.songs).find(function(t){return String(t.id||t.n)===String(id);});var weeks=Math.max(2,N(getEdit(state.era,state.song).weeks,12));state.from=1;state.to=weeks;state.progress=0;state.view='player';sync();setTimeout(drawChart,0);};
+  window.idealOpenVideo=function(videoId){var v=npcVideos().find(function(x){return String(x.id)===String(videoId);});if(!v)return;var a=artists().find(function(x){return String(x.id)===String(v.artistId);});if(!a)return;var es=eras(a),e=es.find(function(x){return String(x.id)===String(v.eraId);})||es[0],t=A(e&&e.songs).find(function(x){return String(x.id||x.n)===String(v.songId);})||A(e&&e.songs)[0];if(!e||!t)return;state.artist=a;state.era=e;state.song=t;state.from=1;state.to=Math.max(2,N(getEdit(e,t).weeks,12));state.progress=0;state.view='player';sync();setTimeout(drawChart,0);};
+  window.idealPlay=function(){if(!state.song)return;state.playing=true;state.progress=0;cancelAnimationFrame(state.raf);tick();};window.idealPause=function(){state.playing=false;cancelAnimationFrame(state.raf);};window.idealReset=function(){state.playing=false;state.progress=0;drawChart();};
+  function mount(){var p=document.getElementById('pProj'),phone=document.getElementById('phoneGrid');if(p&&!document.getElementById('idealChartEntry')){var b=document.createElement('button');b.id='idealChartEntry';b.className='sec';b.textContent='📈 理想榜单走势';b.onclick=openIdealCharts;var h=p.querySelector('h2');if(h)h.parentNode.insertBefore(b,h.nextSibling);}if(phone&&!document.getElementById('idealChartPhoneEntry')){var x=document.createElement('div');x.id='idealChartPhoneEntry';x.className='app-icon';x.style.background='#075985';x.innerHTML='<div class="picon">📈</div>理想榜单';x.onclick=openIdealCharts;phone.appendChild(x);}}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){mount();setTimeout(mount,1000);});else{mount();setTimeout(mount,1000);}setInterval(mount,2000);
+})();
+</script>
+<script>
+/* Burst effects: local simulation layer kept after every advTime wrapper. */
+(function installBurstEffects(){
+  if(window.__burstEffectsInstalled)return;
+  window.__burstEffectsInstalled=true;
+  var clamp=function(v,a,b){return Math.max(a,Math.min(b,v));};
+  var num=function(v,d){var n=Number(v);return isFinite(n)?n:(d||0);};
+  var arr=function(v){return Array.isArray(v)?v:[];};
+  var weekKey=function(){var t=typeof time!=="undefined"&&time?time:{};return [num(t.y,0),num(t.m,0),num(t.w,0)].join("_");};
+  function dailyCap(){
+    var source=typeof ad!=="undefined"&&ad&&ad.marketSettings?ad.marketSettings:{};
+    var input=document.getElementById("customMarketBase");
+    var value=num(source.dailyBase,0);
+    if(input&&num(input.value,0)>0)value=num(input.value,0)*10000;
+    return Math.max(100000,value||3000000);
+  }
+  function range(cap,minRatio,maxRatio){return Math.max(1,Math.round(cap*(minRatio+Math.random()*(maxRatio-minRatio))));}
+  function tracks(){return arr(typeof trackPool!=="undefined"?trackPool:[]).filter(function(t){return t&&t.type==="track";});}
+  function albums(){
+    var out=arr(typeof albs!=="undefined"?albs:[]).filter(function(a){return a;});
+    arr(typeof trackPool!=="undefined"?trackPool:[]).filter(function(t){return t&&t.type==="album";}).forEach(function(a){if(out.indexOf(a)<0)out.push(a);});
+    return out;
+  }
+  function artistName(t){return String(t&&((t.artist)||t.artistName)||"");}
+  function artistFans(name,isMe){
+    if(isMe||((typeof ad!=="undefined"&&ad&&ad.s)&&String(ad.s)===String(name)))return num(ad&&ad.st&&ad.st.f,0);
+    var a=arr(typeof worldArtists!=="undefined"?worldArtists:[]).find(function(x){return x&&String(x.n||x.name)===String(name);});
+    return num(a&&a.fans,0);
+  }
+  function songPeak(t){return num(t&&(t.peakB||t.peakS||t.lastB||t.lastW),101);}
+  function isHot(t,cap){return songPeak(t)<=10||num(t&&t.stmGlobal_Week,0)>=cap*0.35||num(t&&t.stmGlobal_Day,0)>=cap*0.55;}
+  function isSingle(t){
+    if(!t)return false;
+    if(t.isTitleSingle||t.albumSingleConfirmed||num(t.albumSingleNo,0)>0||num(t.promoCount,0)>0||t.hasRealMV)return true;
+    var label=String(t.singleLabel||"");
+    return !!label&&!/非/.test(label);
+  }
+  function linkedSongs(album){
+    var source=arr(album&&album.s),pool=tracks(),seen={},out=[];
+    source.forEach(function(s){
+      var id=s&&s.id,name=s&&s.n;
+      var t=pool.find(function(x){return id&&String(x.id)===String(id);})||pool.find(function(x){return name&&String(x.n)===String(name)&&(!album.artist||String(x.artist)===String(album.artist));});
+      if(t&&!seen[t.id||t.n]){seen[t.id||t.n]=1;out.push(t);}
+    });
+    if(!out.length){
+      var aid=album&&album.id,an=album&&album.n;
+      out=pool.filter(function(t){return (aid&&String(t.albumId)===String(aid))||(an&&(String(t.album)===String(an)||String(t.albumName)===String(an)));});
+    }
+    return out;
+  }
+  function albumGroups(){
+    var list=albums(),used=[],seenAlbums={};
+    list.forEach(function(a){var albumKey=String(a&&a.id||a&&a.n||"");if(seenAlbums[albumKey])return;var songs=linkedSongs(a);if(songs.length){seenAlbums[albumKey]=1;used.push({album:a,songs:songs});}});
+    var groups={};
+    tracks().forEach(function(t){
+      if(t.albumId||t.album||t.albumName){var key=String(t.albumId||t.album||t.albumName);if(!groups[key])groups[key]=[];groups[key].push(t);}
+    });
+    Object.keys(groups).forEach(function(key){if(!used.some(function(g){return String(g.album.id||g.album.n)===key;}))used.push({album:{id:key,n:key,artist:groups[key][0].artist},songs:groups[key]});});
+    return used;
+  }
+  function bumpAudio(t,gain){
+    if(!t||gain<=0)return;
+    t.stmGlobal=num(t.stmGlobal,0)+gain;
+    t.stmGlobal_Day=num(t.stmGlobal_Day,0)+gain;
+    t.stmGlobal_Week=num(t.stmGlobal_Week,0)+gain;
+    var ratio=num(t.stmUS,0)/Math.max(1,num(t.stmGlobal,0)-gain);
+    ratio=clamp(isFinite(ratio)?ratio:.45,.2,.8);
+    t.stmUS=num(t.stmUS,0)+Math.round(gain*ratio);
+    t.stmUS_Day=num(t.stmUS_Day,0)+Math.round(gain*ratio);
+    t.stmUS_Week=num(t.stmUS_Week,0)+Math.round(gain*ratio);
+    t._marketFloatStamp="";
+    /* Make the final market authority recapture the increased weekly base
+       immediately instead of waiting for the next simulated week. */
+    t._finalWeeklyMarketStamp="";
+  }
+  function addPost(title,content){
+    if(typeof posts!=="undefined"&&posts&&Array.isArray(posts.mom))posts.mom.unshift({t:title,c:content});
+  }
+  function noviceMultiplier(name,isMe){
+    var own=tracks().filter(function(t){return artistName(t)===String(name)&&(isMe?t.isMe!==false:true);});
+    var albumKeys={};
+    /* Player album songs often predate albumId/albumName fields and are
+       linked only through albs[].s. Count those real albums first. */
+    albums().forEach(function(a){
+      var linked=linkedSongs(a),belongs=linked.some(function(t){return own.indexOf(t)>=0;});
+      if(belongs)albumKeys[String(a.id||a.n||("album_"+Object.keys(albumKeys).length))]=1;
+    });
+    if(!Object.keys(albumKeys).length)own.forEach(function(t){albumKeys[String(t.albumId||t.album||t.albumName||("track_"+t.id))]=1;});
+    var albumCount=Object.keys(albumKeys).length;
+    var hasTop10=own.some(function(t){return songPeak(t)<=10;});
+    return !hasTop10&&albumCount>0&&albumCount<=3?1.1:1;
+  }
+  function currentWeekSerial(){
+    var t=typeof time!=="undefined"&&time?time:{};
+    return num(t.y,0)*48+Math.max(0,num(t.m,1)-1)*4+Math.max(0,num(t.w,1)-1);
+  }
+  function parseDateParts(value){
+    if(value===null||value===undefined)return null;
+    if(typeof value==="object"){
+      var oy=num(value.y||value.year||value.yy,0),om=num(value.m||value.month,0),ow=num(value.w||value.week||value.weekOfMonth,1);
+      return oy?{y:oy,m:om||1,w:ow||1}:null;
+    }
+    var s=String(value),parts=s.match(/(\d{4})[^\d]?(\d{1,2})?(?:[^\d]?(?:W|周)?\s*(\d{1,2}))?/i);
+    return parts?{y:num(parts[1],0),m:num(parts[2],1)||1,w:num(parts[3],1)||1}:null;
+  }
+  function dateKeyOf(obj){
+    if(!obj)return null;
+    var d=parseDateParts(obj.releaseDate||obj.releasedAt||obj.releaseKey);
+    var y=num(obj.releaseYear||obj.year||obj.t_y,0),m=num(obj.releaseMonth||obj.month||obj.t_m,0),w=num(obj.releaseWeek||obj.week||obj.t_w,0);
+    if(y)return {y:y,m:m||1,w:w||1};
+    return d;
+  }
+  function serialFromDate(d){return d?num(d.y,0)*48+Math.max(0,num(d.m,1)-1)*4+Math.max(0,num(d.w,1)-1):null;}
+  function ageWeeksFromKey(value){
+    var d=parseDateParts(value),s=serialFromDate(d);return s===null?Infinity:currentWeekSerial()-s;
+  }
+  function albumForTrack(t){
+    if(!t)return null;
+    return albums().find(function(a){return linkedSongs(a).some(function(x){return x===t||String(x.id)===String(t.id);});})||null;
+  }
+  function isRecent(value,maxWeeks){
+    var d=typeof value==="object"?dateKeyOf(value):parseDateParts(value),age=ageWeeksFromKey(d&&[d.y,d.m,d.w].join("_"));
+    return age>=0&&age<=maxWeeks;
+  }
+  function shouldBoostRevivalFreshness(t){
+    if(!t)return false;
+    var d=dateKeyOf(t),age=ageWeeksFromKey(d&&[d.y,d.m,d.w].join("_"));
+    if(age!==Infinity)return age>4;
+    return num(t.weeks,0)>4;
+  }
+  window.shouldBoostRevivalFreshness=shouldBoostRevivalFreshness;
+  function recentAlbum(t,album){return isRecent(album||albumForTrack(t),4)||isRecent(t,4);}
+  function recentSingle(t){return isRecent(t&&t._burstSingleStartedAt,1)||isRecent(t&&t.albumSingleConfirmedAt,1);}
+  function recentLive(t){return isRecent(t&&t._burstLiveStartedAt,1)||isRecent(t&&t.promoPlan&&t.promoPlan.startedAt,1)||isRecent(t&&t.promoPlanCompletedAt,1);}
+  function exposureMultiplier(t,album){
+    var mult=1;
+    if(recentAlbum(t,album))mult*=1.05;
+    if(recentSingle(t))mult*=1.05;
+    if(recentLive(t))mult*=1.05;
+    return mult;
+  }
+  function viralSignal(t){
+    /* viralBoost is cumulative career history, so it must not by itself
+       retrigger a burst after the active short-video window has ended. */
+    if(t&&t.shortVideoEffect&&t._shortVideoUntil&&currentWeekSerial()>num(t._shortVideoUntil,0)){t.shortVideoEffect=false;}
+    return num(t&&t.viralWk,0)>0||num(t&&t.longViral,0)>0||t&&t.shortVideoEffect===true;
+  }
+  function eventChance(t,kind){
+    var base=clamp(num(t&&t.viralChance,.05),.005,.8),boost=Math.max(1,num(t&&t.viralBoost,1));
+    var chance=base*(kind==="single"?1.15:.9)*boost*exposureMultiplier(t,null);
+    return clamp(chance*noviceMultiplier(artistName(t),!!(t&&t.isMe)),.005,.65);
+  }
+  function singleBursts(cap,key){
+    var changed=false;
+    tracks().forEach(function(t){
+      if(t._singleBurstWeek===key||!viralSignal(t))return;
+      if(Math.random()>=eventChance(t,"single"))return;
+      var gain=range(cap,.30,1.00);bumpAudio(t,gain);t._singleBurstWeek=key;t._lastBurstGain=gain;
+      addPost("🔥 单曲大爆", "《"+(t.n||"未命名歌曲")+"》受到短视频扩散，新增 "+gain.toLocaleString()+" 全球流媒（按当前大盘上限比例计算）。");
+      changed=true;
+    });
+    return changed;
+  }
+  function mvBursts(cap,key){
+    var changed=false;
+    tracks().forEach(function(t){
+      if(t._mvBurstWeek===key||!viralSignal(t))return;
+      if(Math.random()>=eventChance(t,"mv"))return;
+      var videoGain=range(cap,.30,.70),audioGain=range(cap,.15,.45),video=null;
+      if(typeof ensureVideoPost==="function")video=ensureVideoPost(t,"mv");
+      if(video){video.views=num(video.views,0)+videoGain;video.likes=num(video.likes,0)+Math.round(videoGain*.012);video.shares=num(video.shares,0)+Math.round(videoGain*.002);}
+      else {t.mvViews=num(t.mvViews,0)+videoGain;}
+      bumpAudio(t,audioGain);t._mvBurstWeek=key;
+      addPost("📺 MV 大爆", "《"+(t.n||"未命名歌曲")+"》的短视频带动 MV，YouTube +"+videoGain.toLocaleString()+"，音源反哺 +"+audioGain.toLocaleString()+"（按大盘比例）。");
+      changed=true;
+    });
+    return changed;
+  }
+  function albumBursts(cap,key){
+    var changed=false;
+    albumGroups().forEach(function(group){
+      var album=group.album,songs=group.songs;if(!songs.length||album._albumBurstWeek===key)return;
+      var name=String(album.artist||songs[0].artist||"");
+      if(artistFans(name,!!(album.isMe||songs.some(function(t){return t.isMe;})))<=1000000)return;
+      var hot=songs.filter(function(t){return isHot(t,cap);});if(hot.length<2)return;
+      var signal=hot.reduce(function(sum,t){return sum+(viralSignal(t)?1:0);},0);
+      var exposure=recentAlbum(songs[0],album)?1.05:1;
+      if(songs.some(recentSingle))exposure*=1.05;
+      if(songs.some(recentLive))exposure*=1.05;
+      var chance=clamp((.035+signal*.018)*noviceMultiplier(name,!!album.isMe)*exposure,.01,.22);
+      if(Math.random()>=chance)return;
+      var singles=songs.filter(isSingle),latest=null;
+      if(singles.length){latest=singles.slice().sort(function(a,b){return num(b.albumSingleNo,0)-num(a.albumSingleNo,0)||num(a.weeks,0)-num(b.weeks,0);})[0];}
+      var albumSales=0;
+      songs.forEach(function(t){
+        var gain,min,max;
+        if(latest&&t===latest){min=.50;max=1.00;}
+        else if(isSingle(t)){min=.50;max=.80;}
+        else {min=.10;max=.50;var review=num(t.Spub,0);if(review>=100){min=.95;max=1.00;}else if(review>90){min=.85;max=.90;}else if(review>80){min=.70;max=.80;}}
+        gain=range(cap,min,max);bumpAudio(t,gain);t.slTotal=num(t.slTotal,0)+Math.round(gain/150);albumSales+=Math.round(gain/150);
+      });
+      if(album){
+        var albumSalesGain=albumSales+Math.round(cap*.2/150);
+        album.slTotal=num(album.slTotal,0)+albumSalesGain;
+        if(album.trackRef&&album.trackRef!==album)album.trackRef.slTotal=num(album.trackRef.slTotal,0)+albumSalesGain;
+        album._albumBurstWeek=key;
+      }
+      addPost("💿 专辑大爆", "专辑《"+(album.n||name||"未命名专辑")+"》满足两首热单与百万粉丝条件，全专流媒和销量获得热度红利。");
+      changed=true;
+    });
+    return changed;
+  }
+  function slowViralEffects(cap,key){
+    var changed=false;
+    tracks().forEach(function(t){
+      if(t._slowViralWeek===key||!viralSignal(t))return;
+      var daily=Math.max(0,num(t.stmGlobal_Day,0)),ratio=clamp(.05+Math.random()*.15,.05,.20);
+      var gain=Math.max(1,Math.round((daily>0?daily:cap*.02)*ratio));
+      bumpAudio(t,Math.min(gain,Math.max(1,Math.round(cap*.20))));
+      t._slowViralWeek=key;t._slowViralGain=gain;changed=true;
+      if(Math.random()<.35)addPost("📱 短视频持续扩散","《"+(t.n||"未命名歌曲")+"》热度持续上升，本周流媒增加 "+gain.toLocaleString()+"（单次不超过 20%，按当前大盘比例计算）。");
+    });
+    return changed;
+  }
+  function artistHolder(name,isMe){
+    name=String(name||"");
+    if(isMe||((typeof ad!=="undefined"&&ad&&ad.s)&&String(ad.s)===name))return typeof ad!=="undefined"?ad:null;
+    return arr(typeof worldArtists!=="undefined"?worldArtists:[]).find(function(a){return a&&String(a.n||a.name)===name;})||null;
+  }
+  function artistState(name,isMe){
+    var holder=artistHolder(name,isMe);
+    if(!holder)return null;
+    holder._revivalState=holder._revivalState&&typeof holder._revivalState==="object"?holder._revivalState:{};
+    return holder._revivalState;
+  }
+  function revivalRating(t){
+    var score=num(t&& (t.Spub||t.rating||t.score||t.reviewScore),0);
+    if(score<80)return 0;
+    if(score>=100)return .10;
+    if(score>90)return .08;
+    return .05;
+  }
+  function careerComebackSignal(name,songs){
+    /* A comeback is three performance nodes in sequence: peak -> slump ->
+       rebound. Nodes may be singles from the same Era, so three albums are
+       not required. Only a rebound among the latest few releases is current. */
+    var points=songs.map(function(t,i){
+      var d=dateKeyOf(t)||dateKeyOf(albumForTrack(t))||{y:0,m:0,w:0};
+      var serial=serialFromDate(d);if(serial===0)serial=Number(t._entityCreatedAt||i);
+      var peak=clamp(songPeak(t),1,101),weeks=Math.max(1,num(t.chartWeeks||t.weeks,1));
+      var owner=albumForTrack(t),albumKey=String(t.albumId||t.albumName||t.album||owner&&owner.id||owner&&owner.n||"");
+      return {t:t,key:String(t.id||t.n||i),albumKey:albumKey,score:Math.max(1,(101-peak)*Math.sqrt(weeks)),serial:serial||i,order:num(t.albumSingleNo,999)};
+    }).filter(function(p){return p.score>1;}).sort(function(a,b){return a.serial-b.serial||a.order-b.order;});
+    if(points.length<3)return {active:false,ratio:0};
+    var found=null,start=Math.max(0,points.length-6);
+    for(var i=start;i<=points.length-3;i++){
+      var high=points[i],low=points[i+1],rebound=points[i+2];
+      var slump=low.score<high.score*.88,upturn=rebound.score>low.score*1.10;
+      var albumSpan={};[high,low,rebound].forEach(function(p){if(p.albumKey)albumSpan[p.albumKey]=1;});
+      if(slump&&upturn&&Object.keys(albumSpan).length>=2&&(!found||rebound.serial>=found.toSerial))found={from:high.key,low:low.key,to:rebound.key,toSerial:rebound.serial,ratio:clamp((rebound.score/Math.max(1,low.score)-1)*.20,.03,.18)};
+    }
+    return found?{active:true,ratio:found.ratio,from:found.from,low:found.low,to:found.to}: {active:false,ratio:0};
+  }
+  function revivalEffects(cap,key){
+    var changed=false,groups={};
+    tracks().forEach(function(t){var name=artistName(t);if(!name)return;(groups[name]||(groups[name]=[])).push(t);});
+    Object.keys(groups).forEach(function(name){
+      var songs=groups[name],sources=songs.filter(function(t){return viralSignal(t)||recentLive(t);}),isMe=!!songs.some(function(t){return t.isMe;}),st=artistState(name,isMe),career=careerComebackSignal(name,songs);
+      if(!st)return;
+      st.active=sources.length>0;st.lastWeek=key;st.comeback=!!career.active;st.comebackRatio=career.ratio||0;
+      st.heat=sources.length?Math.max(.05,Math.min(.25,sources.reduce(function(m,t){return Math.max(m,revivalRating(t)||.03);},career.ratio||0))):0;
+      st.sourceCount=sources.length;
+      if(sources.length){
+        st.sourceId=String(sources[0].id||sources[0].n||"");st.startedAt=st.startedAt||key;
+        songs.forEach(function(t){
+          var rate=revivalRating(t);if(!rate||t._revivalWeek===key)return;
+          var daily=Math.max(0,num(t.stmGlobal_Day,0)),gain=Math.max(1,Math.round((daily>0?daily:cap*.01)*rate));
+          bumpAudio(t,Math.min(gain,Math.max(1,Math.round(cap*.10))));
+          if(shouldBoostRevivalFreshness(t)){
+            var freshBoost=Math.max(1,Math.round(2+rate*18));
+            t.freshness=clamp(num(t.freshness,45)+freshBoost,0,100);
+            t.promoFreshness=clamp(num(t.promoFreshness,45)+Math.max(1,Math.round(freshBoost*.7)),0,100);
+          }
+          t._revivalWeek=key;t.revivalHeat=rate;changed=true;
+          if(t!==sources[0]&&rate>=.05&&!t._revivalDiscovered&&Math.random()<(.012+rate*.08)){
+            t._revivalDiscovered=true;t.longViral=Math.max(num(t.longViral,0),4+Math.floor(Math.random()*7));t.viralWk=t.longViral;t.viralBoost=num(t.viralBoost,1)+.10;t.shortVideoEffect=true;t._shortVideoUntil=currentWeekSerial()+t.longViral;addPost("✨ 回春再发现","《"+(t.n||"未命名歌曲")+"》因艺人回春被重新发掘，后续短视频与流媒效应增强。");
+          }
+        });
+        if(st._noticeWeek!==key){addPost(career.active?"🌱 职业生涯回春":"🌱 艺人回春",career.active?name+" 经历低谷后重新上升，歌曲热度触发职业生涯回春。":name+" 因歌曲热度重新活跃，同艺人曲目获得轻微流媒反哺。");st._noticeWeek=key;}
+        var activeHolder=artistHolder(name,isMe);if(activeHolder){activeHolder.revivalActive=true;activeHolder.revivalHeat=st.heat;activeHolder.revivalSourceId=st.sourceId;}
+      }else{
+        st.active=false;st.heat=0;st.sourceId="";st.startedAt="";st.comeback=!!career.active;st.comebackRatio=career.ratio||0;
+        songs.forEach(function(t){t.revivalHeat=0;});
+        var idleHolder=artistHolder(name,isMe);if(idleHolder){idleHolder.revivalActive=false;idleHolder.revivalHeat=0;idleHolder.revivalSourceId="";}
+      }
+    });
+    return changed;
+  }
+  function isFirstSingle(t){
+    return !!(t&&(num(t.albumSingleNo,0)===1||/首单/.test(String(t.singleLabel||""))));
+  }
+  function updateSingleExpectation(cap,key){
+    var changed=false;
+    tracks().forEach(function(t){
+      if(!isFirstSingle(t)||t._expectationUpdatedFor)return;
+      var album=albumForTrack(t),albumDate=album&&dateKeyOf(album),trackDate=dateKeyOf(t),sameRelease=albumDate&&trackDate&&serialFromDate(albumDate)===serialFromDate(trackDate);
+      var songScore=clamp(num(t.Spub,60),0,100),albumScore=clamp(num(album&&(album.Spub||(album.trackRef&&album.trackRef.Spub)),songScore),0,100);
+      /* A lead released with its parent album is not judged by opening
+         streams/peak, which include album consumption. Its linked album
+         review is blended into the public-expectation verdict instead. */
+      var publicScore=sameRelease?(songScore*.55+albumScore*.45):songScore;
+      var delta=publicScore>=90?.15:publicScore>=80?.08:publicScore>=65?0:publicScore>=50?-.08:-.15;
+      var multiplier=clamp(1+delta,.70,1.30),name=artistName(t),holder=artistHolder(name,!!t.isMe);
+      t.expectationMultiplier=multiplier;t._expectationUpdatedFor=key;
+      t.expectationScore=publicScore;t.expectationUsesAlbumReview=!!sameRelease;
+      if(album){album.publicExpectation=multiplier;album.expectationSourceId=t.id;album.expectationUpdatedAt=key;}
+      if(holder){holder.publicExpectation=multiplier;holder.expectationSourceId=t.id;holder.expectationUpdatedAt=key;}
+      if(t.isMe&&typeof ad!=="undefined"&&ad){ad.publicExpectation=multiplier;ad.publicExpectationSource=t.n;ad.publicExpectationUpdatedAt=key;}
+      addPost(multiplier>=1?"📈 首单提升大众预期":"📉 首单降低大众预期","《"+(t.n||"未命名歌曲")+"》以大众乐评 "+publicScore.toFixed(1)+" 评估后，后续作品大众预期倍率调整为 "+multiplier.toFixed(2)+"。"+(sameRelease?"首单与专辑同期发行，已合并关联专辑乐评，不读取首周流媒或榜单。":""));
+      changed=true;
+    });
+    return changed;
+  }
+  function processBurstEffects(){
+    var cap=dailyCap(),key=weekKey(),changed=false;
+    changed=updateSingleExpectation(cap,key)||changed;
+    changed=singleBursts(cap,key)||changed;changed=mvBursts(cap,key)||changed;changed=albumBursts(cap,key)||changed;
+    changed=slowViralEffects(cap,key)||changed;changed=revivalEffects(cap,key)||changed;
+    if(changed){if(typeof updatePeakRanks==="function")updatePeakRanks();if(typeof updAttr==="function")updAttr();if(typeof saveGameImmediate==="function")saveGameImmediate();else if(typeof saveGame==="function")saveGame();}
+  }
+  /* Keep short exposure markers separate from cumulative viral history. */
+  var priorConfirmSingle=window.confirmAlbumSinglePick;
+  if(typeof priorConfirmSingle==="function"&&!window.__burstConfirmWrapped){
+    window.__burstConfirmWrapped=true;
+    window.confirmAlbumSinglePick=function(){
+      var radio=document.querySelector("input[name='albSinglePick']:checked"),t=radio&&tracks().find(function(x){return String(x.id)===String(radio.value);});
+      var result=priorConfirmSingle.apply(this,arguments);
+      if(t&&t.albumSingleConfirmed){t._burstSingleStartedAt=weekKey();if(typeof saveGameImmediate==="function")saveGameImmediate();}
+      return result;
+    };
+  }
+  var priorLivePromo=window.performSongPromoById;
+  if(typeof priorLivePromo==="function"&&!window.__burstLiveWrapped){
+    window.__burstLiveWrapped=true;
+    window.performSongPromoById=function(){
+      var args=arguments,id=args[0],t=tracks().find(function(x){return String(x.id)===String(id);});
+      var result=priorLivePromo.apply(this,args);
+      if(result&&t){t._burstLiveStartedAt=weekKey();if(typeof saveGameImmediate==="function")saveGameImmediate();}
+      return result;
+    };
+  }
+  var baseAdvance=window.advTime;
+  window.advTime=function(){var result=typeof baseAdvance==="function"?baseAdvance.apply(this,arguments):undefined;processBurstEffects();return result;};
+  window.processBurstEffects=processBurstEffects;
+})();
+</script>
+<style>
+#chartVisualApp{display:none;position:fixed;inset:0;z-index:10021;background:#07111d;color:#d9f7ff;font-family:Arial,sans-serif;overflow:auto}
+#chartVisualApp.open{display:block}#chartVisualApp *{box-sizing:border-box}.cv-shell{max-width:1180px;margin:0 auto;padding:20px}.cv-head{display:flex;gap:12px;align-items:center;border-bottom:1px solid #1b4157;padding-bottom:14px;margin-bottom:16px}.cv-head h1{font-size:20px;margin:0;color:#eaffff;letter-spacing:0}.cv-kicker{font-size:11px;color:#70cfe7;letter-spacing:1px}.cv-btn{border:1px solid #24738d;background:#0c2635;color:#dffaff;padding:8px 12px;border-radius:3px;cursor:pointer}.cv-btn:hover{background:#12394d}.cv-btn.primary{background:#087f9e;border-color:#26c6ed;color:#fff}.cv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}.cv-card{background:#0b1d2b;border:1px solid #1b475d;padding:14px;border-radius:4px;cursor:pointer}.cv-card:hover{border-color:#45d9ff}.cv-card h3{margin:0 0 8px;font-size:15px;color:#e9ffff}.cv-muted{font-size:12px;color:#82aebc}.cv-panel{background:#091a28;border:1px solid #19445a;padding:14px;margin-bottom:14px;border-radius:4px}.cv-panel h2{font-size:15px;margin:0 0 10px;color:#a9edff}.cv-choice{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.cv-choice label{font-size:12px;color:#bceefa}.cv-chart{background:#06121d;border:1px solid #1c536a;padding:10px;border-radius:4px}.cv-chart canvas{display:block;width:100%;height:340px;background:#06131e;border:1px solid #19475b}.cv-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:11px}.cv-range{display:grid;grid-template-columns:48px 1fr 48px;gap:7px;align-items:center;margin-top:8px;font-size:11px;color:#8fb9c6}.cv-range input{accent-color:#20c9f2}@media(max-width:760px){.cv-shell{padding:12px}.cv-chart canvas{height:260px}}
+</style>
+<script>
+/* Read-only real chart visualizer. It intentionally has no ideal-chart state,
+   no editing controls, and only renders persisted weekly chart history. */
+(function installChartVisualizer(){
+  if(window.__chartVisualizerInstalled)return;window.__chartVisualizerInstalled=true;
+  var root,state={view:'artists',artists:[],artist:null,era:null,series:[],playing:false,progress:0,speed:1,from:1,to:52,raf:0,returnView:'artists'};
+  var colors=['#22d3ee','#f59e0b','#fb7185','#a3e635','#c084fc','#f97316','#60a5fa','#facc15'];
+  function A(v){return Array.isArray(v)?v:[]}function N(v,d){var n=Number(v);return isFinite(n)?n:(d||0)}function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function player(){return typeof ad!=='undefined'&&ad&&ad.s?{id:'player',name:ad.s,isMe:true}:null}function artists(){var out=A(typeof worldArtists!=='undefined'?worldArtists:[]).map(function(a){return{id:String(a.id||a.n),name:a.n||a.name||'未知艺人',fans:N(a.fans),isMe:false};}),p=player();if(p)out.unshift(p);return out;}
+  function tracks(){return A(typeof trackPool!=='undefined'?trackPool:[]).filter(function(t){return t&&t.type==='track';});}function findTrack(s,a){return tracks().find(function(t){return s&&s.id&&String(t.id)===String(s.id);})||tracks().find(function(t){return s&&t.n===s.n&&(!a||t.artist===a.name);})||s;}
+  function dateVal(a){return N(a&&(a.releaseYear||a.year||a.t_y||(a.releaseDate&&a.releaseDate.y)),0)*12+N(a&&(a.releaseMonth||a.month||a.t_m||(a.releaseDate&&a.releaseDate.m)),1);}
+  function eras(a){var out=[],mine=a&&a.isMe;if(mine){A(typeof albs!=='undefined'?albs:[]).filter(function(x){return x&&x.isMe!==false;}).forEach(function(x,i){out.push({id:String(x.id||'alb_'+i),name:x.n||'未命名专辑',date:dateVal(x),songs:A(x.s).map(function(s){return findTrack(s,a);}).filter(Boolean)});});}else{var g={};tracks().filter(function(t){return t.artist===a.name;}).forEach(function(t){var k=t.albumId||t.album||t.albumName||'单曲时代';(g[k]||(g[k]=[])).push(t);});Object.keys(g).forEach(function(k,i){out.push({id:'npc_'+a.id+'_'+i,name:String(k),date:0,songs:g[k]});});}if(!out.length)out.push({id:'singles_'+a.id,name:'单曲时代',date:0,songs:tracks().filter(function(t){return a.isMe?t.isMe&&t.artist===a.name:t.artist===a.name;})});return out.sort(function(x,y){return x.date-y.date;});}
+  function history(t){
+    /* The visualizer is read-only: use only persisted real weekly ranks. */
+    return A(t&&t.chartHistory).map(function(x){
+      var r=x&&(x.billboard!==undefined?x.billboard:(x.us!==undefined?x.us:x.global));
+      r=Number(r);
+      return r>=1&&r<=100?r:null;
+    });
+  }
+  function head(title,back){return '<div class="cv-head"><button class="cv-btn" onclick="chartVisualBack()">'+(back?'← 返回':'× 关闭')+'</button><div><div class="cv-kicker">REAL CHART VISUALIZER</div><h1>'+esc(title)+'</h1></div></div>';}
+  function render(){if(state.view==='artists')return renderArtists();if(state.view==='eras')return renderEras();if(state.view==='compare')return renderCompare();return renderPlayer();}
+  function sync(){var box=document.getElementById('cvRoot');if(box)box.innerHTML=render();}
+  function renderArtists(){return head('可视化榜单',false)+'<div class="cv-panel"><div class="cv-choice"><button class="cv-btn primary" onclick="chartVisualStartCompare()">多艺人对比</button><span class="cv-muted">选择一位艺人查看现实榜单走势，或选择多位艺人比较代表歌曲。</span></div></div><div class="cv-grid">'+artists().map(function(a){return '<div class="cv-card" onclick="chartVisualChooseArtist(\''+esc(a.id)+'\')"><h3>'+esc(a.name)+'</h3><span class="cv-muted">'+(a.isMe?'玩家歌手':'艺人')+' · 粉丝 '+N(a.fans).toLocaleString()+'</span><div class="cv-muted" style="margin-top:8px">'+eras(a).length+' 个 Era · 现实数据只读</div></div>';}).join('')+'</div>';}
+  function renderEras(){var es=eras(state.artist);return head(state.artist.name+' · 现实 Era',true)+'<div class="cv-grid">'+es.map(function(e){var peak=Math.min.apply(null,e.songs.map(function(t){return N(t.peakB||t.peakS||100,100);}));return '<div class="cv-card" onclick="chartVisualChooseEra(\''+esc(e.id)+'\')"><h3>'+esc(e.name)+'</h3><span class="cv-muted">'+e.songs.length+' 首歌曲 · 最佳 Peak #'+peak+'</span><div class="cv-muted" style="margin-top:8px">播放现实榜单曲线</div></div>';}).join('')+'</div>';}
+  function renderCompare(){var list=artists();return head('多艺人对比',true)+'<div class="cv-panel"><h2>选择艺人</h2><div class="cv-choice">'+list.map(function(a){var checked=state.artists.some(function(x){return x.id===a.id;});return '<label><input type="checkbox" value="'+esc(a.id)+'" '+(checked?'checked':'')+' onchange="chartVisualToggleArtist(\''+esc(a.id)+'\',this.checked)"> '+esc(a.name)+'</label>';}).join('')+'</div><div style="margin-top:12px"><button class="cv-btn primary" onclick="chartVisualBuildCompare()">生成对比图</button></div></div>';}
+  function renderPlayer(){var mode=state.compareMode?'多艺人现实榜单对比':state.era.name+' · 现实榜单';return head(mode,true)+'<div class="cv-chart"><canvas id="cvCanvas" width="900" height="340"></canvas><div class="cv-controls"><button class="cv-btn primary" onclick="chartVisualPlay()">▶ 播放</button><button class="cv-btn" onclick="chartVisualPause()">Ⅱ 暂停</button><select onchange="chartVisualSpeed(this.value)"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select><button class="cv-btn" onclick="chartVisualReset()">↺ 重置</button><span class="cv-muted">只显示现实榜单数据</span></div><div class="cv-range"><span>起点</span><input id="cvFrom" type="range" min="1" max="'+state.to+'" value="'+state.from+'" oninput="chartVisualRange(&quot;from&quot;,this.value)"><span id="cvFromTxt">W'+state.from+'</span></div><div class="cv-range"><span>终点</span><input id="cvTo" type="range" min="2" max="'+state.to+'" value="'+state.to+'" oninput="chartVisualRange(&quot;to&quot;,this.value)"><span id="cvToTxt">W'+state.to+'</span></div></div>';}
+  function draw(){var c=document.getElementById('cvCanvas');if(!c)return;var ctx=c.getContext('2d'),w=c.width,h=c.height,p={l:48,r:16,t:18,b:34},cw=w-p.l-p.r,ch=h-p.t-p.b,max=Math.max(2,state.to),from=Math.max(1,state.from),to=Math.max(from+1,state.to),end=state.progress?Math.max(from,Math.floor(from+(to-from)*state.progress)):from;ctx.fillStyle='#06131e';ctx.fillRect(0,0,w,h);ctx.font='11px Arial';ctx.strokeStyle='#1c3b4b';ctx.setLineDash([3,4]);[1,2,5,10,20,50,100].forEach(function(r){var y=p.t+(r-1)/99*ch;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();ctx.fillStyle='#81a9b5';ctx.fillText(r,p.l-28,y+4);});ctx.setLineDash([]);state.series.forEach(function(s,si){var vals=s.values,limit=Math.min(end,vals.length),drawing=false,points=[],color=colors[si%colors.length];ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.beginPath();for(var i=from;i<=limit;i++){var rank=vals[i-1];if(rank===null||rank===undefined){drawing=false;continue;}var x=p.l+(i-1)/Math.max(1,max-1)*cw,y=p.t+(rank-1)/99*ch;points.push({x:x,y:y});if(!drawing){ctx.moveTo(x,y);drawing=true;}else ctx.lineTo(x,y);}ctx.stroke();ctx.fillStyle=color;points.forEach(function(point){ctx.beginPath();ctx.arc(point.x,point.y,3.5,0,Math.PI*2);ctx.fill();});ctx.fillText(s.label,p.l+8,p.t+14+si*14);});for(var j=1;j<=max;j+=Math.max(1,Math.ceil(max/8))){ctx.fillStyle='#81a9b5';ctx.fillText('W'+j,p.l+(j-1)/Math.max(1,max-1)*cw-8,h-10);}var a=document.getElementById('cvFromTxt'),b=document.getElementById('cvToTxt');if(a)a.textContent='W'+from;if(b)b.textContent='W'+to;}
+  function prepare(series){state.series=series.filter(function(s){return s&&s.values&&s.values.some(function(rank){return rank!==null&&rank!==undefined;});});if(!state.series.length){alert('暂无已保存的现实榜单周历史数据。');return;}var max=Math.max.apply(null,state.series.map(function(s){return s.values.length;}).concat([2]));state.from=1;state.to=max;state.progress=0;state.view='player';sync();setTimeout(draw,0);}
+  function tick(){if(!state.playing)return;state.progress+=.012*state.speed;if(state.progress>=1){state.progress=1;state.playing=false;}draw();if(state.playing)state.raf=requestAnimationFrame(tick);}
+  window.openChartVisualizer=function(){state.view='artists';state.artists=[];state.playing=false;if(!root){root=document.createElement('div');root.id='chartVisualApp';root.innerHTML='<div class="cv-shell" id="cvRoot"></div>';document.body.appendChild(root);}root.classList.add('open');sync();};
+  window.chartVisualBack=function(){state.playing=false;if(state.view==='artists'){root.classList.remove('open');return;}if(state.view==='eras')state.view='artists';else if(state.view==='player')state.view=state.returnView||'artists';else state.view='artists';sync();};window.chartVisualChooseArtist=function(id){state.artist=artists().find(function(a){return a.id===String(id);});state.view='eras';sync();};window.chartVisualChooseEra=function(id){state.era=eras(state.artist).find(function(e){return e.id===String(id);});state.compareMode=false;state.returnView='eras';prepare(state.era.songs.map(function(t){return {label:t.n||'未命名歌曲',values:history(t)};}));};
+  window.chartVisualStartCompare=function(){state.view='compare';state.artists=[];sync();};window.chartVisualToggleArtist=function(id,on){var a=artists().find(function(x){return x.id===String(id);});if(!a)return;state.artists=state.artists.filter(function(x){return x.id!==a.id;});if(on)state.artists.push(a);};window.chartVisualBuildCompare=function(){if(!state.artists.length)return;state.compareMode=true;state.returnView='compare';prepare(state.artists.map(function(a){var t=tracks().filter(function(x){return x.artist===a.name;}).sort(function(x,y){return N(x.peakB||x.peakS,100)-N(y.peakB||y.peakS,100);})[0];return t?{label:a.name+' · '+t.n,values:history(t)}:null;}).filter(Boolean));};
+  window.chartVisualPlay=function(){state.playing=true;state.progress=0;cancelAnimationFrame(state.raf);tick();};window.chartVisualPause=function(){state.playing=false;cancelAnimationFrame(state.raf);};window.chartVisualReset=function(){state.playing=false;state.progress=0;draw();};window.chartVisualSpeed=function(v){state.speed=N(v,1);};window.chartVisualRange=function(k,v){v=N(v,1);if(k==='from')state.from=Math.min(v,state.to-1);else state.to=Math.max(v,state.from+1);draw();};
+  function mount(){var p=document.getElementById('pProj'),phone=document.getElementById('phoneGrid');if(p&&!document.getElementById('chartVisualEntry')){var b=document.createElement('button');b.id='chartVisualEntry';b.className='sec';b.textContent='📊 可视化榜单';b.onclick=openChartVisualizer;var ref=document.getElementById('idealChartEntry');if(ref)ref.parentNode.insertBefore(b,ref.nextSibling);else p.appendChild(b);}if(phone&&!document.getElementById('chartVisualPhoneEntry')){var x=document.createElement('div');x.id='chartVisualPhoneEntry';x.className='app-icon';x.style.background='#0f766e';x.innerHTML='<div class="picon">📊</div>可视化榜单';x.onclick=openChartVisualizer;phone.appendChild(x);}}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){mount();setTimeout(mount,800);});else{mount();setTimeout(mount,800);}setInterval(mount,2000);
 })();
 </script>
 </html>

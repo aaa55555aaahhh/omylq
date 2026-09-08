@@ -27,7 +27,7 @@
   function active(){return !!(window.ad&&ad&&ad.r);}
   function charts(){if(!ad.customMusicCharts||!Array.isArray(ad.customMusicCharts))ad.customMusicCharts=[];return ad.customMusicCharts;}
   function apps(){if(!ad.customPhoneApps||!Array.isArray(ad.customPhoneApps))ad.customPhoneApps=[];return ad.customPhoneApps;}
-  function songs(){return (typeof trackPool!=='undefined'&&Array.isArray(trackPool)?trackPool:[]).filter(function(t){return t&&t.type==='track';});}
+  function songs(){return (typeof trackPool!=='undefined'&&Array.isArray(trackPool)?trackPool:[]).filter(function(t){return t&&t.type==='track'&&(!t.isMe||t.released||t.isSingleRelease||t.isTitleSingle||t.albumSingleConfirmed||t.hasRealMV);});}
   function regionName(key){return window.REGION_SYSTEM&&REGION_SYSTEM[key]?REGION_SYSTEM[key].name:'国际';}
   function periodKey(){return [Number(time&&time.y||0),Number(time&&time.m||0),Number(time&&time.w||0)].join('_');}
   function globalCompressedWeek(t){return Math.max(0,Number(t.stmGlobal_Week||0),Number(t.stmGlobal_Day||0)*7);}
@@ -186,6 +186,23 @@ document.addEventListener("DOMContentLoaded", function installFinalMusicDataFixe
     }
     normalizeEntities();
 
+    function normalizeTitle(value){return String(value==null?'':value).replace(/&amp;|&#39;|&quot;|&lt;|&gt;/g,function(x){return {'&amp;':'&','&#39;':"'",'&quot;':'"','&lt;':'<','&gt;':'>'}[x]||x;}).replace(/\s+/g,' ').trim().toLowerCase();}
+    function isReleasedPlayerTrack(t){return !!(t&&t.isMe&&(t.released||t.isSingleRelease||t.isTitleSingle||t.albumSingleConfirmed||t.hasRealMV));}
+    function dedupeUnreleasedPlayerTracks(){
+        var seen={};
+        arr(trackPool).forEach(function(t){
+            if(!t||t.type!=='track'||!t.isMe||isReleasedPlayerTrack(t))return;
+            var key=normalizeTitle(t.n)+'|'+normalizeTitle(t.artist||ad.s||'')+'|'+normalizeTitle(t.versionType||t.parentTrackId||'');
+            if(!key||key==='|')return;
+            if(seen[key]){
+                var keep=seen[key], fields=['g','gnr','core','c','ff','sType','explicit'];
+                fields.forEach(function(f){if((keep[f]===undefined||keep[f]==='')&&t[f]!==undefined)keep[f]=t[f];});
+                t._duplicateOf=keep.id;t._excludeFromCharts=true;
+            }else seen[key]=t;
+        });
+    }
+    dedupeUnreleasedPlayerTracks();
+
     var baseCreateEntityFinalMusic = window.createEntity;
     if(typeof baseCreateEntityFinalMusic === "function"){
         window.createEntity = function(){
@@ -207,7 +224,8 @@ document.addEventListener("DOMContentLoaded", function installFinalMusicDataFixe
     var baseUpdatePeakRanksFinalMusic = window.updatePeakRanks;
     window.updatePeakRanks = function(){
         if(typeof baseUpdatePeakRanksFinalMusic === "function") baseUpdatePeakRanksFinalMusic();
-        var items = arr(trackPool).filter(function(t){ return t && (t.type === "track" || t.type === "album"); });
+        dedupeUnreleasedPlayerTracks();
+        var items = arr(trackPool).filter(function(t){ return t && (t.type === "album" || (t.type === "track" && (!t._excludeFromCharts) && (!t.isMe || isReleasedPlayerTrack(t)))); });
         items.forEach(function(t){ ensureEntity(t); t.lastW = 999; t.lastB = 999; });
         items.slice().sort(function(a,b){ return (b.stmGlobal_Week||0) - (a.stmGlobal_Week||0); }).forEach(function(t,i){
             var r = i + 1;
@@ -3606,6 +3624,7 @@ var PET_IMAGE_DATA=BUNDLED_VISUAL_ASSETS;
 
         <p style="font-size:12px;color:#888;">选择主曲风：</p>
         <div id="boxSGenre" style="margin:5px 0;"></div>
+        <button type="button" class="sec inline" style="font-size:11px;padding:4px 8px;margin-bottom:6px;" onclick="deletePersistentGenre('song')">🗑️ 删除自定义主曲风</button>
                 <p style="font-size:12px;color:#888;">选择表演类型：</p>
         <select id="inSType" style="margin-bottom:5px;">
             <option value="Vocal">🎤 纯享 Vocal</option>
@@ -3656,6 +3675,7 @@ var PET_IMAGE_DATA=BUNDLED_VISUAL_ASSETS;
           </select>
           <p style="font-size:12px;color:#888;">选择主曲风：</p>
           <div id="boxAGenre" style="margin:5px 0;"></div>
+          <button type="button" class="sec inline" style="font-size:11px;padding:4px 8px;margin-bottom:6px;" onclick="deletePersistentGenre('album')">🗑️ 删除自定义主曲风</button>
                     <p style="font-size:12px;color:#888;">全专核心表演定位：</p>
           <select id="inAType" style="margin-bottom:5px;">
               <option value="Vocal">🎤 纯享 Vocal</option>
@@ -3943,7 +3963,7 @@ function processAvatarUpload(file, callback) {
 }
 
 let ad={}; let lib=[]; let std=[]; let albs=[]; let trackPool=[]; let marketSongs=[]; let worldArtists=[]; let writers=[]; let myWorks=[];
-let selG=[]; let selAG=[]; let posts={wb:[],x:[],ins:[],tiktok:[],mom:[]}; let curApp="";
+let selG=[]; let selAG=[]; let selExplicit=false; let selAExplicit=false; let posts={wb:[],x:[],ins:[],tiktok:[],mom:[]}; let curApp="";
 let time = { y:2026, m:1, w:1, d:1, h:0 }; let Mt = 1.0; 
 let curPj = null; let prog = 0; let curAlbPj = null; 
 let pickAction = ""; let tempIdx = -1;
@@ -4118,6 +4138,7 @@ window.switchMainTab = function(btn, targetId){ let btns = document.querySelecto
 window.switchSubTab = function(btn, targetId, parentId){ let c=btn.parentElement; let st = c.querySelectorAll(".sub-tab"); for(var i=0;i<st.length;i++) st[i].classList.remove("active"); btn.classList.add("active"); let sp = $(parentId).querySelectorAll(".sub-page"); for(var j=0;j<sp.length;j++) sp[j].classList.remove("active"); $(targetId).classList.add("active"); }
 window.closeM = function(id){ $(id).classList.remove("open"); }
 window.tgG = function(el, arr){ let v=el.innerText; if(arr.indexOf(v) > -1){arr.splice(arr.indexOf(v),1); el.classList.remove("selected");}else{arr.push(v); el.classList.add("selected");} }
+window.toggleExplicitTag=function(el,target){var key=target==='album'?'selAExplicit':'selExplicit';window[key]=!window[key];el.classList.toggle('selected',window[key]);el.setAttribute('aria-pressed',window[key]?'true':'false');};
 
 // ==================== 初始化与大盘NPC生成 ====================
 function initCos(){
@@ -4132,13 +4153,37 @@ function initCos(){
   ];
 }
 function initG(){
-  if($("boxSGenre")) $("boxSGenre").innerHTML = gs.map(function(g){return `<span class="g-tag s-tag" onclick="tgG(this,selG)">${g}</span>`}).join('');
-  if($("boxAGenre")) $("boxAGenre").innerHTML = gs.map(function(g){return `<span class="g-tag a-tag" onclick="tgG(this,selAG)">${g}</span>`}).join('');
+  var render=function(list,cls,target){
+    return list.filter(function(g){return g!=="灵魂乐";}).map(function(g){return `<span class="g-tag ${cls}" onclick="tgG(this,${target==='song'?'selG':'selAG'})">${escapeHTML(g)}</span>`}).join('')+
+      `<span class="g-tag ${cls} explicit-tag" onclick="toggleExplicitTag(this,'${target}')">是否有脏标 Explicit</span>`;
+  };
+  if($("boxSGenre")) $("boxSGenre").innerHTML = render(gs,'s-tag','song');
+  if($("boxAGenre")) $("boxAGenre").innerHTML = render(gs,'a-tag','album');
 }
 window.addEventListener("load", function() {
     initG();
     loadApiConfig();
 });
+
+// Keep pre-release demos out of independent charts and merge accidental
+// duplicate player entities without touching legitimate remixes/covers.
+(function installPlayerTrackDeduplication(){
+  function title(v){return String(v==null?'':v).replace(/&amp;|&#39;|&quot;|&lt;|&gt;/g,function(x){return {'&amp;':'&','&#39;':"'",'&quot;':'"','&lt;':'<','&gt;':'>'}[x]||x;}).replace(/\s+/g,' ').trim().toLowerCase();}
+  function released(t){return !!(t&&(t.released||t.isSingleRelease||t.isTitleSingle||t.albumSingleConfirmed||t.hasRealMV));}
+  function reconcile(){
+    if(!Array.isArray(trackPool))return;var seen={};
+    trackPool.forEach(function(t){
+      if(!t||t.type!=='track'||!t.isMe||released(t))return;
+      var key=title(t.n)+'|'+title(t.artist||ad&&ad.s||'')+'|'+title(t.versionType||t.parentTrackId||'');
+      if(!key||key==='|')return;
+      if(seen[key]){t._duplicateOf=seen[key].id;t._excludeFromCharts=true;}else{seen[key]=t;t._excludeFromCharts=false;}
+    });
+  }
+  window.reconcilePlayerTrackDuplicates=reconcile;
+  var oldLoad=window.loadGame;if(typeof oldLoad==='function')window.loadGame=function(){var result=oldLoad.apply(this,arguments),done=function(){reconcile();};if(result&&typeof result.then==='function')return result.then(function(v){done();return v;});done();return result;};
+  var oldAdvance=window.advTime;if(typeof oldAdvance==='function')window.advTime=function(){var result=oldAdvance.apply(this,arguments);reconcile();return result;};
+  reconcile();
+})();
 
 // ==== 地图与同居交互 ====
 window.showMap = function(id){ 
@@ -4738,7 +4783,7 @@ window.startWrite = function(){
     if(customGenre) selG.push(customGenre);
     if(selG.length === 0) selG.push("流行");
 
-    curPj = {type: "write", n: n, g: [...selG], c: escapeHTML($("inSCustom").value), core: core, ff: ff}; 
+    curPj = {type: "write", n: n, g: [...selG], c: escapeHTML($("inSCustom").value), core: core, ff: ff, explicit: !!selExplicit}; 
     prog=0; $("txtProg").innerText="0%"; $("barProg").style.width="0%"; $("boxWriteProgress").style.display="block"; $("btnStartWriteProj").style.display="none"; 
     alert(`企划立项：${n}。已扣除10精力。`); saveGame(); 
 }
@@ -4747,7 +4792,7 @@ window.writeSongStep = function(){
     advHour(1); prog += Math.floor(Math.random()*11)+20; 
     if(prog>=100){ 
         prog=100; 
-        lib.push({id:"lb_"+Date.now(), n:curPj.n, g:[...curPj.g], c:curPj.c, core:curPj.core, ff: curPj.ff}); 
+        lib.push({id:"lb_"+Date.now(), n:curPj.n, g:[...curPj.g], c:curPj.c, core:curPj.core, ff: curPj.ff, explicit:!!curPj.explicit}); 
         alert(`✅ 创作完毕：${curPj.n}`); curPj=null; 
         setTimeout(function(){$("txtProg").innerText="0%"; $("barProg").style.width="0%"; $("boxWriteProgress").style.display="none"; $("btnStartWriteProj").style.display="block";},1000); 
         renderLib(); saveGame(); 
@@ -4773,7 +4818,7 @@ function renderStdMap(){
         <div style="padding:8px 0;border-bottom:1px solid #eee;display:flex;flex-direction:column;gap:5px;">
             <b>${escapeHTML(x.n)}</b>
             <div style="display:flex;gap:5px;">
-                <button class="sec inline" style="flex:1;font-size:11px;" onclick="preheatSong('${escapeHTML(x.n)}')">📢 预热造势</button>
+                <button class="sec inline" style="flex:1;font-size:11px;" onclick='preheatSong(${JSON.stringify(x.n)})'>📢 预热造势</button>
                 <button class="inline" style="flex:1;font-size:11px;" onclick="openRelSingle('${x.id}')">🚀 正式发歌</button>
             </div>
         </div>`}).join(''); 
@@ -4838,7 +4883,7 @@ window.startAlbum = function(){
     let customGenre = $("inACore").value.trim(); 
     if(selAG.length === 0) selAG.push("流行");
     // 新增 singleCount 用来记录发了几单
-    curAlbPj = { n:escapeHTML($("inAName").value)||"Album", g:[...selAG], core:escapeHTML($("inACore").value)||"无", s:[], hype: 1.0, preCount: 0, singleCount: 0 }; 
+    curAlbPj = { n:escapeHTML($("inAName").value)||"Album", g:[...selAG], core:escapeHTML($("inACore").value)||"无", s:[], hype: 1.0, preCount: 0, singleCount: 0, explicit:!!selAExplicit }; 
     alert("新专立项成功！"); updateAlbProjUI(); saveGame(); 
 }
 window.addWipSong = function(){ 
@@ -5377,7 +5422,7 @@ window.openMailbox = function() {
         if (npc.fans > 50000) {
             currentMails.push({ id: "collab", title: `🤝 合作邀请：${npc.n}`, sender: npc.n + " 的经纪团队",
                 content: `你好！${npc.n} 非常欣赏你的才华，希望近期能有机会一起进录音室合作一首新曲。\n\n如果感兴趣，请点击下方接受，TA的名字将会自动加入到你的下一首单曲的合作栏中！`,
-                btnHtml: `<button class="sec inline" onclick="acceptCollab('${escapeHTML(npc.n)}')">接受合作</button> <button class="red inline" onclick="window.openMailbox()">婉拒</button>`
+                btnHtml: `<button class="sec inline" onclick='acceptCollab(${JSON.stringify(npc.n)})'>接受合作</button> <button class="red inline" onclick="window.openMailbox()">婉拒</button>`
             });
         }
     }
@@ -5517,7 +5562,7 @@ window.renderChart = function() {
     let box = document.getElementById("mChartContent");
     if(!trackPool || trackPool.length === 0) { box.innerHTML = "<p style='text-align:center;'>暂无数据</p>"; return; }
     let isAlbum = (curChType === 'album' || curChType === 'album_daily');
-    let list = trackPool.filter(x => isAlbum ? x.type === 'album' : x.type === 'track');
+    let list = trackPool.filter(x => isAlbum ? x.type === 'album' : (x.type === 'track' && !x._excludeFromCharts && (!x.isMe || x.released || x.isSingleRelease || x.isTitleSingle || x.albumSingleConfirmed || x.hasRealMV)));
     list.forEach(t => {
         let stmGlobal = t.stmGlobal_Week || Math.floor(t.stmGlobal/7) || 0;
         let stmUS = t.stmUS_Week || Math.floor(t.stmUS/7) || 0;
@@ -7088,7 +7133,7 @@ window.refreshTrend = function() {
     ];
     document.getElementById("trendList").innerHTML = trends.map((item, i) => 
         `<div style="padding:10px; border-bottom:1px solid #eee; cursor:pointer; background:#f9f9f9; border-radius:6px; margin-bottom:5px;" 
-            onclick="viewPostDetail('${item.t}', '${item.c}', false)">
+            onclick="viewPostDetail(${htmlJsArg(item.t)}, ${htmlJsArg(item.c)}, false)">
             <span style="color:#e6683c;font-weight:bold;margin-right:5px;">${i+1}</span> ${item.t}
             <div style="font-size:11px; color:#888; margin-top:3px;">点击查看讨论详情...</div>
         </div>`
@@ -7110,7 +7155,7 @@ window.renderMyPosts = function() {
     if(!list) return;
     list.innerHTML = posts.mom.map((p, i) => 
         `<div style="padding:8px; border:1px solid #c8a440; background:#fff8e8; border-radius:6px; margin-bottom:5px; cursor:pointer;"
-            onclick="viewPostDetail('${p.t}', '${p.c}', true)">
+            onclick="viewPostDetail(${htmlJsArg(p.t)}, ${htmlJsArg(p.c)}, true)">
             <b>${p.t}</b><br><span style="font-size:12px;color:#333;">${p.c}</span>
             <div style="font-size:11px; color:#888; margin-top:3px;">点击查看粉丝评论...</div>
         </div>`
@@ -8723,7 +8768,7 @@ window.refreshFeed = function() {
         if(dataPost) {
             h += `
             <div class="cmt-box" style="cursor:pointer; border-left:3px solid #0055ff; background:#e0f2fe;" 
-                 onclick="viewPostDetail('📊 乐坛数据速报', \`${dataPost.desc}\`, false)">
+                 onclick="viewPostDetail(${htmlJsArg('📊 乐坛数据速报')}, ${htmlJsArg(dataPost.desc)}, false)">
                 <b>@全球乐坛数据中心</b>: 发布了新单曲 ${dataPost.title}！ 
                 <div style="font-size:10px;color:#0369a1;margin-top:3px;">👉 点击查看详细数据与走势折线...</div>
             </div>`;
@@ -8734,7 +8779,7 @@ window.refreshFeed = function() {
     for(let i=0; i<5; i++) {
         let topic = topics[Math.floor(Math.random()*topics.length)];
         h += `
-        <div class="cmt-box" style="cursor:pointer;" onclick="viewPostDetail('网友热议动态', '${topic}', false)">
+        <div class="cmt-box" style="cursor:pointer;" onclick="viewPostDetail(${htmlJsArg('网友热议动态')}, ${htmlJsArg(topic)}, false)">
             <b>网友${Math.floor(Math.random()*9000)+1000}</b>: ${topic}
             <div style="font-size:10px;color:#888;margin-top:3px;">👉 点击进入评论区互动...</div>
         </div>`;
@@ -8748,7 +8793,7 @@ window.renderMyPosts = function() {
     if(!list) return;
     list.innerHTML = posts.mom.map((p, i) => `
         <div style="padding:10px; border:1px solid #c8a440; background:#fff8e8; border-radius:6px; margin-bottom:8px; cursor:pointer;"
-            onclick="viewPostDetail('${escapeHTML(p.t)}', '${escapeHTML(p.c)}', true)">
+            onclick="viewPostDetail(${htmlJsArg(p.t)}, ${htmlJsArg(p.c)}, true)">
             <b style="color:#c8a440;">${escapeHTML(p.t)}</b><br>
             <span style="font-size:13px;color:#333;display:inline-block;margin-top:4px;">${escapeHTML(p.c)}</span>
             <div style="font-size:11px; color:#888; margin-top:5px;">💬 点击查看粉丝们的回复...</div>
@@ -9936,7 +9981,7 @@ window.refreshFeed = function() {
             
             h += `
             <div class="cmt-box" style="cursor:pointer; border-left:3px solid ${borderColor}; background:${bgColor}; margin-bottom:8px;" 
-                 onclick="viewPostDetail('${post.title}', \`${post.desc}\`, false)">
+                 onclick="viewPostDetail(${htmlJsArg(post.title)}, ${htmlJsArg(post.desc)}, false)">
                 <b>${post.title}</b><br>
                 <span style="font-size:12px;color:#555;display:block;margin-top:4px;">${post.desc.replace(/\n/g, '<br>')}</span>
                 <div style="font-size:10px;color:${borderColor};margin-top:6px;">👉 点击进入帖子查看实时互动...</div>
@@ -9949,7 +9994,7 @@ window.refreshFeed = function() {
     for(let i=0; i<2; i++) {
         let topic = topics[Math.floor(Math.random()*topics.length)];
         h += `
-        <div class="cmt-box" style="cursor:pointer;" onclick="viewPostDetail('网友闲聊', '${topic}', false)">
+        <div class="cmt-box" style="cursor:pointer;" onclick="viewPostDetail(${htmlJsArg('网友闲聊')}, ${htmlJsArg(topic)}, false)">
             <b>网友${Math.floor(Math.random()*9000)+1000}</b>: ${topic}
         </div>`;
     }
@@ -9998,7 +10043,7 @@ window.viewPostDetail = function(title, content, isMine) {
             </div>
             <div style="display:flex; gap:5px; margin-top:10px;">
                 <input type="text" id="postReplyInput" placeholder="发条评论参与讨论..." style="margin:0; flex:1; font-size:12px;">
-                <button class="sec inline" onclick="sendPostReply('${escapeHTML(title)}')">发送</button>
+                <button class="sec inline" onclick="sendPostReply(${htmlJsArg(title)})">发送</button>
             </div>
         </div>`;
     document.getElementById("mPostUIContent").innerHTML = html;
@@ -10288,7 +10333,7 @@ window.refreshFeed = function() {
             
             h += `
             <div class="cmt-box" style="cursor:pointer; border-left:3px solid ${borderColor}; background:${bgColor}; margin-bottom:8px;" 
-                 onclick="viewPostDetail('${post.title}', \`${post.desc}\`, false)">
+                 onclick="viewPostDetail(${htmlJsArg(post.title)}, ${htmlJsArg(post.desc)}, false)">
                 <b>${post.title}</b><br>
                 <span style="font-size:12px;color:#555;display:block;margin-top:4px;">${post.desc.replace(/\n/g, '<br>')}</span>
                 <div style="font-size:10px;color:${borderColor};margin-top:6px;">👉 点击进入帖子查看实时互动与跟帖...</div>
@@ -10493,7 +10538,7 @@ window.refreshFeed = function() {
             
             h += `
             <div class="cmt-box" style="cursor:pointer; border-left:3px solid ${borderColor}; background:${bgColor}; margin-bottom:8px;" 
-                 onclick="viewPostDetail('${post.title}', \`${post.desc}\`, false)">
+                 onclick="viewPostDetail(${htmlJsArg(post.title)}, ${htmlJsArg(post.desc)}, false)">
                 <b>${post.title}</b><br>
                 <span style="font-size:12px;color:#555;display:block;margin-top:4px;">${post.desc.replace(/\n/g, '<br>')}</span>
                 <div style="font-size:10px;color:${borderColor};margin-top:6px;">👉 点击进入帖子查看实时互动...</div>
@@ -11446,7 +11491,7 @@ window.openMailbox = function() {
             currentMails.unshift({
                 id: "gift_song", title: `🎵 歌曲赠礼：${demoName}`, sender: friend.n,
                 content: `嗨，最近我写了一首新 Demo《${demoName}》，感觉非常适合你的声线。如果不嫌弃的话，你可以直接拿去唱！`,
-                btnHtml: `<button class="sec inline" onclick="acceptGiftSong('${demoName}')">收下这首歌</button>`,
+                btnHtml: `<button class="sec inline" onclick="acceptGiftSong(${htmlJsArg(demoName)})">收下这首歌</button>`,
                 _giftName: demoName
             });
         }
@@ -11459,7 +11504,7 @@ window.openMailbox = function() {
             currentMails.unshift({
                 id: "tour_guest", title: `🎤 暖场嘉宾邀请`, sender: `${bigArtist.n} 巡演团队`,
                 content: `${bigArtist.n} 即将开启全球巡回演唱会，想邀请你作为特邀暖场嘉宾（Opening Act）参与前期的预热表演。这将极大地增加你在下沉市场的曝光！`,
-                btnHtml: `<button class="sec inline" onclick="acceptTourGuest('${escapeHTML(bigArtist.n)}')">同意当暖场嘉宾 (耗时1周)</button>`
+                btnHtml: `<button class="sec inline" onclick='acceptTourGuest(${JSON.stringify(bigArtist.n)})'>同意当暖场嘉宾 (耗时1周)</button>`
             });
         }
     }
@@ -12303,6 +12348,11 @@ function escapeHTML(str) {
     }); 
 }
 window.escapeHTML = escapeHTML;
+// 将动态文本安全地嵌入 onclick 属性：JSON 字符串处理引号、换行和反斜杠，&quot; 供 HTML 属性解析后还原为双引号。
+function htmlJsArg(value) {
+    return JSON.stringify(value === null || value === undefined ? '' : String(value)).replace(/"/g, '&quot;');
+}
+window.htmlJsArg = htmlJsArg;
 // 覆盖原版的 updAttr，在底部加入关系表展示
 var oldUpdAttrForRelations = window.updAttr;
 window.updAttr = function() {
@@ -12629,7 +12679,7 @@ window.renderMyPosts = function() {
     let myPlatPosts = posts[curSocialPlatform] || [];
     list.innerHTML = myPlatPosts.map((p, i) => `
         <div style="padding:10px; border:1px solid #c8a440; background:#fff8e8; border-radius:6px; margin-bottom:8px; cursor:pointer;"
-            onclick="viewPostDetail('${escapeHTML(p.t)}', '${escapeHTML(p.c)}', true)">
+            onclick="viewPostDetail(${htmlJsArg(p.t)}, ${htmlJsArg(p.c)}, true)">
             <b style="color:#c8a440;">${escapeHTML(p.t)}</b><br>
             <span style="font-size:13px;color:#333;">${escapeHTML(p.c)}</span>
         </div>`
@@ -12732,7 +12782,7 @@ window.refreshTrend = function() {
     if(trendList && window.globalTrends && window.globalTrends.length > 0) {
         let h = window.globalTrends.map((t, i) => `
             <div style="padding:10px; border-bottom:1px solid #eee; cursor:pointer; background:#fff0f5; border-radius:6px; margin-bottom:5px;" 
-                 onclick="viewPostDetail('${t.t}', '${t.c}', false)">
+                 onclick="viewPostDetail(${htmlJsArg(t.t)}, ${htmlJsArg(t.c)}, false)">
                 <span style="color:#e91e63;font-weight:bold;margin-right:5px;">🔥 爆</span> ${t.t}
             </div>
         `).join('');
@@ -13121,7 +13171,7 @@ window.refreshFeed = function() {
             
             h += `
             <div class="cmt-box" style="cursor:pointer; border-left:3px solid ${borderColor}; background:${bgColor}; margin-bottom:8px;" 
-                 onclick="viewPostDetail('${post.title}', \`${post.desc}\`, false)">
+                 onclick="viewPostDetail(${htmlJsArg(post.title)}, ${htmlJsArg(post.desc)}, false)">
                 <b>${post.title}</b><br>
                 <span style="font-size:12px;color:#555;display:block;margin-top:4px;white-space:pre-wrap;">${post.desc}</span>
                 <div style="font-size:10px;color:${borderColor};margin-top:6px;">👉 点击进入帖子查看评论...</div>
@@ -15642,7 +15692,7 @@ window.refreshFeed = function() {
             
             h += `
             <div class="cmt-box" style="cursor:pointer; border-left:3px solid ${borderColor}; background:${bgColor}; margin-bottom:8px;" 
-                 onclick="viewPostDetail('${post.title}', \`${post.desc}\`, false)">
+                 onclick="viewPostDetail(${htmlJsArg(post.title)}, ${htmlJsArg(post.desc)}, false)">
                 <b>${post.title}</b><br>
                 <span style="font-size:12px;color:#555;display:block;margin-top:4px;white-space:pre-wrap;">${post.desc}</span>
                 <div style="font-size:10px;color:${borderColor};margin-top:6px;">👉 点击进入帖子查看评论...</div>
@@ -17877,7 +17927,7 @@ window.renderBackpack = function() {
                     <b style="font-size:14px;">${escapeHTML(it.n)} <span style="color:#c8a440;">x${it.count}</span></b><br>
                     <span style="font-size:11px;color:#888;">${escapeHTML(it.desc)}</span>
                 </div>
-                <button class="sec inline" style="padding:4px 8px;font-size:11px;" onclick="useItem('${escapeHTML(it.n)}')">使用</button>
+                <button class="sec inline" style="padding:4px 8px;font-size:11px;" onclick='useItem(${JSON.stringify(it.n)})'>使用</button>
             </div>
         `).join('');
     }
@@ -19532,8 +19582,10 @@ document.addEventListener("DOMContentLoaded", function() {
             // 生成原有按钮
             var tagsHtml = "";
             for(var i=0; i<gs.length; i++) {
-                tagsHtml += '<span class="g-tag s-tag" onclick="tgG(this, selG)">' + gs[i] + '</span>';
+                if(gs[i] === "灵魂乐") continue;
+                tagsHtml += '<span class="g-tag s-tag" onclick="tgG(this, selG)">' + escapeHTML(gs[i]) + '</span>';
             }
+            tagsHtml += '<span class="g-tag s-tag explicit-tag" onclick="toggleExplicitTag(this,\'song\')">是否有脏标 Explicit</span>';
             
             // 安全的字符串拼接HTML
             var newHtml = '<div id="hybridGenreBox" style="margin-bottom:10px;">' +
@@ -19594,6 +19646,7 @@ window.confirmStartWrite = function() {
     // 强制把所有曲风塞进去并判定宗教
     if (curPj && curPj.type === "write") {
         curPj.g = finalGenres;
+        curPj.explicit = !!selExplicit;
         
         var hasReligion = false;
         for(var k=0; k<finalGenres.length; k++) {
@@ -21951,7 +22004,7 @@ window.renderStdMap = function(){
         <div style="padding:8px 0;border-bottom:1px solid #eee;display:flex;flex-direction:column;gap:5px;">
             <b>${escapeHTML(x.n)}</b>
             <div style="display:flex;gap:5px;">
-                <button class="sec inline" style="flex:1;font-size:11px;" onclick="preheatSong('${escapeHTML(x.n)}')">📢 预热造势</button>
+                <button class="sec inline" style="flex:1;font-size:11px;" onclick="preheatSong(${htmlJsArg(x.n)})">📢 预热造势</button>
                 <button class="inline" style="flex:1;font-size:11px;" onclick="openRelSingle('${x.id}')">🚀 正式发歌</button>
             </div>
         </div>`).join(''); 
@@ -22205,7 +22258,7 @@ window.renderFashionHouse = function() {
                             <button class="sec inline" style="font-size:11px;padding:4px 8px;" onclick="strollFashion('mag', ${i})">随便逛逛(偶遇主编)</button>
                             <button class="sec inline" style="font-size:11px;padding:4px 8px;" onclick="shootMag(${i})">拍摄杂志</button>
                             <button class="sec inline" style="font-size:11px;padding:4px 8px;" onclick="viewMagHistory(${i})">杂志人物</button>
-                            <button class="sec inline" style="font-size:11px;padding:4px 8px;" onclick="joinFashionGala('${m.n} 晚宴')">杂志晚宴</button>
+                            <button class="sec inline" style="font-size:11px;padding:4px 8px;" onclick="joinFashionGala(${htmlJsArg(m.n+' 晚宴')})">杂志晚宴</button>
                         </div>
                     </div>
                 `).join('')}
@@ -22222,7 +22275,7 @@ window.renderFashionHouse = function() {
                         <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;">
                             <button class="sec inline" style="font-size:11px;padding:4px 8px;" onclick="strollFashion('brand', ${i})">随便逛逛(偶遇PR)</button>
                             <button class="sec inline" style="font-size:11px;padding:4px 8px;" onclick="shootAd(${i})">拍摄广告</button>
-                            <button class="sec inline" style="font-size:11px;padding:4px 8px;" onclick="joinFashionGala('${b.n} 品牌晚宴')">品牌晚宴</button>
+                            <button class="sec inline" style="font-size:11px;padding:4px 8px;" onclick="joinFashionGala(${htmlJsArg(b.n+' 品牌晚宴')})">品牌晚宴</button>
                         </div>
                     </div>
                 `).join('')}
@@ -23046,8 +23099,8 @@ window.checkAutoAward = function() {
                 <button class="sec inline" onclick="addLuxuryBrand()">新增品牌</button>
             </div>
             <div id="fashionTabs">
-                <div id="fashionMag" class="sub-page active">${fashionMags.map(function(m,i){ return `<div class="card" style="padding:10px;"><b>${escapeHTML(m.n)}</b> <span style="font-size:10px;background:#111;color:#c8a440;padding:2px 6px;border-radius:4px;">${escapeHTML(m.tier||"T1")} ${escapeHTML(m.type||"杂志")}</span><br><button class="sec inline" onclick="editFashionMag(${i})">编辑</button><button class="sec inline" onclick="strollFashion('mag',${i})">随便逛逛</button><button class="sec inline" onclick="viewMagHistory(${i})">杂志人物</button><button class="sec inline" onclick="joinFashionGala('${escapeHTML(m.n)} 晚宴')">杂志晚宴</button></div>`; }).join('')}</div>
-                <div id="fashionBrand" class="sub-page">${luxuryBrands.map(function(b,i){ return `<div class="card" style="padding:10px;"><b>${escapeHTML(b.n)}</b> <span style="font-size:10px;background:#c8a440;color:#000;padding:2px 6px;border-radius:4px;">${escapeHTML(b.tier||"高奢")}</span><br><span style="font-size:11px;color:#888;">支线：${safeArr(b.lines).join(" / ")}<br>代言人梯度：${safeArr(b.titles).join(" / ")}</span><br><button class="sec inline" onclick="editLuxuryBrand(${i})">编辑</button><button class="sec inline" onclick="strollFashion('brand',${i})">随便逛逛</button><button class="sec inline" onclick="joinFashionGala('${escapeHTML(b.n)} 品牌晚宴')">品牌晚宴</button></div>`; }).join('')}</div>
+                <div id="fashionMag" class="sub-page active">${fashionMags.map(function(m,i){ return `<div class="card" style="padding:10px;"><b>${escapeHTML(m.n)}</b> <span style="font-size:10px;background:#111;color:#c8a440;padding:2px 6px;border-radius:4px;">${escapeHTML(m.tier||"T1")} ${escapeHTML(m.type||"杂志")}</span><br><button class="sec inline" onclick="editFashionMag(${i})">编辑</button><button class="sec inline" onclick="strollFashion('mag',${i})">随便逛逛</button><button class="sec inline" onclick="viewMagHistory(${i})">杂志人物</button><button class="sec inline" onclick="joinFashionGala(${htmlJsArg(m.n+' 晚宴')})">杂志晚宴</button></div>`; }).join('')}</div>
+                <div id="fashionBrand" class="sub-page">${luxuryBrands.map(function(b,i){ return `<div class="card" style="padding:10px;"><b>${escapeHTML(b.n)}</b> <span style="font-size:10px;background:#c8a440;color:#000;padding:2px 6px;border-radius:4px;">${escapeHTML(b.tier||"高奢")}</span><br><span style="font-size:11px;color:#888;">支线：${safeArr(b.lines).join(" / ")}<br>代言人梯度：${safeArr(b.titles).join(" / ")}</span><br><button class="sec inline" onclick="editLuxuryBrand(${i})">编辑</button><button class="sec inline" onclick="strollFashion('brand',${i})">随便逛逛</button><button class="sec inline" onclick="joinFashionGala(${htmlJsArg(b.n+' 品牌晚宴')})">品牌晚宴</button></div>`; }).join('')}</div>
                 <div id="fashionWeek" class="sub-page"><p style="font-size:11px;color:#888;">四大时装周入口。</p><button onclick="joinFashionWeek('巴黎时装周')">巴黎时装周</button><button onclick="joinFashionWeek('米兰时装周')">米兰时装周</button><button onclick="joinFashionWeek('纽约时装周')">纽约时装周</button><button onclick="joinFashionWeek('伦敦时装周')">伦敦时装周</button></div>
             </div>`;
             var mapFashion = document.getElementById("mapFashion");
@@ -24201,7 +24254,10 @@ function installRuntimeAuthority(){
     function ensureGlobalChartButton(){
         var us=document.getElementById('btnChartUS');if(!us)return null;var global=document.getElementById('btnChartGlobal');
         if(!global){global=document.createElement('button');global.id='btnChartGlobal';global.className='sec inline';global.textContent='🌍 全球';global.onclick=function(){switchChartRegion('Global');};us.parentElement.insertBefore(global,us);}
-        global.style.display=curChartPlatform==='BB'?'none':'';if(curChartPlatform==='BB'&&curChReg==='Global')curChReg='US';return global;
+        global.style.display=curChartPlatform==='BB'?'none':'';if(curChartPlatform==='BB'&&curChReg==='Global')curChReg='US';
+        var sv=document.getElementById('btnSalesVisualizer');
+        if(!sv){sv=document.createElement('button');sv.id='btnSalesVisualizer';sv.className='sec inline';sv.textContent='📊 销量可视化';sv.onclick=function(){if(typeof openSalesVisualizer==='function')openSalesVisualizer();};us.parentElement.appendChild(sv);}
+        sv.style.display=curChartPlatform==='Sale'?'':'none';return global;
     }
     var baseRenderChartAuthority=window.renderChart;window.renderChart=function(){ensureGlobalChartButton();var r=baseRenderChartAuthority.apply(this,arguments);ensureGlobalChartButton();return r;};
     var baseOpenAppAuthority=window.openApp;window.openApp=function(appId){var r=baseOpenAppAuthority.apply(this,arguments);if(['BB','Spot','Sale','Daily'].indexOf(appId)>=0)setTimeout(ensureGlobalChartButton,0);return r;};ensureGlobalChartButton();
@@ -24569,6 +24625,12 @@ function bootCareerExpansion(){
         if(added.length)save();return added;
     }
     function genreButton(value,target){var selected=target==='album'?(Array.isArray(window.__albumGenreDraft)&&window.__albumGenreDraft.indexOf(value)>=0):(target==='classicAlbum'&&typeof selAG!=='undefined'&&selAG.indexOf(value)>=0)||(target==='song'&&typeof selG!=='undefined'&&selG.indexOf(value)>=0);return '<button type="button" class="sec inline persistentGenreChip'+(selected?' active':'')+'" data-genre="'+esc(value)+'" data-target="'+target+'" onclick="togglePersistentGenre(this,\''+target+'\')" style="width:auto;margin:2px;padding:6px 9px;'+(selected?'background:#c8a440;color:#fff;':'')+'">'+esc(value)+'</button>';}
+    window.deletePersistentGenre=function(target){
+        if(!ad||!Array.isArray(ad.genreLibrary))return alert('暂无可删除的自定义曲风。');
+        var value=prompt('输入要删除的自定义曲风名称：',''); if(value===null)return; value=value.trim();
+        if(!value)return; var idx=ad.genreLibrary.indexOf(value); if(idx<0)return alert('未找到该自定义曲风。');
+        ad.genreLibrary.splice(idx,1); if(Array.isArray(gs)){var gi=gs.indexOf(value);if(gi>=0)gs.splice(gi,1);} if(Array.isArray(selG)){var si=selG.indexOf(value);if(si>=0)selG.splice(si,1);} if(Array.isArray(selAG)){var ai=selAG.indexOf(value);if(ai>=0)selAG.splice(ai,1);} save(); initG(); mountGenreLibraries(true); alert('已删除自定义曲风：'+value);
+    };
     window.togglePersistentGenre=function(button,target){var value=button.getAttribute('data-genre'),list;if(target==='album'){if(!Array.isArray(window.__albumGenreDraft))window.__albumGenreDraft=[];list=window.__albumGenreDraft;}else if(target==='classicAlbum'){if(typeof selAG==='undefined')window.selAG=[];list=selAG;}else{if(typeof selG==='undefined')window.selG=[];list=selG;}var index=list.indexOf(value);if(index>=0)list.splice(index,1);else list.push(value);button.classList.toggle('active',index<0);button.style.background=index<0?'#c8a440':'';button.style.color=index<0?'#fff':'';};
     function libraryPanel(id,target){return '<div id="'+id+'" class="card" style="padding:8px;margin:7px 0;background:#fefcf5;"><div style="font-size:11px;color:#777;margin-bottom:5px;">常用曲风，点击即可选择</div><div>'+genreLibrary().map(function(value){return genreButton(value,target);}).join('')+'</div><div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;margin-top:7px;"><input class="genreLibraryInput" placeholder="添加新曲风，多种用逗号隔开" style="margin:0;"><button type="button" class="sec" onclick="addPersistentGenre(this,\''+target+'\')" style="margin:0;width:auto;">添加</button></div></div>';}
     window.addPersistentGenre=function(button,target){var panel=button.closest('.card'),input=panel&&panel.querySelector('.genreLibraryInput'),raw=input&&input.value.trim();if(!raw)return alert('请输入要添加的曲风。');var values=raw.split(/[,，、/|]/).map(function(x){return x.trim();}).filter(Boolean),added=rememberGenres(raw),list;if(target==='album'){if(!Array.isArray(window.__albumGenreDraft))window.__albumGenreDraft=[];list=window.__albumGenreDraft;}else if(target==='classicAlbum'){if(typeof selAG==='undefined')window.selAG=[];list=selAG;}else{if(typeof selG==='undefined')window.selG=[];list=selG;}values.forEach(function(value){if(list.indexOf(value)<0)list.push(value);});var id=panel.id;if(id)panel.outerHTML=libraryPanel(id,target);mountGenreLibraries(false);if(added.length)alert('已加入常用曲风库，以后写歌和制作专辑都可以直接点击。');};
@@ -27115,7 +27177,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   function openChart(id){
     if(!(window.ad&&ad.r))return alert('请先进入游戏。');
     var chart=chartStore().find(function(c){return String(c.id)===String(id);});if(!chart)return alert('未找到该自制软件。');
-    var rows=arr(window.trackPool).filter(function(t){return t&&t.type==='track';}).map(function(t){return {t:t,s:score(t,chart)};}).filter(function(x){return x.s>0;}).sort(function(a,b){return b.s-a.s;}).slice(0,100);
+    var rows=arr(window.trackPool).filter(function(t){return t&&t.type==='track'&&!t._excludeFromCharts&&(!t.isMe||t.released||t.isSingleRelease||t.isTitleSingle||t.albumSingleConfirmed||t.hasRealMV);}).map(function(t){return {t:t,s:score(t,chart)};}).filter(function(x){return x.s>0;}).sort(function(a,b){return b.s-a.s;}).slice(0,100);
     var body='<div class="chart-brandbar"><div><span class="chart-kicker">'+(chart.scope==='regional'?'REGIONAL CHART':'GLOBAL CHART')+'</span><h2>'+esc(chart.name||'自制音乐榜')+'</h2><span class="chart-meta">实时排名 · '+(chart.scope==='regional'?'地区市场占比约 '+Number(chart.sharePercent||15)+'%':'全球压缩大盘')+'</span></div><div class="chart-actions"><button class="chart-custom-btn" onclick="customizeCustomMusicChart(\''+esc(id)+'\')">自定义</button><button class="chart-delete-btn" onclick="deleteCustomMusicChart(\''+esc(id)+'\')">删除榜单</button></div></div><div class="chart-table-head"><span>#</span><span>歌曲</span><span>艺人</span><span>数据</span></div>';
     body+=rows.map(function(row,i){var t=row.t;return '<div class="chart-row"><strong class="chart-rank">'+(i+1)+'</strong><div class="chart-song"><b>'+esc(t.n||'未命名歌曲')+'</b><small>'+esc(t.album||t.albumName||'单曲')+'</small></div><div class="chart-artist">'+esc(t.artist||'未知艺人')+'</div><div class="chart-score">'+row.s.toLocaleString()+'<small>流媒</small></div><button class="chart-more" onclick="viewSongStats(\''+esc(t.id)+'\')">详情</button></div>';}).join('');
     document.getElementById('mInfoTitle').innerText=chart.name||'自制音乐榜';document.getElementById('mInfoContent').innerHTML=body||'<p class="chart-empty">暂无可计入该榜单的歌曲。</p>';document.getElementById('mInfo').classList.add('open');
@@ -27900,6 +27962,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
 .ic-era-card{cursor:pointer;min-height:130px;transition:border-color .15s}.ic-era-card:hover{border-color:#45d9ff}.ic-table{width:100%;border-collapse:collapse;font-size:12px}.ic-table th,.ic-table td{border-bottom:1px solid #17394a;padding:9px 7px;text-align:left;vertical-align:middle}.ic-table th{color:#79d8ed;font-weight:600}.ic-table input,.ic-table select{width:100%;background:#071722;border:1px solid #246078;color:#dffaff;padding:6px;border-radius:2px}.ic-table input[type=range]{padding:0;accent-color:#20c9f2}.ic-readonly{color:#9dbac4}.ic-section{background:#091a28;border:1px solid #19445a;padding:14px;margin-bottom:14px;border-radius:4px}.ic-section h2{font-size:15px;margin:0 0 10px;color:#a9edff}.ic-layout{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(0,1.5fr);gap:14px}.ic-real-list{display:grid;gap:8px}.ic-real-row{border-bottom:1px solid #17394a;padding-bottom:8px}.ic-real-row b{display:block;color:#e8ffff}.ic-real-row span{font-size:11px;color:#86aab6}.ic-mode{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.ic-mode label{font-size:12px;color:#bceefa}.ic-mode input{accent-color:#20c9f2}.ic-buff{padding:9px;border-left:3px solid #22c6ef;background:#0b2736;font-size:12px;color:#bceefa;margin:10px 0}.ic-player{background:#06121d;border:1px solid #1c536a;padding:10px;border-radius:4px}.ic-player canvas{display:block;width:100%;height:340px;background:#06131e;border:1px solid #19475b}.ic-player-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:11px}.ic-player-controls input[type=range]{accent-color:#20c9f2}.ic-range-row{display:grid;grid-template-columns:48px 1fr 48px;gap:7px;align-items:center;margin-top:8px;font-size:11px;color:#8fb9c6}.ic-note{font-size:11px;color:#7197a5;line-height:1.6}.ic-empty{padding:24px;text-align:center;color:#7798a5;border:1px dashed #245367}
 @media(max-width:760px){.ic-shell{padding:12px}.ic-layout{grid-template-columns:1fr}.ic-table{min-width:720px}.ic-section.table-wrap{overflow:auto}.ic-player canvas{height:260px}}
 .ic-shell,.ic-section,.ic-player{background:#fff!important;color:#1f2937!important;border-color:#e5e7eb!important}.ic-section h2{color:#111827!important}.ic-muted,.ic-real-row span,.ic-note{color:#6b7280!important}.ic-buff{background:#f8fafc!important;border-left-color:#38bdf8!important;color:#374151!important}.ic-table th,.ic-table td{border-bottom-color:#e5e7eb!important}.ic-table input,.ic-table select{background:#fff!important;color:#1f2937!important;border-color:#d1d5db!important}.ic-player canvas{background:#fff!important;border-color:#e5e7eb!important}.ic-empty{color:#6b7280!important;border-color:#d1d5db!important}
+#idealChartApp .ic-player.ic-visual{position:relative;background:#000!important;color:#fff!important;border-color:#444!important}.ic-player.ic-visual canvas{background:#000!important;border-color:#333!important}.ic-player.ic-visual .ic-muted,.ic-player.ic-visual .ic-note,.ic-player.ic-visual .ic-range-row{color:#ddd!important}.ic-player.ic-visual .ic-btn{background:#111;color:#fff;border-color:#555}.ic-player.ic-visual .ic-btn.primary{background:#166534;border-color:#22c55e}
 </style>
 <script>
 /* Ideal chart trajectories: local-only computation, no network/API dependency. */
@@ -27933,10 +27996,11 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   function renderArtists(){var videos=npcVideos(),vhtml=videos.length?'<section class="ic-section"><h2>YouTube · NPC 理想走势视频</h2><div class="ic-grid">'+videos.slice(0,8).map(function(v){return '<div class="ic-card"><h3>'+esc(v.title)+'</h3><span class="ic-muted">第 '+esc(v.week)+' 刷新 · 理想指数 '+N(v.index,50)+'</span><div style="margin-top:9px"><button class="ic-btn primary" onclick="idealOpenVideo(\''+esc(v.id)+'\')">▶ 播放视频</button></div></div>';}).join('')+'</div></section>':'<section class="ic-section"><h2>YouTube · NPC 理想走势视频</h2><div class="ic-empty">本周暂无新视频，NPC 会按概率刷新。</div></section>';return head('理想榜单走势',false)+vhtml+'<div class="ic-toolbar"><span class="ic-muted">选择歌手，调整理想指数并查看其音乐时代。</span></div><div class="ic-grid">'+artists().map(function(a){var cfg=artistConfig(a);return '<div class="ic-card ic-era-card" onclick="idealChooseArtist(\''+esc(a.id)+'\')"><h3>'+esc(a.name)+'</h3><span class="ic-muted">'+(a.isMe?'玩家歌手':'艺人')+' · 粉丝 '+N(a.fans).toLocaleString()+'</span><div style="margin-top:10px"><span class="ic-pill">'+eras(a).length+' 个 Era</span></div><div onclick="event.stopPropagation()" style="margin-top:10px"><label class="ic-muted">理想指数 <b id="icIdxTxt_'+esc(a.id)+'">'+cfg.idealIndex+'</b></label><input type="range" min="0" max="100" value="'+cfg.idealIndex+'" oninput="document.getElementById(\'icIdxTxt_'+esc(a.id)+'\').textContent=this.value;idealSetArtistIndex(\''+esc(a.id)+'\',this.value)"></div></div>';}).join('')+'</div>';}
   function renderEras(){var es=eras(state.artist);return head(state.artist.name+' · Era',true)+'<div class="ic-grid">'+(es.map(function(e){var peaks=A(e.songs).map(function(t){return reality(t).peak;}).filter(function(x){return x>0;});var peak=peaks.length?Math.min.apply(null,peaks):100;return '<div class="ic-card ic-era-card" onclick="idealChooseEra(\''+esc(e.id)+'\')"><h3>'+esc(e.name)+'</h3><span class="ic-muted">Era：'+esc(e.era)+' · '+A(e.songs).length+' 首单曲</span><p style="font-size:12px;color:#a9dce8;">现实最高成绩：#'+peak+'</p><span class="ic-pill">进入理想编辑</span></div>';}).join('')||'<div class="ic-empty">暂无可用 Era 数据</div>')+'</div>';}
   function renderEditor(){var e=state.era,rs=realScore(e),is=idealScore(e);state.data[e.id]=state.data[e.id]||{};state.data[e.id].realScore=rs;state.data[e.id].score=is;state.data[e.id].better=is>rs;store();var buff=careerBuff(e);return head(e.name+' · 理想编辑',true)+'<div class="ic-toolbar"><div class="ic-mode"><label><input type="radio" name="icMode" '+((state.mode||'manual')==='manual'?'checked':'')+' onchange="idealSetMode(\'manual\')"> 玩家手动自定义</label><label><input type="radio" name="icMode" '+((state.mode||'manual')==='auto'?'checked':'')+' onchange="idealSetMode(\'auto\')"> 系统自动生成</label><button class="ic-btn primary" onclick="idealAutoGenerate()">一键生成整套 Era</button></div></div><div class="ic-buff">'+(buff?'生涯加成已激活：上一 Era 理想成绩更优，本 Era 在 12 个月窗口内获得热度红利。':'本 Era 暂无生涯加成。上一 Era 理想成绩优于现实且发行间隔不超过 12 个月时自动激活。')+'</div><div class="ic-layout"><section class="ic-section"><h2>现实固定原始数据 · 只读</h2><div class="ic-real-list">'+A(e.songs).map(function(t){var r=reality(t);return '<div class="ic-real-row"><b>'+esc(t.n||'未命名歌曲')+'</b><span>现实 Peak #'+r.peak+' · Peak 周数 '+r.peakWeeks+' · 在榜总周数 '+r.weeks+'</span></div>';}).join('')+'</div></section><section class="ic-section table-wrap"><h2>理想榜单走势编辑</h2><table class="ic-table"><thead><tr><th>歌曲</th><th>现实 Peak</th><th>理想 Peak</th><th>打单状态</th><th>爆火概率</th><th>预览</th></tr></thead><tbody>'+A(e.songs).map(function(t){var r=reality(t),x=getEdit(e,t),id=esc(String(t.id||t.n));return '<tr><td>'+esc(t.n||'未命名歌曲')+'</td><td class="ic-readonly">#'+r.peak+'</td><td><input type="number" min="1" max="100" value="'+N(x.idealPeak,r.peak)+'" onchange="idealEdit(\''+id+'\',\'idealPeak\',this.value)"></td><td><select onchange="idealEdit(\''+id+'\',\'status\',this.value)"><option value="keep" '+(x.status==='keep'?'selected':'')+'>维持原版</option><option value="add" '+(x.status==='add'?'selected':'')+'>开启打单</option><option value="drop" '+(x.status==='drop'?'selected':'')+'>取消打单</option></select></td><td><input type="range" min="0" max="100" step="1" value="'+Math.round(N(x.viral,.08)*100)+'" oninput="this.nextElementSibling.textContent=this.value+'%';idealEdit(\''+id+'\',\'viral\',this.value/100)"><span style="font-size:11px;color:#8be5fa">'+Math.round(N(x.viral,.08)*100)+'%</span></td><td><button class="ic-btn" onclick="idealPreview(\''+id+'\')">走势</button></td></tr>';}).join('')+'</tbody></table></section></div>'+'<div class="ic-toolbar" style="margin-top:14px"><span class="ic-muted">本 Era 理想总分 '+is.toLocaleString()+' / 现实 '+rs.toLocaleString()+'</span><button class="ic-btn primary" onclick="idealSaveAndBack()">保存并返回</button></div>';}
-  function renderPlayer(){var e=state.era,t=state.song;return head((t.n||'单曲')+' · 理想走势',true)+'<div class="ic-player"><canvas id="icCanvas" width="900" height="340"></canvas><div class="ic-player-controls"><button class="ic-btn primary" onclick="idealPlay()">▶ 播放</button><button class="ic-btn" onclick="idealPause()">Ⅱ 暂停</button><select onchange="state.speed=Number(this.value);"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select><button class="ic-btn" onclick="idealReset()">↺ 重置</button><span class="ic-muted">仅显示理想走势 · Peak #'+N(getEdit(e,t).idealPeak,100)+'</span></div><div class="ic-range-row"><span>起点</span><input id="icFrom" type="range" min="1" max="'+Math.max(2,N(getEdit(e,t).weeks,12))+'" value="'+state.from+'" oninput="state.from=Math.min(Number(this.value),state.to-1);drawChart()"><span id="icFromTxt">'+idealDateLabel(t,state.from)+'</span></div><div class="ic-range-row"><span>终点</span><input id="icTo" type="range" min="2" max="'+Math.max(2,N(getEdit(e,t).weeks,12))+'" value="'+state.to+'" oninput="state.to=Math.max(Number(this.value),state.from+1);drawChart()"><span id="icToTxt">'+idealDateLabel(t,state.to)+'</span></div><p class="ic-note">拖动双滑块选择片段后播放，可预览选定周数区间。现实曲线不会在此图表中渲染。</p></div>';}
+  function renderPlayer(){var e=state.era,t=state.song;return head((t.n||'单曲')+' · 理想走势',true)+'<div class="ic-player ic-visual"><canvas id="icCanvas" width="900" height="340"></canvas><div class="ic-player-controls"><button class="ic-btn primary" onclick="idealPlay()">▶ 播放</button><button class="ic-btn" onclick="idealPause()">Ⅱ 暂停</button><select onchange="state.speed=Number(this.value);"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select><button class="ic-btn" onclick="idealReset()">↺ 重置</button><button class="ic-btn" onclick="idealToggleParticles()">✦ 粒子：'+(state.particlesOff?'关':'自动')+'</button><span class="ic-muted">仅显示理想走势 · Peak #'+N(getEdit(e,t).idealPeak,100)+'</span></div><div class="ic-range-row"><span>起点</span><input id="icFrom" type="range" min="1" max="'+Math.max(2,N(getEdit(e,t).weeks,12))+'" value="'+state.from+'" oninput="state.from=Math.min(Number(this.value),state.to-1);drawChart()"><span id="icFromTxt">'+idealDateLabel(t,state.from)+'</span></div><div class="ic-range-row"><span>终点</span><input id="icTo" type="range" min="2" max="'+Math.max(2,N(getEdit(e,t).weeks,12))+'" value="'+state.to+'" oninput="state.to=Math.max(Number(this.value),state.from+1);drawChart()"><span id="icToTxt">'+idealDateLabel(t,state.to)+'</span></div><p class="ic-note">拖动双滑块选择片段后播放，可预览选定周数区间。现实曲线不会在此图表中渲染。</p></div>';}
   function curve(t){var x=getEdit(state.era,t),weeks=Math.max(2,N(x.weeks,12)),peak=Math.max(1,Math.min(100,Math.round(N(x.idealPeak,100)/heatMultiplier(state.era)))),arr=[];for(var i=1;i<=weeks;i++){var p=i<=2?Math.max(peak,100-(i-1)*Math.max(3,(100-peak)/2)):peak+Math.abs(Math.sin(i*1.73))*Math.max(1,(100-peak)*.08)+(i>weeks*.65?(i-weeks*.65)*2:0);arr.push(Math.max(1,Math.min(100,Math.round(p))));}return arr;}
-  function idealDateLabel(song,week){var base=typeof time!=='undefined'&&time?time:{y:2026,m:1,w:1},y=Number(song&& (song.releaseYear||song.t_y)||base.y)||2026,m=Number(song&& (song.releaseMonth||song.t_m)||base.m)||1,w=Number(song&& (song.releaseWeek||song.t_w)||base.w)||1,total=(m-1)*4+(w-1)+(Number(week||1)-1);y+=Math.floor(total/48);total%=48;return y+'年'+(Math.floor(total/4)+1)+'月第'+(total%4+1)+'周';}
-  function drawChart(){var c=document.getElementById('icCanvas');if(!c||!state.song)return;var ctx=c.getContext('2d'),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);var pad={l:48,r:16,t:18,b:34},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;ctx.font='11px Arial';ctx.strokeStyle='#e5e7eb';ctx.setLineDash([3,4]);[1,2,5,10,20,50,100].forEach(function(rank){var y=pad.t+(rank-1)/99*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillStyle='#6b7280';ctx.fillText(rank,pad.l-28,y+4);});ctx.setLineDash([]);var vals=curve(state.song),max=vals.length,from=Math.max(1,state.from),to=Math.min(max,state.to),drawTo=state.progress?Math.max(from,from+(to-from)*state.progress):from;ctx.strokeStyle='#0ea5e9';ctx.lineWidth=3;ctx.lineJoin='round';ctx.lineCap='round';ctx.beginPath();for(var i=from;i<=Math.floor(drawTo);i++){var xx=pad.l+(i-1)/Math.max(1,max-1)*cw,yy=pad.t+(vals[i-1]-1)/99*ch;if(i===from)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy);}var base=Math.floor(drawTo),frac=drawTo-base;if(frac>0&&base<to){var x1=pad.l+(base-1)/Math.max(1,max-1)*cw,y1=pad.t+(vals[base-1]-1)/99*ch,x2=pad.l+base/Math.max(1,max-1)*cw,y2=pad.t+(vals[base]-1)/99*ch;ctx.lineTo(x1+(x2-x1)*frac,y1+(y2-y1)*frac);}ctx.stroke();var peak=Math.min.apply(null,vals),pi=vals.indexOf(peak)+1,px=pad.l+(pi-1)/Math.max(1,max-1)*cw,py=pad.t+(peak-1)/99*ch;ctx.fillStyle='#0284c7';ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.fillText('Peak #'+peak+' · '+idealDateLabel(state.song,pi),Math.min(w-190,px+8),py-8);ctx.fillStyle='#6b7280';for(var j=1;j<=max;j+=Math.max(1,Math.ceil(max/8))){var tx=pad.l+(j-1)/Math.max(1,max-1)*cw;ctx.fillText(idealDateLabel(state.song,j),Math.max(pad.l,tx-28),h-10);}var a=document.getElementById('icFromTxt'),b=document.getElementById('icToTxt');if(a)a.textContent=idealDateLabel(state.song,from);if(b)b.textContent=idealDateLabel(state.song,to);}
+  function idealDateLabel(song,week){var base=typeof time!=='undefined'&&time?time:{y:2026,m:1,w:1},y=Number(song&& (song.releaseYear||song.t_y)||base.y)||2026,m=Number(song&& (song.releaseMonth||song.t_m)||base.m)||1,w=Number(song&& (song.releaseWeek||song.t_w)||base.w)||1,total=(m-1)*4+(w-1)+(Number(week||1)-1);y+=Math.floor(total/48);total%=48;m=Math.floor(total/4)+1;return m+'/'+((total%4)*7+1)+'/'+y;}
+  var idealCoverCache={},idealStars=[];function idealCover(t){var a=A(typeof albs!=='undefined'?albs:[]).find(function(x){return x&&((x.id&&t.albumId&&String(x.id)===String(t.albumId))||(x.n&&t.albumName&&x.n===t.albumName));});return a&&(a.cover||a.coverUrl||a.img||a.image||a.artwork)||(t&&(t.cover||t.coverUrl||t.coverImage||t.img||t.avatar||t.albumCover))||'';}function idealStarSeed(){if(idealStars.length)return;for(var i=0;i<80;i++)idealStars.push({x:Math.random(),y:Math.random(),r:.5+Math.random()*1.5,a:.25+Math.random()*.7,s:.2+Math.random()*.7});}
+  function drawChart(){var c=document.getElementById('icCanvas');if(!c||!state.song)return;var ctx=c.getContext('2d'),w=c.width,h=c.height,vals=curve(state.song),max=vals.length,from=Math.max(1,state.from),to=Math.min(max,state.to),drawTo=state.progress?Math.max(from,from+(to-from)*state.progress):from,peak=Math.min.apply(null,vals),mode=peak===1?3:(peak<=10?2:1),pad={l:50,r:18,t:48,b:54},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;ctx.clearRect(0,0,w,h);ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);var src=idealCover(state.song);if(src){if(!idealCoverCache[src]){var im=new Image();idealCoverCache[src]=im;im.onload=function(){drawChart();};im.src=src;}var img=idealCoverCache[src];if(img.complete&&img.naturalWidth){var sc=Math.max(w/img.naturalWidth,h/img.naturalHeight);ctx.globalAlpha=.18;ctx.drawImage(img,(w-img.naturalWidth*sc)/2,(h-img.naturalHeight*sc)/2,img.naturalWidth*sc,img.naturalHeight*sc);ctx.globalAlpha=1;}}ctx.fillStyle=mode===1?'rgba(0,0,0,.83)':'rgba(0,0,0,.72)';ctx.fillRect(0,0,w,h);if(mode>1&&!state.particlesOff){idealStarSeed();var now=Date.now()/1000;idealStars.forEach(function(s){ctx.globalAlpha=s.a*(mode===3?(.65+.35*Math.sin(now*s.s*5)):1);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(s.x*w,((s.y+now*s.s*.006)%1)*h,s.r*(mode===3?1.3:1),0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;}ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='bold 17px Georgia,serif';ctx.fillText(state.era&&state.era.name||'Era',w/2,25);ctx.font='18px Georgia,serif';ctx.fillText(state.artist&&state.artist.name||'',w/2,h-12);ctx.textAlign='left';if(mode>1){ctx.fillStyle='rgba(134,239,172,.14)';ctx.fillRect(pad.l,pad.t,cw,ch*9/99);ctx.fillStyle='#4ade80';ctx.font='bold 14px Arial';ctx.fillText('↑ TOP 10',12,27);}if(mode===3){ctx.textAlign='right';ctx.fillText('↑ #1',w-12,27);ctx.textAlign='left';}ctx.font='11px Arial';ctx.strokeStyle='rgba(255,255,255,.2)';[10,20,30,40,50,60,70,80,90,100].forEach(function(rank){var y=pad.t+(rank-1)/99*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillStyle='#ddd';ctx.fillText(rank,pad.l-30,y+4);});ctx.strokeStyle=mode===1?'rgba(255,255,255,.9)':'#7dd3fc';ctx.lineWidth=mode===1?1.5:2.7;ctx.lineJoin='round';ctx.lineCap='round';ctx.beginPath();for(var i=from;i<=Math.floor(drawTo);i++){var xx=pad.l+(i-1)/Math.max(1,max-1)*cw,yy=pad.t+(vals[i-1]-1)/99*ch;if(i===from)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy);}var base=Math.floor(drawTo),frac=drawTo-base;if(frac>0&&base<to){var x1=pad.l+(base-1)/Math.max(1,max-1)*cw,y1=pad.t+(vals[base-1]-1)/99*ch,x2=pad.l+base/Math.max(1,max-1)*cw,y2=pad.t+(vals[base]-1)/99*ch;ctx.lineTo(x1+(x2-x1)*frac,y1+(y2-y1)*frac);}ctx.stroke();for(var k=from;k<=Math.floor(drawTo);k++){var px=pad.l+(k-1)/Math.max(1,max-1)*cw,py=pad.t+(vals[k-1]-1)/99*ch;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#000';ctx.textAlign='center';ctx.font='9px Arial';ctx.fillText(vals[k-1],px,py+3);if(mode===3&&vals[k-1]===1){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,11+Math.sin(Date.now()/180)*2,0,Math.PI*2);ctx.stroke();}}ctx.textAlign='left';ctx.fillStyle='#ddd';ctx.font='10px Arial';for(var j=1;j<=max;j+=Math.max(1,Math.ceil(max/8))){var tx=pad.l+(j-1)/Math.max(1,max-1)*cw;ctx.save();ctx.translate(tx,h-10);ctx.rotate(-Math.PI/7);ctx.fillText(idealDateLabel(state.song,j),-24,0);ctx.restore();}var a=document.getElementById('icFromTxt'),b=document.getElementById('icToTxt');if(a)a.textContent=idealDateLabel(state.song,from);if(b)b.textContent=idealDateLabel(state.song,to);if(mode>1&&!state.particlesOff&&!state.playing)requestAnimationFrame(drawChart);}
   function tick(){if(!state.playing)return;var span=Math.max(1,state.to-state.from);state.progress+=(.012*state.speed);if(state.progress>=1){state.progress=1;state.playing=false;}drawChart();if(state.playing)state.raf=requestAnimationFrame(tick);}
   window.openIdealCharts=function(){load();generateNpcVideos();state.view='artists';state.mode='manual';state.from=1;state.to=52;if(!root){root=document.createElement('div');root.id='idealChartApp';root.innerHTML='<div class="ic-shell" id="icRoot"></div>';document.body.appendChild(root);}root.classList.add('open');sync();};
   window.idealBack=function(){if(state.view==='artists'){root.classList.remove('open');return;}if(state.view==='eras')state.view='artists';else if(state.view==='editor')state.view='eras';else state.view='editor';state.playing=false;sync();};
@@ -27949,7 +28013,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   window.idealSaveAndBack=function(){store();state.view='eras';sync();};
   window.idealPreview=function(id){state.song=A(state.era.songs).find(function(t){return String(t.id||t.n)===String(id);});var weeks=Math.max(2,N(getEdit(state.era,state.song).weeks,12));state.from=1;state.to=weeks;state.progress=0;state.view='player';sync();setTimeout(drawChart,0);};
   window.idealOpenVideo=function(videoId){var v=npcVideos().find(function(x){return String(x.id)===String(videoId);});if(!v)return;var a=artists().find(function(x){return String(x.id)===String(v.artistId);});if(!a)return;var es=eras(a),e=es.find(function(x){return String(x.id)===String(v.eraId);})||es[0],t=A(e&&e.songs).find(function(x){return String(x.id||x.n)===String(v.songId);})||A(e&&e.songs)[0];if(!e||!t)return;state.artist=a;state.era=e;state.song=t;state.from=1;state.to=Math.max(2,N(getEdit(e,t).weeks,12));state.progress=0;state.view='player';sync();setTimeout(drawChart,0);};
-  window.idealPlay=function(){if(!state.song)return;state.playing=true;state.progress=0;cancelAnimationFrame(state.raf);tick();};window.idealPause=function(){state.playing=false;cancelAnimationFrame(state.raf);};window.idealReset=function(){state.playing=false;state.progress=0;drawChart();};
+  window.idealPlay=function(){if(!state.song)return;state.playing=true;state.progress=0;cancelAnimationFrame(state.raf);tick();};window.idealPause=function(){state.playing=false;cancelAnimationFrame(state.raf);};window.idealReset=function(){state.playing=false;state.progress=0;drawChart();};window.idealToggleParticles=function(){state.particlesOff=!state.particlesOff;sync();setTimeout(drawChart,0);};
   function mount(){/* 理想走势已作为 YouTube 分支提供，不再创建独立入口 */}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){mount();setTimeout(mount,1000);});else{mount();setTimeout(mount,1000);}setInterval(mount,2000);
 })();
@@ -28311,8 +28375,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
 })();
 </script>
 <style>
-#chartVisualApp{display:none;position:fixed;inset:0;z-index:10021;background:#07111d;color:#d9f7ff;font-family:Arial,sans-serif;overflow:auto}
-#chartVisualApp.open{display:block}#chartVisualApp *{box-sizing:border-box}.cv-shell{max-width:1180px;margin:0 auto;padding:20px}.cv-head{display:flex;gap:12px;align-items:center;border-bottom:1px solid #1b4157;padding-bottom:14px;margin-bottom:16px}.cv-head h1{font-size:20px;margin:0;color:#eaffff;letter-spacing:0}.cv-kicker{font-size:11px;color:#70cfe7;letter-spacing:1px}.cv-btn{border:1px solid #24738d;background:#0c2635;color:#dffaff;padding:8px 12px;border-radius:3px;cursor:pointer}.cv-btn:hover{background:#12394d}.cv-btn.primary{background:#087f9e;border-color:#26c6ed;color:#fff}.cv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}.cv-card{background:#0b1d2b;border:1px solid #1b475d;padding:14px;border-radius:4px;cursor:pointer}.cv-card:hover{border-color:#45d9ff}.cv-card h3{margin:0 0 8px;font-size:15px;color:#e9ffff}.cv-muted{font-size:12px;color:#82aebc}.cv-panel{background:#091a28;border:1px solid #19445a;padding:14px;margin-bottom:14px;border-radius:4px}.cv-panel h2{font-size:15px;margin:0 0 10px;color:#a9edff}.cv-choice{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.cv-choice label{font-size:12px;color:#bceefa}.cv-chart{background:#06121d;border:1px solid #1c536a;padding:10px;border-radius:4px}.cv-chart canvas{display:block;width:100%;height:340px;background:#06131e;border:1px solid #19475b}.cv-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:11px}.cv-range{display:grid;grid-template-columns:48px 1fr 48px;gap:7px;align-items:center;margin-top:8px;font-size:11px;color:#8fb9c6}.cv-range input{accent-color:#20c9f2}@media(max-width:760px){.cv-shell{padding:12px}.cv-chart canvas{height:260px}}
+#chartVisualApp{display:none;position:fixed;inset:0;z-index:10021;background:#07111d;color:#fff;font-family:Arial,sans-serif;overflow:auto}
+#chartVisualApp.open{display:block}#chartVisualApp *{box-sizing:border-box}.cv-shell{max-width:1180px;margin:0 auto;padding:20px}.cv-head{display:flex;gap:12px;align-items:center;border-bottom:1px solid #1b4157;padding-bottom:14px;margin-bottom:16px}.cv-head h1{font-size:20px;margin:0;color:#fff;letter-spacing:0}.cv-kicker{font-size:11px;color:#9ca3af;letter-spacing:1px}.cv-btn{border:1px solid #555;background:#111;color:#fff;padding:8px 12px;border-radius:4px;cursor:pointer}.cv-btn:hover{background:#222}.cv-btn.primary{background:#166534;border-color:#22c55e;color:#fff}.cv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}.cv-card{background:#111;border:1px solid #333;padding:14px;border-radius:4px;cursor:pointer}.cv-card:hover{border-color:#888}.cv-card h3{margin:0 0 8px;font-size:15px;color:#fff}.cv-muted{font-size:12px;color:#bbb}.cv-panel{background:#111;border:1px solid #333;padding:14px;margin-bottom:14px;border-radius:4px}.cv-panel h2{font-size:15px;margin:0 0 10px;color:#fff}.cv-choice{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.cv-choice label{font-size:12px;color:#ddd}.cv-chart{position:relative;background:#000;border:1px solid #444;padding:10px;border-radius:4px}.cv-chart canvas{display:block;width:100%;height:min(58vw,520px);min-height:300px;background:#000;border:1px solid #333}.cv-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:11px}.cv-range{display:grid;grid-template-columns:48px 1fr 150px;gap:7px;align-items:center;margin-top:8px;font-size:11px;color:#ddd}.cv-range input{accent-color:#22c55e}.cv-tip{position:absolute;display:none;pointer-events:none;background:rgba(0,0,0,.9);border:1px solid #aaa;color:#fff;padding:6px 8px;border-radius:4px;font-size:11px;white-space:nowrap;z-index:2}.cv-particle-toggle{margin-left:auto}@media(max-width:760px){.cv-shell{padding:12px}.cv-chart canvas{height:360px;min-height:260px}.cv-range{grid-template-columns:42px 1fr 120px}}
 </style>
 <script>
 /* Read-only real chart visualizer. It intentionally has no ideal-chart state,
@@ -28340,14 +28404,19 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   function renderArtists(){return head('可视化榜单',false)+'<div class="cv-panel"><div class="cv-choice"><button class="cv-btn primary" onclick="chartVisualStartCompare()">多艺人对比</button><span class="cv-muted">选择一位艺人查看现实榜单走势，或选择多位艺人比较代表歌曲。</span></div></div><div class="cv-grid">'+artists().map(function(a){return '<div class="cv-card" onclick="chartVisualChooseArtist(\''+esc(a.id)+'\')"><h3>'+esc(a.name)+'</h3><span class="cv-muted">'+(a.isMe?'玩家歌手':'艺人')+' · 粉丝 '+N(a.fans).toLocaleString()+'</span><div class="cv-muted" style="margin-top:8px">'+eras(a).length+' 个 Era · 现实数据只读</div></div>';}).join('')+'</div>';}
   function renderEras(){var es=eras(state.artist);return head(state.artist.name+' · 现实 Era',true)+'<div class="cv-grid">'+es.map(function(e){var peak=Math.min.apply(null,e.songs.map(function(t){return N(t.peakB||t.peakS||100,100);}));return '<div class="cv-card" onclick="chartVisualChooseEra(\''+esc(e.id)+'\')"><h3>'+esc(e.name)+'</h3><span class="cv-muted">'+e.songs.length+' 首歌曲 · 最佳 Peak #'+peak+'</span><div class="cv-muted" style="margin-top:8px">播放现实榜单曲线</div></div>';}).join('')+'</div>';}
   function renderCompare(){var list=artists();return head('多艺人对比',true)+'<div class="cv-panel"><h2>选择艺人</h2><div class="cv-choice">'+list.map(function(a){var checked=state.artists.some(function(x){return x.id===a.id;});return '<label><input type="checkbox" value="'+esc(a.id)+'" '+(checked?'checked':'')+' onchange="chartVisualToggleArtist(\''+esc(a.id)+'\',this.checked)"> '+esc(a.name)+'</label>';}).join('')+'</div><div style="margin-top:12px"><button class="cv-btn primary" onclick="chartVisualBuildCompare()">生成对比图</button></div></div>';}
-  function renderPlayer(){var mode=state.compareMode?'多艺人现实榜单对比':state.era.name+' · 现实榜单';return head(mode,true)+'<div class="cv-chart"><canvas id="cvCanvas" width="900" height="340"></canvas><div class="cv-controls"><button class="cv-btn primary" onclick="chartVisualPlay()">▶ 播放</button><button class="cv-btn" onclick="chartVisualPause()">Ⅱ 暂停</button><select onchange="chartVisualSpeed(this.value)"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select><button class="cv-btn" onclick="chartVisualReset()">↺ 重置</button><span class="cv-muted">只显示现实榜单数据</span></div><div class="cv-range"><span>起点</span><input id="cvFrom" type="range" min="1" max="'+state.to+'" value="'+state.from+'" oninput="chartVisualRange(&quot;from&quot;,this.value)"><span id="cvFromTxt">W'+state.from+'</span></div><div class="cv-range"><span>终点</span><input id="cvTo" type="range" min="2" max="'+state.to+'" value="'+state.to+'" oninput="chartVisualRange(&quot;to&quot;,this.value)"><span id="cvToTxt">W'+state.to+'</span></div></div>';}
-  function draw(){var c=document.getElementById('cvCanvas');if(!c)return;var ctx=c.getContext('2d'),w=c.width,h=c.height,p={l:48,r:16,t:18,b:34},cw=w-p.l-p.r,ch=h-p.t-p.b,max=Math.max(2,state.to),from=Math.max(1,state.from),to=Math.max(from+1,state.to),end=state.progress?Math.max(from,Math.floor(from+(to-from)*state.progress)):from;ctx.fillStyle='#06131e';ctx.fillRect(0,0,w,h);ctx.font='11px Arial';ctx.strokeStyle='#1c3b4b';ctx.setLineDash([3,4]);[1,2,5,10,20,50,100].forEach(function(r){var y=p.t+(r-1)/99*ch;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();ctx.fillStyle='#81a9b5';ctx.fillText(r,p.l-28,y+4);});ctx.setLineDash([]);state.series.forEach(function(s,si){var vals=s.values,limit=Math.min(end,vals.length),drawing=false,points=[],color=colors[si%colors.length];ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.beginPath();for(var i=from;i<=limit;i++){var rank=vals[i-1];if(rank===null||rank===undefined){drawing=false;continue;}var x=p.l+(i-1)/Math.max(1,max-1)*cw,y=p.t+(rank-1)/99*ch;points.push({x:x,y:y});if(!drawing){ctx.moveTo(x,y);drawing=true;}else ctx.lineTo(x,y);}ctx.stroke();ctx.fillStyle=color;points.forEach(function(point){ctx.beginPath();ctx.arc(point.x,point.y,3.5,0,Math.PI*2);ctx.fill();});ctx.fillText(s.label,p.l+8,p.t+14+si*14);});for(var j=1;j<=max;j+=Math.max(1,Math.ceil(max/8))){ctx.fillStyle='#81a9b5';ctx.fillText('W'+j,p.l+(j-1)/Math.max(1,max-1)*cw-8,h-10);}var a=document.getElementById('cvFromTxt'),b=document.getElementById('cvToTxt');if(a)a.textContent='W'+from;if(b)b.textContent='W'+to;}
-  function prepare(series){state.series=series.filter(function(s){return s&&s.values&&s.values.some(function(rank){return rank!==null&&rank!==undefined;});});if(!state.series.length){alert('暂无已保存的现实榜单周历史数据。');return;}var max=Math.max.apply(null,state.series.map(function(s){return s.values.length;}).concat([2]));state.from=1;state.to=max;state.progress=0;state.view='player';sync();setTimeout(draw,0);}
+  function coverForEra(era,t){var list=A(typeof albs!=='undefined'?albs:[]),a=list.find(function(x){return x&&(t&&((x.id&&t.albumId&&String(x.id)===String(t.albumId))||(x.n&&t.albumName&&x.n===t.albumName)));});var v=a&&(a.cover||a.coverUrl||a.img||a.image||a.artwork);return v||(t&&(t.cover||t.coverUrl||t.coverImage||t.img||t.avatar||t.albumCover))||'';}
+  var coverCache={},particles=[];function particleSeed(){if(particles.length)return;for(var i=0;i<90;i++)particles.push({x:Math.random(),y:Math.random(),r:.4+Math.random()*1.5,a:.25+Math.random()*.7,s:.2+Math.random()*.8});}
+  function weekLabel(s,i){var t=s&&s.track||null,x=t&&t.chartHistory&&t.chartHistory[i-1],y=N(x&& (x.y||x.year),0),m=N(x&&x.m,0),w=N(x&&x.w,0);if(!y&&t){y=N(t.releaseYear||t.year||t.t_y,0);m=N(t.releaseMonth||t.month||t.t_m,0);w=N(t.releaseWeek||t.t_w,0);}if(!y&&typeof time!=='undefined'&&time){y=N(time.y,2026);m=N(time.m,1);w=N(time.w,1);}if(!y)return '—';m=Math.max(1,m||1);var day=Math.max(1,Math.min(28,((w||1)-1)*7+1));return m+'/'+day+'/'+y;}
+  function rankState(){var min=101;state.series.forEach(function(s){for(var i=Math.max(0,state.from-1);i<Math.min(s.values.length,state.to);i++){var r=s.values[i];if(r!=null)min=Math.min(min,r);}});return min===1?3:(min<=10?2:1);}
+  function bindCanvas(){var c=document.getElementById('cvCanvas');if(!c||c.dataset.bound)return;c.dataset.bound='1';c.addEventListener('mousemove',function(ev){var tip=document.getElementById('cvTip');if(!tip)return;var rect=c.getBoundingClientRect(),x=ev.clientX-rect.left,y=ev.clientY-rect.top;var w=rect.width,h=rect.height,p={l:56,r:18,t:52,b:58},cw=w-p.l-p.r,ch=h-p.t-p.b,max=Math.max(2,state.to),idx=Math.round((x-p.l)/Math.max(1,cw)*(max-1))+1,best=null;state.series.forEach(function(s,si){var r=s.values[idx-1];if(r==null)return;var py=p.t+(r-1)/99*ch,px=p.l+(idx-1)/Math.max(1,max-1)*cw;if(Math.abs(px-x)<14&&Math.abs(py-y)<14)best={s:s,r:r,idx:idx,px:px,py:py};});if(best){tip.style.display='block';tip.style.left=Math.min(rect.width-180,best.px+14)+'px';tip.style.top=Math.max(8,best.py-34)+'px';tip.textContent=best.s.label+' · '+weekLabel(best.s,best.idx)+' · #'+best.r;}else tip.style.display='none';});c.addEventListener('mouseleave',function(){var t=document.getElementById('cvTip');if(t)t.style.display='none';});}
+  function renderPlayer(){var mode=state.compareMode?'多艺人现实榜单对比':state.era.name+' · 现实榜单';return head(mode,true)+'<div class="cv-chart"><canvas id="cvCanvas" width="1200" height="520"></canvas><div id="cvTip" class="cv-tip"></div><div class="cv-controls"><button class="cv-btn primary" onclick="chartVisualPlay()">▶ 播放</button><button class="cv-btn" onclick="chartVisualPause()">Ⅱ 暂停</button><select onchange="chartVisualSpeed(this.value)"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select><button class="cv-btn" onclick="chartVisualReset()">↺ 重置</button><button class="cv-btn cv-particle-toggle" onclick="chartVisualToggleParticles()">✦ 粒子：'+(state.particlesOff?'关':'自动')+'</button><span class="cv-muted">只显示现实榜单数据</span></div><div class="cv-range"><span>起点</span><input id="cvFrom" type="range" min="1" max="'+state.to+'" value="'+state.from+'" oninput="chartVisualRange(&quot;from&quot;,this.value)"><span id="cvFromTxt">'+weekLabel(state.series[0],state.from)+'</span></div><div class="cv-range"><span>终点</span><input id="cvTo" type="range" min="2" max="'+state.to+'" value="'+state.to+'" oninput="chartVisualRange(&quot;to&quot;,this.value)"><span id="cvToTxt">'+weekLabel(state.series[0],state.to)+'</span></div></div>';}
+  function draw(){var c=document.getElementById('cvCanvas');if(!c)return;var rect=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1,w=Math.max(320,rect.width),h=Math.max(300,rect.height);if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);}var ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);var p={l:56,r:18,t:52,b:58},cw=w-p.l-p.r,ch=h-p.t-p.b,max=Math.max(2,state.to),from=Math.max(1,state.from),to=Math.max(from+1,state.to),end=state.progress?Math.max(from,from+(to-from)*state.progress):to,mode=rankState();ctx.clearRect(0,0,w,h);ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);var cv=coverForEra(state.era,state.series[0]&&state.series[0].track);if(cv){if(!coverCache[cv]){var im=new Image();coverCache[cv]=im;im.onload=function(){draw();};im.src=cv;}var im=coverCache[cv];if(im.complete&&im.naturalWidth){ctx.globalAlpha=.18;var sc=Math.max(w/im.naturalWidth,h/im.naturalHeight);ctx.drawImage(im,(w-im.naturalWidth*sc)/2,(h-im.naturalHeight*sc)/2,im.naturalWidth*sc,im.naturalHeight*sc);ctx.globalAlpha=1;}}ctx.fillStyle=mode===1?'rgba(0,0,0,.82)':'rgba(0,0,0,.72)';ctx.fillRect(0,0,w,h);if(mode>1&&!state.particlesOff){particleSeed();var now=Date.now()/1000;particles.forEach(function(q){var px=q.x*w,py=((q.y+now*q.s*.006)%1)*h;ctx.globalAlpha=q.a*(mode===3?(.65+.35*Math.sin(now*q.s*4)):1);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(px,py,q.r*(mode===3?1.3:1),0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;}ctx.fillStyle='#fff';ctx.font='bold 17px Georgia,serif';ctx.textAlign='center';ctx.fillText(state.era&&state.era.name||'Era',w/2,26);ctx.font='18px Georgia,serif';ctx.fillText(state.artist&&state.artist.name||'',w/2,h-12);ctx.textAlign='left';if(mode>1){ctx.fillStyle='rgba(134,239,172,.14)';ctx.fillRect(p.l,p.t,cw,ch*9/99);ctx.fillStyle='#4ade80';ctx.font='bold 14px Arial';ctx.fillText('↑ TOP 10',12,28);}if(mode===3){ctx.textAlign='right';ctx.fillText('↑ #1',w-12,28);ctx.textAlign='left';}ctx.font='11px Arial';ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;[10,20,30,40,50,60,70,80,90,100].forEach(function(r){var y=p.t+(r-1)/99*ch;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();ctx.fillStyle='#ddd';ctx.fillText(r,p.l-30,y+4);});state.series.forEach(function(s,si){var vals=s.values,limit=Math.min(Math.floor(end),vals.length),drawing=false,pts=[],color=colors[si%colors.length];ctx.strokeStyle=color;ctx.globalAlpha=mode===1?.82:1;ctx.lineWidth=mode===1?1.5:2.6;ctx.beginPath();for(var i=from;i<=limit;i++){var rank=vals[i-1];if(rank==null){drawing=false;continue;}var x=p.l+(i-1)/Math.max(1,max-1)*cw,y=p.t+(rank-1)/99*ch;pts.push({x:x,y:y,r:rank,i:i});if(!drawing){ctx.moveTo(x,y);drawing=true;}else ctx.lineTo(x,y);}ctx.stroke();ctx.globalAlpha=1;pts.forEach(function(pt){ctx.fillStyle=color;ctx.beginPath();ctx.arc(pt.x,pt.y,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='10px Arial';ctx.textAlign='center';ctx.fillText(pt.r,pt.x,pt.y+3);if(mode===3&&pt.r===1){ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(pt.x,pt.y,10+Math.sin(Date.now()/180)*2,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(pt.x-9,pt.y);ctx.lineTo(pt.x+9,pt.y);ctx.moveTo(pt.x,pt.y-9);ctx.lineTo(pt.x,pt.y+9);ctx.stroke();}});ctx.textAlign='left';ctx.fillStyle='#fff';ctx.font='11px Arial';ctx.fillText(s.label,p.l+8,p.t+14+si*14);});ctx.save();ctx.translate(0,h-10);ctx.fillStyle='#ddd';ctx.font='10px Arial';for(var j=1;j<=max;j+=Math.max(1,Math.ceil(max/8))){var tx=p.l+(j-1)/Math.max(1,max-1)*cw;ctx.save();ctx.translate(tx,0);ctx.rotate(-Math.PI/7);ctx.fillText(weekLabel(state.series[0],j),-20,0);ctx.restore();}ctx.restore();var a=document.getElementById('cvFromTxt'),b=document.getElementById('cvToTxt');if(a)a.textContent=weekLabel(state.series[0],from);if(b)b.textContent=weekLabel(state.series[0],to);if(!c.dataset.bound)bindCanvas();if(mode>1&&!state.particlesOff)requestAnimationFrame(draw);}
+  function prepare(series){state.series=series.filter(function(s){return s&&s.values&&s.values.some(function(rank){return rank!==null&&rank!==undefined;});});if(!state.series.length){alert('暂无已保存的现实榜单周历史数据。');return;}var max=Math.max.apply(null,state.series.map(function(s){return s.values.length;}).concat([2]));state.from=1;state.to=max;state.progress=0;state.view='player';sync();setTimeout(function(){bindCanvas();draw();},0);}
   function tick(){if(!state.playing)return;state.progress+=.012*state.speed;if(state.progress>=1){state.progress=1;state.playing=false;}draw();if(state.playing)state.raf=requestAnimationFrame(tick);}
   window.openChartVisualizer=function(){state.view='artists';state.artists=[];state.playing=false;if(!root){root=document.createElement('div');root.id='chartVisualApp';root.innerHTML='<div class="cv-shell" id="cvRoot"></div>';document.body.appendChild(root);}root.classList.add('open');sync();};
-  window.chartVisualBack=function(){state.playing=false;if(state.view==='artists'){root.classList.remove('open');return;}if(state.view==='eras')state.view='artists';else if(state.view==='player')state.view=state.returnView||'artists';else state.view='artists';sync();};window.chartVisualChooseArtist=function(id){state.artist=artists().find(function(a){return a.id===String(id);});state.view='eras';sync();};window.chartVisualChooseEra=function(id){state.era=eras(state.artist).find(function(e){return e.id===String(id);});state.compareMode=false;state.returnView='eras';prepare(state.era.songs.map(function(t){return {label:t.n||'未命名歌曲',values:history(t)};}));};
-  window.chartVisualStartCompare=function(){state.view='compare';state.artists=[];sync();};window.chartVisualToggleArtist=function(id,on){var a=artists().find(function(x){return x.id===String(id);});if(!a)return;state.artists=state.artists.filter(function(x){return x.id!==a.id;});if(on)state.artists.push(a);};window.chartVisualBuildCompare=function(){if(!state.artists.length)return;state.compareMode=true;state.returnView='compare';prepare(state.artists.map(function(a){var t=tracks().filter(function(x){return x.artist===a.name;}).sort(function(x,y){return N(x.peakB||x.peakS,100)-N(y.peakB||y.peakS,100);})[0];return t?{label:a.name+' · '+t.n,values:history(t)}:null;}).filter(Boolean));};
-  window.chartVisualPlay=function(){state.playing=true;state.progress=0;cancelAnimationFrame(state.raf);tick();};window.chartVisualPause=function(){state.playing=false;cancelAnimationFrame(state.raf);};window.chartVisualReset=function(){state.playing=false;state.progress=0;draw();};window.chartVisualSpeed=function(v){state.speed=N(v,1);};window.chartVisualRange=function(k,v){v=N(v,1);if(k==='from')state.from=Math.min(v,state.to-1);else state.to=Math.max(v,state.from+1);draw();};
+  window.chartVisualBack=function(){state.playing=false;if(state.view==='artists'){root.classList.remove('open');return;}if(state.view==='eras')state.view='artists';else if(state.view==='player')state.view=state.returnView||'artists';else state.view='artists';sync();};window.chartVisualChooseArtist=function(id){state.artist=artists().find(function(a){return a.id===String(id);});state.view='eras';sync();};window.chartVisualChooseEra=function(id){state.era=eras(state.artist).find(function(e){return e.id===String(id);});state.compareMode=false;state.returnView='eras';prepare(state.era.songs.map(function(t){return {label:t.n||'未命名歌曲',track:t,values:history(t)};}));};
+  window.chartVisualStartCompare=function(){state.view='compare';state.artists=[];sync();};window.chartVisualToggleArtist=function(id,on){var a=artists().find(function(x){return x.id===String(id);});if(!a)return;state.artists=state.artists.filter(function(x){return x.id!==a.id;});if(on)state.artists.push(a);};window.chartVisualBuildCompare=function(){if(!state.artists.length)return;state.compareMode=true;state.returnView='compare';prepare(state.artists.map(function(a){var t=tracks().filter(function(x){return x.artist===a.name;}).sort(function(x,y){return N(x.peakB||x.peakS,100)-N(y.peakB||y.peakS,100);})[0];return t?{label:a.name+' · '+t.n,track:t,values:history(t)}:null;}).filter(Boolean));};
+  window.chartVisualPlay=function(){state.playing=true;state.progress=0;cancelAnimationFrame(state.raf);tick();};window.chartVisualPause=function(){state.playing=false;cancelAnimationFrame(state.raf);};window.chartVisualReset=function(){state.playing=false;state.progress=0;draw();};window.chartVisualSpeed=function(v){state.speed=N(v,1);};window.chartVisualToggleParticles=function(){state.particlesOff=!state.particlesOff;sync();setTimeout(function(){bindCanvas();draw();},0);};window.chartVisualRange=function(k,v){v=N(v,1);if(k==='from')state.from=Math.min(v,state.to-1);else state.to=Math.max(v,state.from+1);draw();};
   function mount(){var p=document.getElementById('pProj'),phone=document.getElementById('phoneGrid');if(p&&!document.getElementById('chartVisualEntry')){var b=document.createElement('button');b.id='chartVisualEntry';b.className='sec';b.textContent='📊 可视化榜单';b.onclick=openChartVisualizer;var ref=document.getElementById('idealChartEntry');if(ref)ref.parentNode.insertBefore(b,ref.nextSibling);else p.appendChild(b);}if(phone&&!document.getElementById('chartVisualPhoneEntry')){var x=document.createElement('div');x.id='chartVisualPhoneEntry';x.className='app-icon';x.style.background='#0f766e';x.innerHTML='<div class="picon">📊</div>可视化榜单';x.onclick=openChartVisualizer;phone.appendChild(x);}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){mount();setTimeout(mount,800);});else{mount();setTimeout(mount,800);}setInterval(mount,2000);
 })();
@@ -28436,6 +28505,42 @@ input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(
   function cap(){var v=0;try{v=Number(ad&&ad.marketSettings&&ad.marketSettings.dailyBase)||0;}catch(e){}if(!(v>0)){try{v=Number(ad&&ad.customMarketBase)||0;}catch(e){}}if(!(v>0)){try{var saved=JSON.parse(localStorage.getItem('starPro_market_settings_v2')||'null');v=Number(saved&&saved.dailyBase)||0;}catch(e){}}if(!(v>0)){var input=document.getElementById('customMarketBase');v=input&&Number(input.value)>0?Number(input.value)*10000:3000000;}return Math.max(100000,v);}
   function apply(){var list=songs();if(!list.length)return;var dailyCap=cap(),weeklyCap=dailyCap*7,key=String(dailyCap)+'|'+String(typeof time!=='undefined'&&time?time.y+'_'+time.m+'_'+time.w:'market');list.forEach(function(t){if(t._absoluteCapKey!==key){/* Prefer raw snapshots created before legacy clamps; otherwise use current values. */t._absoluteRawDay=Math.max(0,Number(t._hardMarketRawDay||0),Number(t._rankCompressionRaw||0)/7,Number(t.stmGlobal_Day||0),Number(t.stmGlobal_Week||0)/7);t._absoluteRawWeek=Math.max(0,Number(t._hardMarketRawWeek||0),Number(t._rankCompressionRaw||0),Number(t.stmGlobal_Week||0),Number(t.stmGlobal_Day||0)*7);t._absoluteCapKey=key;}});var topDay=list.reduce(function(m,t){return Math.max(m,t._absoluteRawDay||0);},0),topWeek=list.reduce(function(m,t){return Math.max(m,t._absoluteRawWeek||0);},0);list.forEach(function(t){var d=Number(t._absoluteRawDay||0),w=Number(t._absoluteRawWeek||0);t.stmGlobal_Day=topDay>dailyCap?Math.floor(dailyCap*Math.pow(d/Math.max(1,topDay),.5)):Math.min(d,dailyCap);t.stmGlobal_Week=topWeek>weeklyCap?Math.floor(weeklyCap*Math.pow(w/Math.max(1,topWeek),.5)):Math.min(w,weeklyCap);t.stmUS_Day=Math.min(t.stmGlobal_Day,Math.max(0,Number(t.stmUS_Day||0)));t.stmUS_Week=Math.min(t.stmGlobal_Week,Math.max(0,Number(t.stmUS_Week||0)));});}
   window.applyAbsoluteMusicCap=apply;var oldRender=window.renderChart;window.renderChart=function(){apply();var r=typeof oldRender==='function'?oldRender.apply(this,arguments):undefined;apply();return r;};var oldAdv=window.advTime;window.advTime=function(){var r=typeof oldAdv==='function'?oldAdv.apply(this,arguments):undefined;apply();return r;};function bind(){var input=document.getElementById('customMarketBase');if(!input||input.dataset.absoluteCapBound)return;input.dataset.absoluteCapBound='1';input.addEventListener('input',function(){var v=Number(input.value);if(!(v>0))return;try{if(typeof ad!=='undefined'&&ad){ad.marketSettings=ad.marketSettings||{};ad.marketSettings.dailyBase=v*10000;ad.customMarketBase=v*10000;}localStorage.setItem('starPro_market_settings_v2',JSON.stringify(Object.assign({},JSON.parse(localStorage.getItem('starPro_market_settings_v2')||'{}'),{dailyBase:v*10000})));}catch(e){}apply();});}setInterval(function(){bind();apply();},700);bind();apply();
+})();
+</script>
+</style>
+<style>
+#salesVisualApp{display:none;position:fixed;inset:0;z-index:10022;background:#090909;color:#fff;font-family:Arial,sans-serif;overflow:auto}#salesVisualApp.open{display:block}#salesVisualApp *{box-sizing:border-box}.sv-shell{max-width:1220px;margin:auto;padding:20px}.sv-head{display:flex;gap:12px;align-items:center;padding-bottom:14px;border-bottom:1px solid #333;margin-bottom:16px}.sv-head h1{margin:0;font-size:20px}.sv-kicker{font-size:11px;color:#aaa;letter-spacing:1px}.sv-btn{border:1px solid #555;background:#151515;color:#fff;border-radius:4px;padding:8px 12px;cursor:pointer}.sv-btn:hover{background:#262626}.sv-btn.primary{background:#166534;border-color:#22c55e}.sv-panel{background:#111;border:1px solid #333;padding:14px;margin-bottom:14px;border-radius:5px}.sv-panel h2{font-size:14px;margin:0 0 10px}.sv-choice{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:7px;max-height:280px;overflow:auto;padding-right:4px}.sv-choice label{font-size:12px;color:#ddd;display:flex;gap:7px;align-items:center;padding:6px;background:#161616}.sv-choice input{accent-color:#22c55e}.sv-chart{position:relative;background:#050505;border:1px solid #444;border-radius:5px;padding:10px}.sv-chart canvas{width:100%;height:min(58vw,570px);min-height:330px;display:block;background:#000}.sv-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12px}.sv-controls select{background:#151515;color:#fff;border:1px solid #555;padding:7px}.sv-timeline{display:grid;grid-template-columns:52px 1fr 110px;gap:8px;align-items:center;margin-top:10px;font-size:11px;color:#ddd}.sv-timeline input{accent-color:#22c55e}.sv-sub{font-size:12px;color:#aaa;margin:0 0 10px}.sv-empty{padding:32px;text-align:center;color:#aaa}@media(max-width:760px){.sv-shell{padding:12px}.sv-chart canvas{height:390px;min-height:280px}.sv-timeline{grid-template-columns:42px 1fr 86px}}
+</style>
+<script>
+/* Sales visualizer: uses the same global/monthly sales basis as the Sale app
+   and records read-only monthly snapshots for its playback timeline. */
+(function installSalesVisualizer(){
+  if(window.__salesVisualizerInstalled)return;window.__salesVisualizerInstalled=true;
+  var root,state={view:'home',mode:'multi',artistIndex:0,candidates:[],selected:[],items:[],timeline:[],cursor:0,playing:false,speed:1,raf:0,rowY:{}};
+  var colors=['#22c55e','#38bdf8','#f59e0b','#f472b6','#a78bfa','#fb7185','#2dd4bf','#facc15'];
+  function A(v){return Array.isArray(v)?v:[]}function N(v,d){var n=Number(v);return isFinite(n)?n:(d||0)}function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  function now(){var t=typeof time!=='undefined'&&time?time:{y:2026,m:1};return {y:Math.max(1,N(t.y,2026)),m:Math.max(1,Math.min(12,N(t.m,1)))}}function mi(y,m){return N(y,2026)*12+N(m,1)-1}function ym(i){return {y:Math.floor(i/12),m:i%12+1}}function key(i){var d=ym(i);return d.y+'-'+String(d.m).padStart(2,'0')}function label(i){var d=ym(i);return d.y+'年'+d.m+'月'}
+  function tracks(){return A(typeof trackPool!=='undefined'?trackPool:[]).filter(function(t){return t&&t.type==='track'&&t.released!==false})}function cover(t){var a=A(typeof albs!=='undefined'?albs:[]).find(function(x){return x&&((x.id&&t.albumId&&String(x.id)===String(t.albumId))||(x.n&&t.albumName&&x.n===t.albumName))});return (a&&(a.cover||a.coverUrl||a.img||a.image||a.artwork))||(t&&(t.cover||t.coverUrl||t.coverImage||t.img||t.avatar||t.albumCover))||''}
+  function officialSales(t){return Math.max(0,Math.floor(N(t&&t.stmGlobal)/150))}function officialMonthSales(t){return Math.max(0,Math.floor(N(t&&(t.salesMonth||t.slMonth||t.monthlySales||t.stmGlobal_Month))/150))}
+  function works(){var out=tracks().map(function(t){return {id:'track:'+String(t.id||t.n),name:t.n||'未命名歌曲',artist:t.artist||'未知艺人',kind:'单曲',sale:officialSales(t),release:mi(t.releaseYear||t.t_y||now().y,t.releaseMonth||t.t_m||1),cover:cover(t),raw:t,saleSource:t};});A(typeof albs!=='undefined'?albs:[]).forEach(function(a,i){if(!a||a.st==='未发')return;var ref=a.trackRef||A(typeof trackPool!=='undefined'?trackPool:[]).find(function(t){return t&&t.type==='album'&&((a.id&&String(t.id)===String(a.id))||(a.n&&t.n===a.n))}),source=ref||a,sale=officialSales(source),name=a.n||'未命名专辑';if(out.some(function(x){return x.kind==='专辑'&&x.name===name&&x.artist===(a.artist||a.singer||((typeof ad!=='undefined'&&ad&&ad.s)||''))}))return;out.push({id:'album:'+String(a.id||i),name:name,artist:a.artist||a.singer||((typeof ad!=='undefined'&&ad&&ad.s)||'玩家歌手'),kind:'专辑',sale:sale,release:mi(a.releaseYear||a.t_y||(ref&&ref.releaseYear)||now().y,a.releaseMonth||a.t_m||(ref&&ref.releaseMonth)||1),cover:a.cover||a.coverUrl||a.img||a.image||a.artwork||cover(ref),raw:a,saleSource:source});});return out.filter(function(x){return x.sale>0||x.raw})}
+  function history(){if(typeof ad==='undefined'||!ad)return {};ad.salesVisualizationHistory=ad.salesVisualizationHistory||{};return ad.salesVisualizationHistory}function monthHistory(){if(typeof ad==='undefined'||!ad)return {};ad.salesVisualizationMonthlyHistory=ad.salesVisualizationMonthlyHistory||{};return ad.salesVisualizationMonthlyHistory}function snap(){var h=history(),mh=monthHistory(),k=key(mi(now().y,now().m)),changed=false;works().forEach(function(x){h[x.id]=h[x.id]||{};mh[x.id]=mh[x.id]||{};var total=Math.round(x.sale),monthly=Math.round(officialMonthSales(x.saleSource));if(h[x.id][k]!==total){h[x.id][k]=total;changed=true}if(mh[x.id][k]!==monthly){mh[x.id][k]=monthly;changed=true}});return changed}
+  function artistRows(){var ws=works(),names=[];ws.forEach(function(w){if(w.artist&&names.indexOf(w.artist)<0)names.push(w.artist)});return names.sort().map(function(n){var parts=ws.filter(function(w){return w.artist===n});return {id:'artist:'+n,name:n,artist:n,kind:'艺人',parts:parts,sale:parts.reduce(function(s,x){return s+x.sale},0),release:Math.min.apply(null,parts.map(function(x){return x.release})),cover:parts[0]&&parts[0].cover}})}
+  function candidates(){var rows=artistRows().concat(works().filter(function(x){return x.kind==='专辑'}));return rows.sort(function(a,b){return b.sale-a.sale})}
+  function buildTimeline(items){var end=mi(now().y,now().m),start=Math.min.apply(null,items.map(function(x){return N(x.release,end)}).concat([end]));start=Math.max(end-59,start);var out=[];for(var i=start;i<=end;i++)out.push(i);return out}
+  function workSeries(x,timeline){var h=history(),mh=monthHistory(),map=h[x.id]||{},months=mh[x.id]||{},rel=Math.max(0,timeline.indexOf(x.release)),last=0,total=Math.max(0,x.sale),len=Math.max(1,timeline.length-1-rel),rebuilt=0;return timeline.map(function(mon,i){if(i<rel)return 0;var k=key(mon),known=map[k],monthValue=N(months[k],0);rebuilt+=monthValue;var p=Math.max(0,Math.min(1,(i-rel+1)/len)),made=Math.round(total*(1-Math.pow(1-p,1.65))),value=known===undefined?(rebuilt>0?Math.min(total,rebuilt):made):Math.max(0,N(known));last=Math.max(last,value);return last})}
+  function seriesFor(x,timeline){if(x.parts){var all=x.parts.map(function(p){return workSeries(p,timeline)});return timeline.map(function(_,i){return all.reduce(function(s,a){return s+N(a[i])},0)})}return workSeries(x,timeline)}
+  function head(title,back){return '<div class="sv-head"><button class="sv-btn" onclick="salesVisualBack()">'+(back?'← 返回':'× 关闭')+'</button><div><div class="sv-kicker">SALES DATA VISUALIZER</div><h1>'+esc(title)+'</h1></div></div>'}
+  function render(){if(state.view==='home')return renderHome();return renderChart()}
+  function sync(){var box=document.getElementById('svRoot');if(box)box.innerHTML=render()}
+  function renderHome(){var cs=candidates(),ars=artistRows();state.candidates=cs;if(!state.selected.length&&cs.length)state.selected=cs.slice(0,Math.min(4,cs.length)).map(function(_,i){return i});var multiple=cs.map(function(x,i){return '<label><input type="checkbox" '+(state.selected.indexOf(i)>=0?'checked':'')+' onchange="salesVisualToggle('+i+',this.checked)"><span>'+esc(x.kind)+' · '+esc(x.name)+' <small>('+N(x.sale).toLocaleString()+')</small></span></label>'}).join('');var opts=ars.map(function(a,i){return '<option value="'+i+'" '+(state.artistIndex===i?'selected':'')+'>'+esc(a.name)+'（'+a.parts.length+' 个作品）</option>'}).join('');return head('销量数据可视化',false)+'<div class="sv-panel"><h2>模式 A · 多人 / 专辑对比</h2><p class="sv-sub">选择多个艺人或专辑，按累计销量实时排序。</p><div class="sv-choice">'+multiple+'</div><div style="margin-top:12px"><button class="sv-btn primary" onclick="salesVisualOpenMulti()">生成对比图</button></div></div><div class="sv-panel"><h2>模式 B · 单个艺人作品累计</h2><p class="sv-sub">选择一位歌手，比较其全部单曲与专辑的累计销量。</p><select class="sv-btn" onchange="salesVisualSetArtist(this.value)">'+opts+'</select><button class="sv-btn primary" style="margin-left:8px" onclick="salesVisualOpenArtist()">查看作品对比</button></div>'}
+  function renderChart(){var title=state.mode==='multi'?'多人 / 专辑销量对比':((state.artist&&state.artist.name)||'艺人')+' · 作品累计销量';var max=Math.max(0,state.timeline.length-1);return head(title,true)+'<div class="sv-chart"><canvas id="svCanvas" width="1200" height="580"></canvas><div class="sv-controls"><button class="sv-btn primary" onclick="salesVisualPlay()">▶ 播放</button><button class="sv-btn" onclick="salesVisualPause()">Ⅱ 暂停</button><select onchange="salesVisualSpeed(this.value)"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select><button class="sv-btn" onclick="salesVisualReset()">↺ 重置</button><span class="sv-sub">按月累计销量 · 条目会随数值平滑重排</span></div><div class="sv-timeline"><span>时间</span><input type="range" min="0" max="'+max+'" value="'+Math.round(state.cursor)+'" oninput="salesVisualSeek(this.value)"><span id="svDateTxt">'+(state.timeline.length?label(state.timeline[Math.round(state.cursor)]):'—')+'</span></div></div>'}
+  function niceMax(v){if(v<=500000)return 500000;var u=Math.pow(10,Math.floor(Math.log(v)/Math.LN10)),n=Math.ceil(v/u);return n*u}
+  function draw(){var c=document.getElementById('svCanvas');if(!c||!state.items.length)return;var rect=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1,w=Math.max(350,rect.width),h=Math.max(300,rect.height);if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}var ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);var p={l:190,r:32,t:56,b:76},cw=w-p.l-p.r,ch=h-p.t-p.b,idx=Math.max(0,Math.min(state.timeline.length-1,state.cursor)),lo=Math.floor(idx),hi=Math.min(state.timeline.length-1,lo+1),frac=idx-lo,rows=state.items.map(function(x,i){var a=x.series[lo]||0,b=x.series[hi]||a;return {item:x,value:a+(b-a)*frac,color:colors[i%colors.length]}}).sort(function(a,b){return b.value-a.value}),max=niceMax(Math.max.apply(null,rows.map(function(x){return x.item.series[x.item.series.length-1]||0}).concat([1]))),rowH=Math.max(32,Math.min(58,ch/Math.max(1,rows.length))),activeH=Math.min(ch,rows.length*rowH);ctx.font='11px Arial';for(var q=0;q<=5;q++){var x=p.l+cw*q/5;ctx.strokeStyle='rgba(255,255,255,.16)';ctx.beginPath();ctx.moveTo(x,p.t);ctx.lineTo(x,p.t+activeH);ctx.stroke();ctx.fillStyle='#ddd';ctx.textAlign='center';ctx.fillText(Math.round(max*q/5).toLocaleString(),x,p.t-16)}rows.forEach(function(row,rank){var id=row.item.id,target=p.t+rank*rowH+rowH*.5,current=state.rowY[id];if(current===undefined)current=target;current+=(target-current)*.22;state.rowY[id]=current;var y=current,bar=Math.max(0,Math.min(cw,cw*row.value/max));ctx.fillStyle='rgba(255,255,255,.055)';ctx.fillRect(p.l,y-rowH*.28,cw,rowH*.56);ctx.fillStyle=row.color;ctx.globalAlpha=.88;ctx.fillRect(p.l,y-rowH*.28,bar,rowH*.56);ctx.globalAlpha=1;if(row.item.cover){var im=row.item._image;if(!im){im=new Image();row.item._image=im;im.onload=function(){draw()};im.src=row.item.cover}if(im.complete&&im.naturalWidth)ctx.drawImage(im,p.l-180,y-16,30,30)}ctx.fillStyle='#fff';ctx.textAlign='left';ctx.font='12px Arial';ctx.fillText(row.item.name,p.l-144,y-2);ctx.fillStyle='#aaa';ctx.font='10px Arial';ctx.fillText(row.item.kind,p.l-144,y+12);ctx.fillStyle='#fff';ctx.textAlign='left';ctx.font='11px Arial';ctx.fillText(Math.round(row.value).toLocaleString(),Math.min(w-62,p.l+bar+7),y+4)});var total=rows.reduce(function(s,x){return s+x.value},0),date=state.timeline[lo];ctx.fillStyle='#fff';ctx.textAlign='right';ctx.font='bold 28px Georgia,serif';ctx.fillText(label(date),w-p.r,h-34);ctx.font='11px Arial';ctx.fillStyle='#ccc';ctx.fillText('Total '+Math.round(total).toLocaleString(),w-p.r,h-16);ctx.textAlign='left';ctx.fillStyle='#aaa';ctx.font='11px Arial';ctx.fillText(label(state.timeline[0]),p.l,h-17);ctx.textAlign='right';ctx.fillText(label(state.timeline[state.timeline.length-1]),w-p.r,h-17);var txt=document.getElementById('svDateTxt');if(txt)txt.textContent=label(date);if(state.playing)state.raf=requestAnimationFrame(tick);}
+  function tick(){if(!state.playing)return;state.cursor+=.016*state.speed;if(state.cursor>=state.timeline.length-1){state.cursor=state.timeline.length-1;state.playing=false}draw()}
+  function prepare(items,mode){state.items=items.filter(function(x){return x&&x.sale>=0});if(!state.items.length){alert('暂无可用于销量可视化的已发行作品。');return}state.mode=mode;state.timeline=buildTimeline(state.items);state.items.forEach(function(x){x.series=seriesFor(x,state.timeline)});state.cursor=0;state.playing=false;state.rowY={};state.view='chart';sync();setTimeout(draw,0)}
+  window.openSalesVisualizer=function(){snap();state.view='home';state.playing=false;if(!root){root=document.createElement('div');root.id='salesVisualApp';root.innerHTML='<div class="sv-shell" id="svRoot"></div>';document.body.appendChild(root)}root.classList.add('open');sync()};window.salesVisualBack=function(){state.playing=false;if(state.view==='home'){root.classList.remove('open');return}state.view='home';sync()};window.salesVisualToggle=function(i,on){state.selected=state.selected.filter(function(x){return x!==i});if(on)state.selected.push(i)};window.salesVisualSetArtist=function(i){state.artistIndex=N(i)};window.salesVisualOpenMulti=function(){var cs=state.candidates||candidates(),items=state.selected.map(function(i){return cs[i]}).filter(Boolean);if(!items.length)return alert('请至少选择一个艺人或专辑。');prepare(items,'multi')};window.salesVisualOpenArtist=function(){var a=artistRows()[state.artistIndex];if(!a)return alert('请选择一位艺人。');state.artist=a;prepare(a.parts,'artist')};window.salesVisualPlay=function(){state.playing=true;cancelAnimationFrame(state.raf);tick()};window.salesVisualPause=function(){state.playing=false;cancelAnimationFrame(state.raf)};window.salesVisualReset=function(){state.playing=false;state.cursor=0;state.rowY={};draw()};window.salesVisualSpeed=function(v){state.speed=Math.max(.25,N(v,1))};window.salesVisualSeek=function(v){state.playing=false;state.cursor=Math.max(0,Math.min(state.timeline.length-1,N(v)));draw()};
+  function mount(){var p=document.getElementById('pProj'),phone=document.getElementById('phoneGrid');if(p&&!document.getElementById('salesVisualEntry')){var b=document.createElement('button');b.id='salesVisualEntry';b.className='sec';b.textContent='销量可视化';b.onclick=openSalesVisualizer;var ref=document.getElementById('chartVisualEntry');if(ref)ref.parentNode.insertBefore(b,ref.nextSibling);else p.appendChild(b)}if(phone&&!document.getElementById('salesVisualPhoneEntry')){var x=document.createElement('div');x.id='salesVisualPhoneEntry';x.className='app-icon';x.style.background='#14532d';x.innerHTML='<div class="picon">▤</div>销量可视化';x.onclick=openSalesVisualizer;phone.appendChild(x)}}
+  var priorAdvance=window.advTime;window.advTime=function(){var before=snap(),r=typeof priorAdvance==='function'?priorAdvance.apply(this,arguments):undefined,after=snap();if((before||after)&&typeof window.saveGameImmediate==='function')window.saveGameImmediate();return r};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){snap();mount();setTimeout(mount,700)});else{snap();mount();setTimeout(mount,700)}setInterval(mount,2000);
 })();
 </script>
 </html>
